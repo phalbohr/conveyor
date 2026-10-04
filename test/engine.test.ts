@@ -5,9 +5,9 @@ import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
 import { UsageLedger } from '../src/usage.js'
-import { FakeHarness, type Script } from '../src/harness/fake.js'
+import type { Script } from '../src/harness/fake.js'
 import type { StageResult } from '../src/harness/harness.js'
-import { FakeWorkspaces, deferred } from './fakes.js'
+import { FakeWorkspaces, deferred, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
 type Setup = { config?: string; local?: string; script?: Script; instructions?: Record<string, string> }
@@ -24,7 +24,7 @@ function setup(options: Setup = {}) {
   const repo = tempDir('conveyor-repo-')
   const usage = new UsageLedger()
   const board = new FakeBoard('me')
-  const harness = new FakeHarness(options.script)
+  const harness = stageHarness(options.script)
   const workspaces = new FakeWorkspaces()
   const engine = new Engine({
     board,
@@ -40,7 +40,7 @@ function setup(options: Setup = {}) {
     await engine.tick()
     await engine.idle()
   }
-  const runs = () => harness.runs.map((run) => `${run.taskId}:${run.stage}`)
+  const runs = () => stageRuns(harness).map((run) => `${run.taskId}:${run.stage}`)
   return { settings, home, repo, usage, board, harness, workspaces, engine, cycle, runs }
 }
 
@@ -64,7 +64,7 @@ describe('Engine stage chain', () => {
     await cycle()
 
     expect(runs()).toEqual(['1:implement', '1:review', '1:merge'])
-    expect(harness.runs[1]).toMatchObject({ model: 'gpt', effort: 'high' })
+    expect(stageRuns(harness)[1]).toMatchObject({ model: 'gpt', effort: 'high' })
     expect(await board.getTask(task.id)).toMatchObject({ state: 'review', owner: 'me' })
     expect(await board.claim(task.id)).toBe(false)
     expect((await board.listComments(task.id)).filter((c) => c.body.includes('conveyor:workpad'))).toHaveLength(1)
@@ -87,9 +87,9 @@ describe('Engine stage chain', () => {
 
     await cycle()
 
-    expect(harness.runs[0]?.prompt).toContain('Write the code test-first.')
-    expect(harness.runs[0]?.prompt).toContain('the plan body')
-    expect(harness.runs[1]?.prompt).toContain('- [x] step one')
+    expect(stageRuns(harness)[0]?.prompt).toContain('Write the code test-first.')
+    expect(stageRuns(harness)[0]?.prompt).toContain('the plan body')
+    expect(stageRuns(harness)[1]?.prompt).toContain('- [x] step one')
   })
 
   it('asks for approval of a story in interactive mode', async () => {
@@ -121,7 +121,7 @@ describe('Engine stage chain', () => {
     await cycle()
 
     expect(runs()).toEqual(['1:story', '1:story', '1:plan'])
-    expect(harness.runs[1]?.prompt).toContain('Looks good, approved.')
+    expect(stageRuns(harness)[1]?.prompt).toContain('Looks good, approved.')
     expect(await board.getTask(task.id)).toMatchObject({ state: 'needs-input' })
     expect((await board.listComments(task.id)).some((c) => c.body.includes('conveyor:artifact:plan') && c.body.includes('the plan'))).toBe(true)
   })
@@ -162,8 +162,8 @@ describe('Engine stage chain', () => {
     await cycle()
 
     expect(runs()).toEqual(['1:implement', '1:implement', '1:review', '1:merge'])
-    expect(harness.runs[1]?.prompt).toContain('Which database?')
-    expect(harness.runs[1]?.prompt).toContain('Use Postgres.')
+    expect(stageRuns(harness)[1]?.prompt).toContain('Which database?')
+    expect(stageRuns(harness)[1]?.prompt).toContain('Use Postgres.')
   })
 
   it('accepts approval in autonomous mode as done', async () => {
@@ -214,7 +214,7 @@ describe('Engine artifacts', () => {
     await board.createTask('Login', 'story', 'story')
     await cycle()
     expect(workspaces.commits).toEqual([{ taskId: '1', file: 'docs/plans/1-plan.md', content: '# Repo plan' }])
-    expect(harness.runs[1]?.prompt).toContain('# Repo plan')
+    expect(stageRuns(harness)[1]?.prompt).toContain('# Repo plan')
   })
 })
 
@@ -353,7 +353,7 @@ describe('Engine stage files', () => {
     const { board, cycle, harness } = setup({ instructions: { implement: 'Implement #{{ issue.id }} "{{ issue.title }}" in {{ stage }}.' } })
     await board.createTask('Add login', 'p', 'plan')
     await cycle()
-    expect(harness.runs[0]?.prompt).toContain('Implement #1 "Add login" in implement.')
+    expect(stageRuns(harness)[0]?.prompt).toContain('Implement #1 "Add login" in implement.')
   })
 
   it('does not start a stage with an unknown template variable and asks a human at once', async () => {
@@ -381,7 +381,7 @@ describe('Engine stage files', () => {
     writeFileSync(join(home, '.claude', 'skills', 'grilling', 'SKILL.md'), '---\nname: grilling\n---\n')
     await board.createTask('Add login', 'p', 'plan')
     await cycle()
-    expect(harness.runs[0]?.skills).toEqual([{ name: 'grilling', source: 'personal', dir: join(home, '.claude', 'skills', 'grilling') }])
+    expect(stageRuns(harness)[0]?.skills).toEqual([{ name: 'grilling', source: 'personal', dir: join(home, '.claude', 'skills', 'grilling') }])
   })
 })
 
@@ -390,8 +390,8 @@ describe('Engine language and formats', () => {
     const { board, cycle, harness } = setup({ config: 'language: {docs: German}\n', local: 'language: {chat: Russian}\n' })
     await board.createTask('Login', 'p', 'plan')
     await cycle()
-    expect(harness.runs[0]?.prompt).toContain('German')
-    expect(harness.runs[0]?.prompt).not.toContain('Russian')
+    expect(stageRuns(harness)[0]?.prompt).toContain('German')
+    expect(stageRuns(harness)[0]?.prompt).not.toContain('Russian')
   })
 
   it('gives stage templates the story format and the documentation language', async () => {
@@ -403,8 +403,8 @@ describe('Engine language and formats', () => {
     writeFileSync(join(settings, 'formats', 'story.md'), '**Story:** As a <role>...')
     await board.createTask('Login', 'idea', 'idea')
     await cycle()
-    expect(harness.runs[0]?.prompt).toContain('Write in English.')
-    expect(harness.runs[0]?.prompt).toContain('**Story:** As a <role>...')
+    expect(stageRuns(harness)[0]?.prompt).toContain('Write in English.')
+    expect(stageRuns(harness)[0]?.prompt).toContain('**Story:** As a <role>...')
   })
 })
 
@@ -413,9 +413,10 @@ describe('Engine token budget', () => {
     const { board, cycle, runs, usage } = setup({ local: 'limits: {daily_tokens: 300, awaiting_review: 10}\n' })
     await board.createTask('First', 'p', 'plan')
     await cycle()
-    expect(usage.today()).toBe(330)
+    expect(usage.today()).toBe(440)
     await board.createTask('Second', 'p', 'plan')
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:review', '1:merge'])
+    expect(usage.today()).toBe(440)
   })
 })

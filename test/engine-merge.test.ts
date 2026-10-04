@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
-import { FakeHarness, type Script } from '../src/harness/fake.js'
+import type { Script } from '../src/harness/fake.js'
 import type { StageResult } from '../src/harness/harness.js'
 import { UsageLedger } from '../src/usage.js'
-import { FakeWorkspaces } from './fakes.js'
+import { FakeWorkspaces, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
 const done: StageResult = { outcome: 'done', summary: 'ok' }
@@ -27,7 +27,7 @@ function setup(options: { mode?: 'human' | 'ai' | 'smart'; stages?: string; conf
   writeFileSync(join(settings, 'local.yaml'), 'limits: {awaiting_review: 10}\n')
   mkdirSync(join(settings, 'stages'))
   const board = new FakeBoard('me')
-  const harness = new FakeHarness(options.script)
+  const harness = stageHarness(options.script)
   const workspaces = new FakeWorkspaces()
   const engine = new Engine({
     board,
@@ -43,7 +43,7 @@ function setup(options: { mode?: 'human' | 'ai' | 'smart'; stages?: string; conf
     await engine.tick()
     await engine.idle()
   }
-  const runs = () => harness.runs.map((run) => `${run.taskId}:${run.stage}`)
+  const runs = () => stageRuns(harness).map((run) => `${run.taskId}:${run.stage}`)
   const expireRetry = async (id = '1') => {
     const comments = await board.listComments(id)
     const pad = comments.find((c) => c.body.includes('conveyor:workpad'))
@@ -79,6 +79,7 @@ describe('merge mode human', () => {
     expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: true })
     expect(await board.claim('1')).toBe(true)
     expect(workspaces.removed).toEqual(['1'])
+    expect(workspaces.deletedBranches).toEqual(['1'])
   })
 
   it('keeps waiting while the pull request is under review', async () => {
@@ -142,7 +143,7 @@ describe('merge mode ai', () => {
     await expireRetry()
     await cycle()
     expect(board.merges).toHaveLength(1)
-    expect(harness.runs).toHaveLength(2)
+    expect(stageRuns(harness)).toHaveLength(2)
   })
 
   it('runs failure stages when checks fail and merges after the fix', async () => {
@@ -160,7 +161,7 @@ describe('merge mode ai', () => {
 
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:merge', '1:fix-ci'])
-    expect(harness.runs[2]?.prompt).toContain('checks failed')
+    expect(stageRuns(harness)[2]?.prompt).toContain('checks failed')
 
     await expireRetry()
     await cycle()
@@ -201,7 +202,7 @@ describe('merge mode smart', () => {
     await cycle()
     expect((await board.getTask('1'))?.state).toBe('review')
     expect(board.merges).toEqual([])
-    expect(harness.runs[1]?.prompt).toContain('human review')
+    expect(stageRuns(harness)[1]?.prompt).toContain('human review')
   })
 
   it('merges when the merge stage returns done', async () => {
@@ -222,7 +223,7 @@ describe('rework', () => {
     await cycle()
 
     expect(runs()).toEqual(['1:implement', '1:merge', '1:implement', '1:merge'])
-    expect(harness.runs[2]?.prompt).toContain('Use bcrypt for passwords.')
+    expect(stageRuns(harness)[2]?.prompt).toContain('Use bcrypt for passwords.')
     expect(workspaces.resets).toEqual(['1'])
     expect(await board.pullRequest('1')).toMatchObject({ state: 'open', review: 'none' })
     expect((await board.getTask('1'))?.state).toBe('review')
@@ -237,7 +238,7 @@ describe('rework', () => {
 
     await cycle()
 
-    expect(harness.runs[2]?.stage).toBe('implement')
-    expect(harness.runs[2]?.prompt).toContain('Please split the controller.')
+    expect(stageRuns(harness)[2]?.stage).toBe('implement')
+    expect(stageRuns(harness)[2]?.prompt).toContain('Please split the controller.')
   })
 })

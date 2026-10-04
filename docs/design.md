@@ -333,9 +333,31 @@ If the board read fails, running stages continue; the next cycle tries again.
 
 ## Merge and dependencies
 
-- `triage` sets "blocked by" links with the board's native features (GitHub and GitLab).
-- The CLI does not claim a task with open blockers.
-- Merge runs in topological order: rebase, CI, merge. Only one workstation merges at a time: lock branch `conveyor-lock/merge`.
+After the `merge` stage the CLI pushes the task branch and opens a pull request. The body has no closing keyword (`Closes #N`), so GitHub does not close the issue on merge; the CLI closes it when the task is complete.
+
+| Merge mode | After the merge stage |
+|---|---|
+| `human` | the task goes to `review`; a human reviews and merges the pull request |
+| `ai` | the CLI lands the pull request |
+| `smart` | the merge stage returns `approval` (review needed, by `smart/merge.md`) or `done` (land) |
+
+Landing is a deterministic CLI step, retried every minute while it waits:
+
+1. Open blockers → wait (dependency order).
+2. Checks pending or mergeability unknown → wait.
+3. Checks failed, conflicts, or merge error → run post-merge stages with `when: failure` or `always` (for example `fix-ci`), then land again. Without such stages, or after `retry.max_attempts` landing failures, the task goes to `needs-input`.
+4. Otherwise take the lock `conveyor-lock/merge`, merge with `merge_method` (`merge`, `squash`, `rebase`; default `merge`), release the lock.
+5. Success → post-merge stages with `when: success` or `always` → `conveyor::done`: the CLI closes the issue, deletes the claim lock, the workspace, and the merged task branch.
+
+In `review` the CLI checks the pull request every cycle: merged by a human → post-merge stages; changes requested → rework.
+
+## Triage
+
+- Runs at the start of a cycle when unclaimed tasks in `idea`, `story`, or `plan` have no priority.
+- One workstation at a time: lock `conveyor-lock/triage`.
+- The agent gets all open conveyor tasks (title, state, priority, the start of the body) with new tasks marked. It returns JSON: a priority 1–4 per new task and `blocked_by` lists. The CLI sets `priority::<n>` labels and native "blocked by" links.
+- New tasks the agent left out get priority 3, so the triage does not repeat every cycle.
+- A failed triage waits `retry.max_backoff` before the next attempt. No triage runs over the daily token limit.
 
 ## Rework
 

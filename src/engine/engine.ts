@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { z } from 'zod'
 import { join } from 'node:path'
 import type { Board, Comment, Task } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
@@ -8,7 +9,7 @@ import { resolveSkills } from '../skills.js'
 import type { UsageLedger } from '../usage.js'
 import type { Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
-import { buildPrompt, type GateMode } from './prompt.js'
+import { buildPrompt, buildTriagePrompt, type GateMode } from './prompt.js'
 import { releaseClaim } from './release.js'
 import { parseStageFile, readFormat, renderInstructions } from './stage-file.js'
 import { waitingDeadline } from './time.js'
@@ -51,6 +52,19 @@ type TaskRun = {
   save: () => Promise<void>
 }
 
+const TRIAGE_LOCK = 'triage'
+const DEFAULT_PRIORITY = 3
+const NEW_STATES: Task['state'][] = ['idea', 'story', 'plan']
+const triageSchema = z.object({
+  tasks: z.array(
+    z.object({
+      id: z.union([z.string(), z.number()]).transform(String),
+      priority: z.int().min(1).max(4).optional(),
+      blocked_by: z.array(z.union([z.string(), z.number()]).transform(String)).default([]),
+    }),
+  ),
+})
+
 const LAND = 'land'
 const LAND_WAIT = 60_000
 const MERGE_LOCK = 'merge'
@@ -83,6 +97,7 @@ const WAITING_STATES: Task['state'][] = ['needs-input', 'queued', 'review']
 export class Engine {
   private readonly running = new Map<string, Running>()
   private me?: string
+  private triageRetryAt = 0
 
   constructor(private readonly options: EngineOptions) {}
 
@@ -97,6 +112,7 @@ export class Engine {
       return
     }
     const config = loaded.config
+    await this.triage(config).catch((error: unknown) => this.log(`triage failed: ${(error as Error).message}`))
 
     const resumable: Task[] = []
     const fresh: Task[] = []
@@ -336,6 +352,7 @@ export class Engine {
     await board.closeTask(id)
     await board.release(id)
     await workspaces.remove(id)
+    await workspaces.deleteBranch(id)
     this.log(`task ${id}: done`)
   }
 
@@ -468,6 +485,56 @@ export class Engine {
     await board.setState(id, 'needs-input')
     await run.save()
     return 'stop'
+  }
+
+  private async triage(config: Config) {
+    const { board } = this.options
+    if (Date.now() < this.triageRetryAt) return
+    if (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) return
+    const tasks = await board.listTasks()
+    const fresh = tasks.filter((task) => !task.owner && NEW_STATES.includes(task.state) && task.priority === undefined).map((task) => task.id)
+    if (fresh.length === 0) return
+    const harness = this.options.harnesses[config.triage.harness]
+    if (!harness) {
+      this.log(`triage skipped: harness ${config.triage.harness} is not available`)
+      return
+    }
+    if (!(await board.claim(TRIAGE_LOCK))) return
+    try {
+      const output = await harness.runStage({
+        stage: 'triage',
+        prompt: buildTriagePrompt({ instructions: this.read('triage.md'), tasks, fresh, language: config.language.docs }),
+        model: config.triage.model,
+        effort: config.triage.effort,
+        cwd: this.options.repo,
+        signal: AbortSignal.timeout(config.timeouts.stage),
+      })
+      this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
+      const parsed = output.result.outcome === 'done' && output.result.artifact ? parseJson(output.result.artifact.content) : undefined
+      const result = triageSchema.safeParse(parsed)
+      if (!result.success) {
+        this.triageRetryAt = Date.now() + config.retry.max_backoff
+        this.log(`triage failed: ${output.result.outcome === 'done' ? 'invalid triage result' : output.result.summary}`)
+        return
+      }
+      const known = new Set(tasks.map((task) => task.id))
+      const prioritized = new Set<string>()
+      for (const entry of result.data.tasks) {
+        if (!known.has(entry.id)) continue
+        if (entry.priority !== undefined) {
+          await board.setPriority(entry.id, entry.priority)
+          prioritized.add(entry.id)
+        }
+        for (const blocker of entry.blocked_by) {
+          if (blocker === entry.id || !known.has(blocker)) continue
+          await board.addBlocker(entry.id, blocker).catch((error: unknown) => this.log(`triage: blocker ${blocker} → ${entry.id}: ${(error as Error).message}`))
+        }
+      }
+      for (const id of fresh) if (!prioritized.has(id)) await board.setPriority(id, DEFAULT_PRIORITY)
+      this.log(`triage: ${output.result.summary}`)
+    } finally {
+      await board.release(TRIAGE_LOCK)
+    }
   }
 
   private async mustGetTask(id: string) {
@@ -657,4 +724,12 @@ export class Engine {
 function withoutOwner(task: Task): Task {
   const { owner: _owner, ...rest } = task
   return rest
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
 }
