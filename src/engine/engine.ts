@@ -4,9 +4,13 @@ import type { Board, Comment, Task } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, StageOutput, StageResult } from '../harness/harness.js'
 import { NO_USAGE, failed } from '../harness/harness.js'
+import { resolveSkills } from '../skills.js'
+import type { UsageLedger } from '../usage.js'
 import type { Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
 import { buildPrompt, type GateMode } from './prompt.js'
+import { releaseClaim } from './release.js'
+import { parseStageFile, renderInstructions } from './stage-file.js'
 import { waitingDeadline } from './time.js'
 import {
   agentComment,
@@ -23,12 +27,16 @@ export type EngineOptions = {
   harnesses: Partial<Record<HarnessName, Harness>>
   workspaces: Workspaces
   settingsDir: string
+  repo: string
   home: string
+  usage: UsageLedger
   loadConfig: () => LoadResult
   log?: (message: string) => void
 }
 
 type Running = { controller: AbortController; promise: Promise<void> }
+
+type StageAttempt = StageOutput & { fatal?: boolean }
 
 type StageContext = {
   workspace: string
@@ -121,12 +129,14 @@ export class Engine {
       if (task.state === 'needs-input') await board.setState(task.id, 'queued')
     }
 
-    if (waiting > 0 || awaitingMe >= config.limits.awaiting_me || awaitingReview >= config.limits.awaiting_review) return
+    const overBudget = config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens
+    if (waiting > 0 || overBudget || awaitingMe >= config.limits.awaiting_me || awaitingReview >= config.limits.awaiting_review) return
 
     for (const task of this.sorted(fresh, me)) {
       if (slots <= 0) break
       if (!(await board.claim(task.id))) continue
       await board.setOwner(task.id, me)
+      this.log(`claimed task ${task.id}: ${task.title}`)
       this.start(task, config)
       slots--
     }
@@ -136,13 +146,17 @@ export class Engine {
     while (this.running.size > 0) await Promise.all([...this.running.values()].map((running) => running.promise))
   }
 
+  async stop() {
+    for (const running of this.running.values()) running.controller.abort()
+    await this.idle()
+  }
+
   async release(id: string, reason: string) {
     const running = this.running.get(id)
     running?.controller.abort()
     await running?.promise
-    await this.options.board.release(id)
-    await this.options.board.setOwner(id, undefined)
-    await this.options.board.addComment(id, agentComment('release', reason))
+    await releaseClaim(this.options.board, id, reason)
+    this.log(`task ${id}: ${reason}`)
   }
 
   private async reconcile(me: string) {
@@ -225,7 +239,7 @@ export class Engine {
       comments = await board.listComments(id)
       const gate = this.gate(stage, config)
       const heartbeat = setInterval(() => void save().catch(() => undefined), config.timeouts.heartbeat / 3)
-      let output: StageOutput
+      let output: StageAttempt
       try {
         output = await this.runStage(task, stage, config, {
           workspace: workspace.path,
@@ -240,6 +254,8 @@ export class Engine {
         clearInterval(heartbeat)
       }
       if (signal.aborted) return
+      this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
+      this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
       conversation = undefined
       await workspaces.push(id).catch((error: unknown) => this.log(`task ${id}: push failed: ${(error as Error).message}`))
 
@@ -258,7 +274,7 @@ export class Engine {
         continue
       }
       if (result.outcome === 'failed') {
-        await this.fail(id, stage, state, result, config)
+        await this.fail(id, stage, state, result, config, output.fatal ?? false)
         await save()
         return
       }
@@ -279,9 +295,31 @@ export class Engine {
     await save()
   }
 
-  private async runStage(task: Task, stage: Stage, config: Config, context: StageContext): Promise<StageOutput> {
+  private async runStage(task: Task, stage: Stage, config: Config, context: StageContext): Promise<StageAttempt> {
+    const cannotStart = (reason: string): StageAttempt => ({ result: failed(reason), usage: NO_USAGE, fatal: true })
     const harness = this.options.harnesses[stage.harness]
-    if (!harness) return { result: failed(`harness ${stage.harness} is not available`), usage: NO_USAGE }
+    if (!harness) return cannotStart(`harness ${stage.harness} is not available`)
+    const file = parseStageFile(this.read('stages', `${stage.name}.md`))
+    if (!file.ok) return cannotStart(`stages/${stage.name}.md: ${file.error}`)
+    if (file.skills.length > 0 && stage.harness !== 'claude') return cannotStart(`skills in the ${stage.name} stage are supported only with the claude harness`)
+    const { skills, missing } = resolveSkills(file.skills, { repo: this.options.repo, home: this.options.home })
+    if (missing.length > 0) return cannotStart(`skills not found for the ${stage.name} stage: ${missing.join(', ')}`)
+    const instructions = renderInstructions(file.template, {
+      issue: {
+        id: task.id,
+        title: task.title,
+        body: task.body,
+        state: task.state ?? '',
+        assignees: task.assignees,
+        priority: task.priority ?? null,
+        blockers: task.openBlockers,
+      },
+      stage: stage.name,
+      attempt: context.attempt,
+      artifacts: context.artifacts,
+      review: '',
+    })
+    if (!instructions.ok) return cannotStart(`stages/${stage.name}.md: ${instructions.error}`)
     try {
       await this.options.workspaces.runHook('before_run', context.workspace)
     } catch (error) {
@@ -290,7 +328,7 @@ export class Engine {
     const prompt = buildPrompt({
       task,
       stage: stage.name,
-      instructions: this.read('stages', `${stage.name}.md`),
+      instructions: instructions.text,
       ...(context.gate ? { gate: context.gate } : {}),
       artifacts: context.artifacts,
       workpad: context.workpad,
@@ -328,6 +366,7 @@ export class Engine {
         cwd: context.workspace,
         signal: controller.signal,
         onEvent: arm,
+        skills: skills.filter((skill) => skill.source !== 'project'),
       })
       return reason ? { ...output, result: failed(reason) } : output
     } finally {
@@ -338,9 +377,17 @@ export class Engine {
     }
   }
 
-  private async fail(id: string, stage: Stage, state: WorkpadState, result: StageResult, config: Config) {
+  private async fail(id: string, stage: Stage, state: WorkpadState, result: StageResult, config: Config, fatal: boolean) {
     state.attempt++
     state.lastError = result.summary
+    if (fatal) {
+      const text = `**The \`${stage.name}\` stage cannot start.**\n\n${result.summary}\n\nFix the cause, then reply in a comment to retry.`
+      const comment = await this.options.board.addComment(id, agentComment('error', text))
+      state.attempt = 0
+      state.waiting = { kind: 'error', stage: stage.name, commentId: comment.id, since: new Date().toISOString() }
+      await this.options.board.setState(id, 'needs-input')
+      return
+    }
     if (state.attempt < config.retry.max_attempts) {
       const delay = Math.min(10_000 * 2 ** (state.attempt - 1), config.retry.max_backoff)
       state.retryAt = new Date(Date.now() + delay).toISOString()

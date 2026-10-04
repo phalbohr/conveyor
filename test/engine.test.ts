@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
+import { UsageLedger } from '../src/usage.js'
 import { FakeHarness, type Script } from '../src/harness/fake.js'
 import type { StageResult } from '../src/harness/harness.js'
 import { FakeWorkspaces, deferred } from './fakes.js'
@@ -20,6 +21,8 @@ function setup(options: Setup = {}) {
   mkdirSync(join(settings, 'stages'))
   for (const [stage, text] of Object.entries(options.instructions ?? {})) writeFileSync(join(settings, 'stages', `${stage}.md`), text)
   const home = tempDir('conveyor-home-')
+  const repo = tempDir('conveyor-repo-')
+  const usage = new UsageLedger()
   const board = new FakeBoard('me')
   const harness = new FakeHarness(options.script)
   const workspaces = new FakeWorkspaces()
@@ -28,6 +31,8 @@ function setup(options: Setup = {}) {
     harnesses: { claude: harness, codex: harness },
     workspaces,
     settingsDir: settings,
+    repo,
+    usage,
     home,
     loadConfig: () => loadConfig(settings),
   })
@@ -36,7 +41,7 @@ function setup(options: Setup = {}) {
     await engine.idle()
   }
   const runs = () => harness.runs.map((run) => `${run.taskId}:${run.stage}`)
-  return { settings, home, board, harness, workspaces, engine, cycle, runs }
+  return { settings, home, repo, usage, board, harness, workspaces, engine, cycle, runs }
 }
 
 const done = (artifact?: { kind: string; content: string }): StageResult => ({ outcome: 'done', summary: 'ok', ...(artifact ? { artifact } : {}) })
@@ -333,5 +338,54 @@ describe('Engine scheduling', () => {
     await cycle()
     expect(runs()).toEqual([])
     expect((await board.listComments('1')).find((c) => c.body.includes('conveyor:workpad'))?.body).toContain('"attempt":1')
+  })
+})
+
+describe('Engine stage files', () => {
+  it('renders template variables in the stage instructions', async () => {
+    const { board, cycle, harness } = setup({ instructions: { implement: 'Implement #{{ issue.id }} "{{ issue.title }}" in {{ stage }}.' } })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    expect(harness.runs[0]?.prompt).toContain('Implement #1 "Add login" in implement.')
+  })
+
+  it('does not start a stage with an unknown template variable and asks a human at once', async () => {
+    const { board, cycle, runs } = setup({ instructions: { implement: 'Owner: {{ issue.owner }}' } })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    expect(runs()).toEqual([])
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+    expect((await board.listComments('1')).at(-1)?.body).toContain('issue.owner')
+  })
+
+  it('does not start a stage with a missing skill', async () => {
+    const { board, cycle, runs } = setup({ instructions: { implement: '---\nskills: [grilling]\n---\nUse grilling.' } })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    expect(runs()).toEqual([])
+    const last = (await board.listComments('1')).at(-1)?.body
+    expect(last).toContain('grilling')
+    expect(last).toContain('implement')
+  })
+
+  it('passes the resolved skills to the harness', async () => {
+    const { board, cycle, harness, home } = setup({ instructions: { implement: '---\nskills: [grilling]\n---\nUse grilling.' } })
+    mkdirSync(join(home, '.claude', 'skills', 'grilling'), { recursive: true })
+    writeFileSync(join(home, '.claude', 'skills', 'grilling', 'SKILL.md'), '---\nname: grilling\n---\n')
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    expect(harness.runs[0]?.skills).toEqual([{ name: 'grilling', source: 'personal', dir: join(home, '.claude', 'skills', 'grilling') }])
+  })
+})
+
+describe('Engine token budget', () => {
+  it('stops claiming new tasks when the daily token limit is reached', async () => {
+    const { board, cycle, runs, usage } = setup({ local: 'limits: {daily_tokens: 300, awaiting_review: 10}\n' })
+    await board.createTask('First', 'p', 'plan')
+    await cycle()
+    expect(usage.today()).toBe(330)
+    await board.createTask('Second', 'p', 'plan')
+    await cycle()
+    expect(runs()).toEqual(['1:implement', '1:review', '1:merge'])
   })
 })

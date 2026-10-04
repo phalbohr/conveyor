@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ResolvedSkill } from '../skills.js'
 
 export type StageResult = {
   outcome: 'done' | 'needs_input' | 'approval' | 'failed'
@@ -19,6 +20,7 @@ export type StageRun = {
   cwd: string
   signal?: AbortSignal
   onEvent?: () => void
+  skills?: ResolvedSkill[]
 }
 
 export type StageOutput = { result: StageResult; usage: Usage }

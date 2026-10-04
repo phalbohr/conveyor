@@ -107,7 +107,9 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 
 ## Artifacts
 
-- Each artifact (idea, story, plan) has its own storage: `board` (issue body or comment), `repo` (file in the project repository), `path` (any local directory, also outside the repository).
+- Each artifact (idea, story, plan) has its own storage: `board`, `repo` (file in the project repository, committed on the task branch), `path` (any local directory, also outside the repository).
+- On the board, idea and story live in the issue body; plan and custom artifacts live in one agent comment per kind, updated in place.
+- Files in `repo` and `path` storage are named `<issue>-<kind>.md`.
 - `write: replace` overwrites the previous artifact text in place (idea → story in the same issue body). `write: append` adds to it.
 - Private artifacts: the team allows them with `allow_private: true`. A member then overrides the storage in `local.yaml`. A private artifact is visible only to its owner.
 - A task always has an owner (`claimed-by`). A task with a private artifact is never released automatically. Only the owner can continue it, unless it is released manually (a non-owner needs `--force`).
@@ -142,6 +144,7 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 - A missing skill blocks the stage with an error that names the skill and the stage. The stage never runs without a declared skill.
 - `conveyor run` checks the frontmatter of all configured stages once at start, so a missing skill shows up at once and not hours later.
 - For teams, skills belong in the repository (committed copies) or in a plugin. Symlinks to personal paths break on other workstations.
+- The claude adapter attaches personal skills through `--add-dir` (names stay unchanged) and plugin skills through a temporary plugin with the same name (`plugin:skill` stays unchanged). Skills are supported only for claude stages for now.
 - Fallback: `settings: full` per stage in `local.yaml` only. It loads all personal settings for that stage on this workstation. It is a personal choice and never part of the team configuration.
 
 ## Stage result contract
@@ -298,7 +301,8 @@ If the board read fails, running stages continue; the next cycle tries again.
 
 ## Limits and queue
 
-- `running` is counted locally from lock files in `~/.conveyor/run/`.
+- `running` is counted in the `conveyor run` process. A pid file in `~/.conveyor/run/` allows only one `run` process per project on a workstation.
+- Daily token usage is stored in `~/.conveyor/usage/<project>.json`.
 - A confirmed task leaves `awaiting_me`. If no `running` slot is free, it gets `conveyor::queued` and waits.
 - When a slot is free: first tasks from the resume queue, then new tasks from the board.
 - `awaiting_review` only blocks the claim of new tasks. It never stops a task that is ready for review.
