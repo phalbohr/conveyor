@@ -3,7 +3,13 @@ import type { Board, Task, TaskState } from '../src/board/board.js'
 
 const eventually = (assertion: () => Promise<void>) => vi.waitFor(assertion, { timeout: 30_000, interval: 1_000 })
 
-export function boardContract(name: string, makeBoard: () => Board, options: { timeout?: number } = {}) {
+type ContractOptions = {
+  timeout?: number
+  prepareBranch?: (id: string) => Promise<void>
+  removeBranch?: (id: string) => Promise<void>
+}
+
+export function boardContract(name: string, makeBoard: () => Board, options: ContractOptions = {}) {
   describe(`${name} board contract`, { timeout: options.timeout ?? 5_000 }, () => {
     const board = makeBoard()
     const created: string[] = []
@@ -14,8 +20,16 @@ export function boardContract(name: string, makeBoard: () => Board, options: { t
       return result
     }
 
+    const branches: string[] = []
+
+    async function branch(id: string) {
+      await options.prepareBranch?.(id)
+      branches.push(id)
+    }
+
     afterAll(async () => {
       for (const id of created) await board.closeTask(id)
+      for (const id of branches) await options.removeBranch?.(id)
     }, 120_000)
 
     it('creates a task with a state and lists it', async () => {
@@ -94,6 +108,42 @@ export function boardContract(name: string, makeBoard: () => Board, options: { t
       await board.release(t.id)
       expect(await board.claim(t.id)).toBe(true)
       await board.release(t.id)
+    })
+
+    it('replaces the priority', async () => {
+      const t = await task('plan')
+      await board.setPriority(t.id, 3)
+      await board.setPriority(t.id, 1)
+      expect((await board.getTask(t.id))?.priority).toBe(1)
+    })
+
+    it('has no pull request for a new task', async () => {
+      const t = await task('plan')
+      expect(await board.pullRequest(t.id)).toBeUndefined()
+    })
+
+    it('opens one pull request for the task branch and merges it', async () => {
+      const t = await task('review')
+      await branch(t.id)
+      const opened = await board.openPullRequest(t.id, `Task ${t.id}`, 'Part of the contract test.')
+      expect(opened).toMatchObject({ state: 'open', review: 'none', feedback: [] })
+      expect((await board.openPullRequest(t.id, `Task ${t.id}`, 'again')).number).toBe(opened.number)
+      expect((await board.pullRequest(t.id))?.number).toBe(opened.number)
+
+      await eventually(async () => {
+        expect((await board.pullRequest(t.id))?.mergeable).toBe('yes')
+      })
+      expect(await board.mergePullRequest(t.id, 'squash')).toEqual({ ok: true })
+      expect((await board.pullRequest(t.id))?.state).toBe('merged')
+      expect((await board.getTask(t.id))?.closed).toBe(false)
+    })
+
+    it('closes a pull request', async () => {
+      const t = await task('review')
+      await branch(t.id)
+      await board.openPullRequest(t.id, `Task ${t.id}`, 'Part of the contract test.')
+      await board.closePullRequest(t.id)
+      expect((await board.pullRequest(t.id))?.state).toBe('closed')
     })
 
     it('releases an unclaimed task without error', async () => {

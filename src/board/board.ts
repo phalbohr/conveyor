@@ -23,6 +23,18 @@ export type Comment = {
   updatedAt: string
 }
 
+export type PullRequest = {
+  number: string
+  url: string
+  state: 'open' | 'merged' | 'closed'
+  checks: 'pending' | 'success' | 'failure' | 'none'
+  mergeable: 'yes' | 'no' | 'unknown'
+  review: 'approved' | 'changes_requested' | 'none'
+  feedback: string[]
+}
+
+export type MergeMethod = 'merge' | 'squash' | 'rebase'
+
 export interface Board {
   user(): Promise<string>
   createTask(title: string, body: string, state?: TaskState): Promise<Task>
@@ -38,6 +50,11 @@ export interface Board {
   addBlocker(id: string, blockerId: string): Promise<void>
   claim(id: string): Promise<boolean>
   release(id: string): Promise<void>
+  setPriority(id: string, priority: number): Promise<void>
+  openPullRequest(id: string, title: string, body: string): Promise<PullRequest>
+  pullRequest(id: string): Promise<PullRequest | undefined>
+  mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }>
+  closePullRequest(id: string): Promise<void>
 }
 
 export const STATE_LABEL = 'conveyor::'
