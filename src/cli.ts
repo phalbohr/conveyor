@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { Command, CommanderError, Option } from 'commander'
+import { releaseCommand, runCommand } from './commands/run.js'
 import { loadConfig } from './config.js'
 import { detectBoard, initProject, type Board, type InitResult, type Target } from './init.js'
 import { findSettings } from './settings.js'
@@ -55,6 +56,23 @@ export async function main(argv: string[], context: Context): Promise<number> {
           : { kind: 'here' }
       const board = target.kind === 'use' ? undefined : await resolveBoard(context, options)
       exitCode = report(context, await initProject(context, target, board), json())
+    })
+
+  program
+    .command('run')
+    .description('work the board: claim tasks within the limits and run their stages')
+    .option('--once', 'run one cycle, wait for the started stages, and exit')
+    .action(async (options: { once?: boolean }) => {
+      exitCode = await runCommand(context, options)
+    })
+
+  program
+    .command('release')
+    .description('release the claim of a task')
+    .argument('<issue>', 'task id on the board')
+    .option('--force', 'release a task with private artifacts of another member')
+    .action(async (issue: string, options: { force?: boolean }) => {
+      exitCode = await releaseCommand(context, issue, options.force ?? false)
     })
 
   try {

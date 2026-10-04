@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { ResolvedSkill } from '../skills.js'
 import { NO_USAGE, RESULT_SCHEMA, childEnv, failed, parseResult, type Harness, type HarnessOptions, type StageOutput, type StageRun } from './harness.js'
 import { spawnLines } from './process.js'
 
@@ -13,6 +17,15 @@ export class ClaudeHarness implements Harness {
   constructor(private readonly options: HarnessOptions = {}) {}
 
   async runStage(run: StageRun): Promise<StageOutput> {
+    const attached = attachSkills(run.skills ?? [])
+    try {
+      return await this.execute(run, attached.args)
+    } finally {
+      attached.cleanup()
+    }
+  }
+
+  private async execute(run: StageRun, skillArgs: string[]): Promise<StageOutput> {
     let last: ResultEvent | undefined
     const args = [
       '-p',
@@ -25,6 +38,7 @@ export class ClaudeHarness implements Harness {
       '--setting-sources', 'project,local',
       '--strict-mcp-config',
       '--no-session-persistence',
+      ...skillArgs,
       '--',
       run.prompt,
     ]
@@ -45,6 +59,33 @@ export class ClaudeHarness implements Harness {
     }
     return { result: parseResult(last.structured_output), usage: usage(last) }
   }
+}
+
+function attachSkills(skills: ResolvedSkill[]): { args: string[]; cleanup: () => void } {
+  if (skills.length === 0) return { args: [], cleanup: () => undefined }
+  const root = mkdtempSync(join(tmpdir(), 'conveyor-skills-'))
+  const args: string[] = []
+  const link = (target: string, path: string) => {
+    mkdirSync(join(path, '..'), { recursive: true })
+    symlinkSync(target, path)
+  }
+
+  const personal = skills.filter((skill) => skill.source === 'personal')
+  if (personal.length > 0) {
+    for (const skill of personal) link(skill.dir, join(root, 'personal', '.claude', 'skills', skill.name))
+    args.push('--add-dir', join(root, 'personal'))
+  }
+
+  const plugins = new Map<string, Extract<ResolvedSkill, { source: 'plugin' }>[]>()
+  for (const skill of skills) if (skill.source === 'plugin') plugins.set(skill.plugin, [...(plugins.get(skill.plugin) ?? []), skill])
+  for (const [plugin, pluginSkills] of plugins) {
+    const dir = join(root, 'plugins', plugin)
+    mkdirSync(join(dir, '.claude-plugin'), { recursive: true })
+    writeFileSync(join(dir, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: plugin, version: '0.0.0', description: 'conveyor stage skills' }))
+    for (const skill of pluginSkills) link(skill.dir, join(dir, 'skills', skill.skill))
+    args.push('--plugin-dir', dir)
+  }
+  return { args, cleanup: () => rmSync(root, { recursive: true, force: true }) }
 }
 
 function usage(event: ResultEvent | undefined) {

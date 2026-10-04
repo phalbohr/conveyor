@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
+import { UsageLedger } from '../src/usage.js'
 import { renderWorkpad, type WorkpadState } from '../src/engine/workpad.js'
 import { FakeHarness, type Script } from '../src/harness/fake.js'
 import type { StageResult } from '../src/harness/harness.js'
@@ -22,6 +23,8 @@ function setup(options: { config?: string; script?: Script } = {}) {
     `board: {provider: github, project: acme/app}\nstages:\n  implement: {}\n  review: {}\n${options.config ?? ''}`,
   )
   mkdirSync(join(settings, 'stages'))
+  const repo = tempDir('conveyor-repo-')
+  const usage = new UsageLedger()
   const board = new FakeBoard('me')
   const harness = new FakeHarness(options.script)
   const workspaces = new FakeWorkspaces()
@@ -30,6 +33,8 @@ function setup(options: { config?: string; script?: Script } = {}) {
     harnesses: { claude: harness },
     workspaces,
     settingsDir: settings,
+    repo,
+    usage,
     home: tempDir(),
     loadConfig: () => loadConfig(settings),
   })

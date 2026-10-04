@@ -1,4 +1,4 @@
-import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ClaudeHarness } from '../src/harness/claude.js'
@@ -22,6 +22,10 @@ function stub(fixture: string, options: { exitCode?: number; hang?: boolean } = 
 const fs = require('node:fs')
 fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }))
 fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify(Object.keys(process.env)))
+const listed = []
+const walk = (dir) => { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const path = dir + '/' + entry.name; if (entry.isDirectory() || fs.statSync(path).isDirectory()) walk(path); else listed.push(path) } }
+process.argv.forEach((arg, index) => { if (arg === '--add-dir' || arg === '--plugin-dir') walk(process.argv[index + 1]) })
+fs.writeFileSync(${JSON.stringify(join(dir, 'skills.json'))}, JSON.stringify(listed))
 process.stdout.write(fs.readFileSync(${JSON.stringify(join(FIXTURES, fixture))}, 'utf8'))
 ${options.hang ? 'setInterval(() => {}, 1000)' : `process.exit(${options.exitCode ?? 0})`}
 `,
@@ -88,6 +92,32 @@ describe.each(harnesses)('$name harness adapter', ({ fixture, make }) => {
     expect(keys).toContain('KEEP_ME')
     expect(keys).not.toContain('GH_TOKEN')
     expect(keys).not.toContain('GITLAB_TOKEN')
+  })
+})
+
+describe('claude harness skills', () => {
+  it('attaches personal and plugin skills for the run and removes them afterwards', async () => {
+    const s = stub('claude-done.jsonl')
+    const skillDir = (name: string) => {
+      const dir = join(tempDir(), name)
+      mkdirSync(dir)
+      writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${name}\n---\n`)
+      return dir
+    }
+    await new ClaudeHarness({ command: s.command }).runStage(
+      run({
+        skills: [
+          { name: 'grilling', source: 'personal', dir: skillDir('grilling') },
+          { name: 'superpowers:brainstorming', source: 'plugin', plugin: 'superpowers', skill: 'brainstorming', dir: skillDir('brainstorming') },
+        ],
+      }),
+    )
+    const listed = JSON.parse(readFileSync(join(s.command, '..', 'skills.json'), 'utf8')) as string[]
+    expect(listed.some((path) => path.endsWith('/personal/.claude/skills/grilling/SKILL.md'))).toBe(true)
+    expect(listed.some((path) => path.endsWith('/plugins/superpowers/skills/brainstorming/SKILL.md'))).toBe(true)
+    expect(listed.some((path) => path.endsWith('/plugins/superpowers/.claude-plugin/plugin.json'))).toBe(true)
+    const attached = listed[0]?.split('/personal/')[0] ?? ''
+    expect(existsSync(attached)).toBe(false)
   })
 })
 
