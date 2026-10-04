@@ -115,6 +115,7 @@ const unavailableWorkspaces = {
   runHook: () => Promise.resolve(),
   commitFile: () => Promise.reject(new Error('no workspace in a live session')),
   commitAll: () => Promise.resolve(false),
+  reset: () => Promise.reject(new Error('no workspace in a live session')),
   push: () => Promise.resolve(),
   remove: () => Promise.resolve(),
   list: () => Promise.resolve([]),

@@ -12,6 +12,9 @@ export type PromptInput = {
   conversation?: { request: string; replies: string[]; approval: boolean }
   attempt: number
   language: string
+  review?: string
+  merge?: string
+  mergeCriteria?: string
 }
 
 const MODES: Record<GateMode, string> = {
@@ -40,6 +43,16 @@ export function buildPrompt(input: PromptInput): string {
       ? 'You asked for approval. If the human approves, return outcome `done` without changes. If the human asks for changes, revise the result and ask for approval again.'
       : 'You asked these questions. Continue the stage with the answers.'
     sections.push(`## Conversation\n\n${note}\n\nYour request:\n\n${input.conversation.request.trim()}\n\nReplies:\n\n${replies}`)
+  }
+  if (input.review) {
+    const feedback = `> ${input.review.trim().replaceAll('\n', '\n> ')}`
+    sections.push(`## Review feedback\n\nA reviewer asked for changes. The task restarts from a fresh branch. Address every point:\n\n${feedback}`)
+  }
+  if (input.merge) sections.push(`## Merge\n\n${input.merge}`)
+  if (input.mergeCriteria !== undefined) {
+    sections.push(
+      `## Merge decision\n\nDecide if this change needs human review. Return outcome \`approval\` with the reason in the summary if the criteria below require human review. Otherwise return outcome \`done\`, and the conveyor merges the change.\n\n${input.mergeCriteria.trim()}`,
+    )
   }
   if (input.attempt > 0) sections.push(`## Retry\n\nThis stage failed ${input.attempt} time(s) before. Check the workpad and change your approach.`)
   sections.push(

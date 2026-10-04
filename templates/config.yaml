@@ -12,6 +12,7 @@ transitions:
   idea_to_story: interactive
   story_to_plan: interactive
   merge: human
+merge_method: merge
 defaults: {harness: claude, model: sonnet, effort: medium}
 triage: {model: opus, effort: high}
 stages:

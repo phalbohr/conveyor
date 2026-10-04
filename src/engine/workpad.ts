@@ -15,6 +15,10 @@ export type WorkpadState = {
   heartbeat?: string
   private?: boolean
   lastError?: string
+  landing?: 'success' | 'failure'
+  mergeError?: string
+  landAttempts?: number
+  review?: string
 }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }

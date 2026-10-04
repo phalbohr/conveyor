@@ -12,6 +12,7 @@ export interface Workspaces {
   runHook(hook: 'before_run' | 'after_run', path: string): Promise<void>
   commitFile(taskId: string, file: string, content: string, message: string): Promise<void>
   commitAll(taskId: string, message: string): Promise<boolean>
+  reset(taskId: string): Promise<void>
   push(taskId: string): Promise<void>
   remove(taskId: string): Promise<void>
   list(): Promise<string[]>
@@ -62,8 +63,16 @@ export class GitWorkspaces implements Workspaces {
     return true
   }
 
+  async reset(taskId: string) {
+    const path = this.path(taskId)
+    await this.git(this.options.repo, 'fetch', '--quiet', 'origin')
+    await this.git(path, 'reset', '--quiet', '--hard', await this.baseRef())
+    await this.git(path, 'clean', '-fdq')
+    await this.push(taskId)
+  }
+
   async push(taskId: string) {
-    await this.git(this.path(taskId), 'push', '--quiet', 'origin', `HEAD:refs/heads/${taskBranch(taskId)}`)
+    await this.git(this.path(taskId), 'push', '--quiet', '--force', 'origin', `HEAD:refs/heads/${taskBranch(taskId)}`)
   }
 
   async remove(taskId: string) {

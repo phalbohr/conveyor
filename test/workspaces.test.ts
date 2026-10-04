@@ -124,6 +124,22 @@ describe('GitWorkspaces', () => {
     expect(git(origin, 'show', 'conveyor/6:feature.txt')).toBe('new')
   })
 
+  it('resets the task branch to the base branch', async () => {
+    const { project, origin } = repository()
+    const manager = workspaces(project)
+    const { path } = await manager.prepare('8')
+    writeFileSync(join(path, 'wrong.txt'), 'wrong approach\n')
+    await manager.commitAll('8', 'implement: wrong approach')
+    await manager.push('8')
+    writeFileSync(join(path, 'untracked.txt'), 'leftover\n')
+
+    await manager.reset('8')
+
+    expect(existsSync(join(path, 'wrong.txt'))).toBe(false)
+    expect(existsSync(join(path, 'untracked.txt'))).toBe(false)
+    expect(git(origin, 'rev-parse', 'conveyor/8')).toBe(git(origin, 'rev-parse', 'main'))
+  })
+
   it('runs before_remove and removes the workspace', async () => {
     const { project } = repository()
     const marker = join(tempDir(), 'removed')
