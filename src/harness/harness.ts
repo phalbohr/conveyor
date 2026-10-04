@@ -21,6 +21,8 @@ export type StageRun = {
   signal?: AbortSignal
   onEvent?: () => void
   skills?: ResolvedSkill[]
+  sandbox?: 'workspace-write' | 'full-access'
+  network?: boolean
 }
 
 export type StageOutput = { result: StageResult; usage: Usage }

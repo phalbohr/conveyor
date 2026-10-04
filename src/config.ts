@@ -31,6 +31,8 @@ const stageSettings = z.strictObject({
 const stageEntry = z.strictObject({
   ...stageSettings.shape,
   when: z.enum(['success', 'failure', 'always']).optional(),
+  sandbox: z.enum(['workspace-write', 'full-access']).optional(),
+  network: z.boolean().optional(),
 })
 
 const needsPath = (artifact: { store: string; path?: string | undefined }) => artifact.store === 'board' || artifact.path !== undefined
@@ -110,7 +112,12 @@ type ArtifactKind = keyof Team['artifacts']
 
 export type Harness = z.output<typeof harness>
 export type StageSettings = { harness: Harness; model: string; effort: string }
-export type Stage = StageSettings & { name: string; when?: 'success' | 'failure' | 'always' }
+export type Stage = StageSettings & {
+  name: string
+  when?: 'success' | 'failure' | 'always'
+  sandbox?: 'workspace-write' | 'full-access'
+  network?: boolean
+}
 export type Artifact = { store: 'board' | 'repo' | 'path'; path?: string; write: 'replace' | 'append' }
 
 export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages'> &
@@ -199,6 +206,10 @@ function resolveStages(team: Team, errors: string[]): Stage[] {
     if (!reserved && index < plan) errors.push(`${CONFIG_FILE}: stages.${stageName}: custom stages must come after plan`)
     if (!postMerge && entry.when) errors.push(`${CONFIG_FILE}: stages.${stageName}: only post-merge stages can have when`)
     const stage: Stage = { name: stageName, ...withDefaults(entry, team.defaults) }
+    if (stage.harness === 'codex') Object.assign(stage, { sandbox: entry.sandbox ?? 'workspace-write', network: entry.network ?? true })
+    else if (entry.sandbox !== undefined || entry.network !== undefined) {
+      errors.push(`${CONFIG_FILE}: stages.${stageName}: sandbox and network apply only to codex stages`)
+    }
     if (postMerge) stage.when = entry.when ?? 'success'
     return stage
   })
