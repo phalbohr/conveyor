@@ -126,7 +126,7 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
       const t = await task('review')
       await branch(t.id)
       const opened = await board.openPullRequest(t.id, `Task ${t.id}`, 'Part of the contract test.')
-      expect(opened).toMatchObject({ state: 'open', review: 'none', feedback: [] })
+      expect(opened).toMatchObject({ state: 'open', reviews: [], feedback: [] })
       expect((await board.openPullRequest(t.id, `Task ${t.id}`, 'again')).number).toBe(opened.number)
       expect((await board.pullRequest(t.id))?.number).toBe(opened.number)
 

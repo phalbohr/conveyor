@@ -35,9 +35,8 @@ type GitHubPull = {
   url: string
   state: 'OPEN' | 'MERGED' | 'CLOSED'
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
-  reviewDecision: string
   statusCheckRollup: Check[] | null
-  reviews: { state: string; body: string; author: { login: string } | null }[]
+  reviews: { state: string; body: string; submittedAt: string; author: { login: string } | null }[]
   comments: { body: string; createdAt: string; author: { login: string } | null }[]
 }
 
@@ -47,7 +46,7 @@ type ProjectMirror = { projectId: string; fieldId: string; options: Map<string, 
 export type GitHubBoardOptions = { projectNumber?: number; warn?: (message: string) => void }
 
 const PROJECT_FIELD = 'Conveyor'
-const PULL_FIELDS = 'number,url,state,mergeable,reviewDecision,statusCheckRollup,reviews,comments'
+const PULL_FIELDS = 'number,url,state,mergeable,statusCheckRollup,reviews,comments'
 
 const LOCK_PREFIX = 'conveyor-lock/'
 
@@ -281,22 +280,15 @@ function toPull(pull: GitHubPull, inline: string[]): PullRequest {
     state: pull.state === 'OPEN' ? 'open' : pull.state === 'MERGED' ? 'merged' : 'closed',
     checks: checks.length === 0 ? 'none' : failed ? 'failure' : pending ? 'pending' : 'success',
     mergeable: pull.mergeable === 'MERGEABLE' ? 'yes' : pull.mergeable === 'CONFLICTING' ? 'no' : 'unknown',
-    review: pull.reviewDecision === 'APPROVED' ? 'approved' : pull.reviewDecision === 'CHANGES_REQUESTED' ? 'changes_requested' : 'none',
-    feedback: [
-      ...pull.reviews.filter((review) => review.state === 'CHANGES_REQUESTED' && review.body.trim()).map((review) => review.body),
-      ...inline,
-    ],
-    approvedBy: approvers(pull.reviews),
+    feedback: inline,
+    reviews: pull.reviews.map((review) => ({
+      author: review.author?.login ?? '',
+      state: review.state === 'APPROVED' ? 'approved' : review.state === 'CHANGES_REQUESTED' ? 'changes_requested' : review.state === 'DISMISSED' ? 'dismissed' : 'commented',
+      body: review.body,
+      submittedAt: review.submittedAt,
+    })),
     comments: pull.comments.map((comment) => ({ author: comment.author?.login ?? '', body: comment.body, createdAt: comment.createdAt })),
   }
-}
-
-function approvers(reviews: GitHubPull['reviews']): string[] {
-  const latest = new Map<string, string>()
-  for (const review of reviews) {
-    if (review.author && ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state)) latest.set(review.author.login, review.state)
-  }
-  return [...latest].filter(([, state]) => state === 'APPROVED').map(([login]) => login)
 }
 
 function toComment(comment: GitHubComment): Comment {
