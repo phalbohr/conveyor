@@ -8,6 +8,7 @@ export class FakeWorkspaces implements Workspaces {
   readonly hooks: string[] = []
   readonly commits: { taskId: string; file: string; content: string }[] = []
   readonly pushes: string[] = []
+  readonly stageCommits: string[] = []
   readonly removed: string[] = []
   failBeforeRun = false
 
@@ -28,6 +29,11 @@ export class FakeWorkspaces implements Workspaces {
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, content)
     this.commits.push({ taskId, file, content })
+  }
+
+  async commitAll(taskId: string, message: string) {
+    this.stageCommits.push(`${taskId}:${message}`)
+    return true
   }
 
   async push(taskId: string) {

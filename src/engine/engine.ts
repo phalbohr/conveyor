@@ -257,6 +257,9 @@ export class Engine {
       this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
       this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
       conversation = undefined
+      await workspaces
+        .commitAll(id, `${stage.name}: ${(output.result.summary.split('\n')[0] ?? '').slice(0, 72)}`)
+        .catch((error: unknown) => this.log(`task ${id}: commit failed: ${(error as Error).message}`))
       await workspaces.push(id).catch((error: unknown) => this.log(`task ${id}: push failed: ${(error as Error).message}`))
 
       let result = output.result

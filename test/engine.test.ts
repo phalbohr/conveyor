@@ -71,6 +71,13 @@ describe('Engine stage chain', () => {
     expect(workspaces.hooks).toEqual(['before_run:1', 'after_run:1', 'before_run:1', 'after_run:1', 'before_run:1', 'after_run:1'])
   })
 
+  it('commits the changes of each stage before pushing', async () => {
+    const { board, cycle, workspaces } = setup({ script: () => ({ outcome: 'done', summary: 'did the work\nwith details' }) })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    expect(workspaces.stageCommits).toEqual(['1:implement: did the work', '1:review: did the work', '1:merge: did the work'])
+  })
+
   it('puts stage instructions, task, and workpad into the prompt', async () => {
     const { board, cycle, harness } = setup({
       instructions: { implement: 'Write the code test-first.' },
