@@ -52,7 +52,7 @@ const localArtifact = z
   .refine(needsPath, pathRequired)
 
 const teamSchema = z.strictObject({
-  board: z.strictObject({ provider: z.enum(['github', 'gitlab']), project: name }),
+  board: z.strictObject({ provider: z.enum(['github', 'gitlab']), project: name, github_project: count.optional() }),
   artifacts: z
     .strictObject({ idea: teamArtifact.prefault({}), story: teamArtifact.prefault({}), plan: teamArtifact.prefault({}) })
     .prefault({}),

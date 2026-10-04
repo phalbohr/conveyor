@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { labelsToTask } from '../src/board/board.js'
 import { FakeBoard } from '../src/board/fake.js'
 import { GitHubBoard } from '../src/board/github.js'
@@ -41,3 +41,29 @@ describe('labelsToTask', () => {
     expect(labelsToTask(['conveyor::shipping', 'priority::high'])).toEqual({})
   })
 })
+
+const projectNumber = Number(process.env.CONVEYOR_GITHUB_PROJECT)
+if (sandbox && projectNumber) {
+  describe('github project mirror', { timeout: 120_000 }, () => {
+    it('mirrors the task state to the Conveyor field of the project', async () => {
+      const warnings: string[] = []
+      const board = new GitHubBoard(sandbox, createRun(), { projectNumber, warn: (message) => warnings.push(message) })
+      const task = await board.createTask('Project mirror test', 'body', 'review')
+      try {
+        await board.setState(task.id, 'needs-input')
+        const owner = sandbox.split('/')[0] ?? ''
+        await vi.waitFor(
+          async () => {
+            const result = await createRun()('gh', ['project', 'item-list', String(projectNumber), '--owner', owner, '--format', 'json'])
+            const items = (JSON.parse(result.stdout) as { items: { content?: { number?: number }; conveyor?: string }[] }).items
+            expect(items.find((item) => item.content?.number === Number(task.id))?.conveyor).toBe('needs-input')
+          },
+          { timeout: 30_000, interval: 2_000 },
+        )
+        expect(warnings).toEqual([])
+      } finally {
+        await board.closeTask(task.id)
+      }
+    })
+  })
+}

@@ -152,5 +152,12 @@ export function prepare(context: Context): Prepared | undefined {
     context.stderr('The GitLab board adapter is not available yet.\n')
     return undefined
   }
-  return { settings, config: loaded.config, board: context.boardFor?.(loaded.config) ?? new GitHubBoard(loaded.config.board.project, context.run) }
+  const { project, github_project } = loaded.config.board
+  const board =
+    context.boardFor?.(loaded.config) ??
+    new GitHubBoard(project, context.run, {
+      ...(github_project ? { projectNumber: github_project } : {}),
+      warn: (message) => context.stderr(`warning: ${message}\n`),
+    })
+  return { settings, config: loaded.config, board }
 }

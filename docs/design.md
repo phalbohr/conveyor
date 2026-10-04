@@ -241,7 +241,7 @@ A comment without the marker after an agent question is the answer. The task goe
 | `conveyor::rework` | review rejected, the task restarts |
 | `conveyor::done` | merged and post-merge stages complete |
 
-GitHub Projects: the states are mirrored to the `Status` field for board columns.
+GitHub Projects: with `board.github_project: <number>` the CLI adds every task to the project and mirrors its state to the single-select field `Conveyor` (created automatically with one option per state). The standard `Status` field stays untouched. Choose `Conveyor` as the column field of a board view.
 
 ## Task claim
 

@@ -3,6 +3,7 @@ import {
   OWNER_LABEL,
   PRIORITY_LABEL,
   STATE_LABEL,
+  TASK_STATES,
   labelsToTask,
   type Board,
   type Comment,
@@ -40,6 +41,12 @@ type GitHubPull = {
   comments: { body: string }[]
 }
 
+type ProjectField = { id: string; name: string; type: string; options?: { id: string; name: string }[] }
+type ProjectMirror = { projectId: string; fieldId: string; options: Map<string, string> }
+
+export type GitHubBoardOptions = { projectNumber?: number; warn?: (message: string) => void }
+
+const PROJECT_FIELD = 'Conveyor'
 const PULL_FIELDS = 'number,url,state,mergeable,reviewDecision,statusCheckRollup,reviews,comments'
 
 const LOCK_PREFIX = 'conveyor-lock/'
@@ -48,10 +55,12 @@ export class GitHubBoard implements Board {
   private readonly repo: string
   private login?: string
   private defaultBranch?: string
+  private mirror?: ProjectMirror
 
   constructor(
     private readonly project: string,
     private readonly run: Run,
+    private readonly options: GitHubBoardOptions = {},
   ) {
     this.repo = `repos/${project}`
   }
@@ -63,7 +72,9 @@ export class GitHubBoard implements Board {
 
   async createTask(title: string, body: string, state?: TaskState) {
     const labels = state ? ['-f', `labels[]=${STATE_LABEL}${state}`] : []
-    return toTask(await this.api<Issue>(['-X', 'POST', `${this.repo}/issues`, '-f', `title=${title}`, '-f', `body=${body}`, ...labels]))
+    const task = toTask(await this.api<Issue>(['-X', 'POST', `${this.repo}/issues`, '-f', `title=${title}`, '-f', `body=${body}`, ...labels]))
+    if (state) await this.mirrorState(task.id, state)
+    return task
   }
 
   async listTasks() {
@@ -83,6 +94,7 @@ export class GitHubBoard implements Board {
 
   async setState(id: string, state: TaskState) {
     await this.replaceLabel(id, STATE_LABEL, STATE_LABEL + state)
+    await this.mirrorState(id, state)
   }
 
   async setOwner(id: string, owner: string | undefined) {
@@ -164,6 +176,45 @@ export class GitHubBoard implements Board {
   async closePullRequest(id: string) {
     const pull = await this.pullRequest(id)
     if (pull?.state === 'open') await this.gh(['pr', 'close', pull.number, '-R', this.project])
+  }
+
+  private async mirrorState(id: string, state: TaskState) {
+    const number = this.options.projectNumber
+    if (!number) return
+    try {
+      const mirror = await this.projectMirror(number)
+      const option = mirror.options.get(state)
+      if (!option) throw new Error(`the ${PROJECT_FIELD} field has no option ${state}`)
+      const item = JSON.parse(
+        await this.gh(['project', 'item-add', String(number), '--owner', this.owner(), '--url', `https://github.com/${this.project}/issues/${id}`, '--format', 'json']),
+      ) as { id: string }
+      await this.gh(['project', 'item-edit', '--id', item.id, '--project-id', mirror.projectId, '--field-id', mirror.fieldId, '--single-select-option-id', option])
+    } catch (error) {
+      this.options.warn?.(`project ${number}: task ${id} → ${state} not mirrored: ${(error as Error).message}`)
+    }
+  }
+
+  private async projectMirror(number: number): Promise<ProjectMirror> {
+    if (this.mirror) return this.mirror
+    const owner = this.owner()
+    const project = JSON.parse(await this.gh(['project', 'view', String(number), '--owner', owner, '--format', 'json'])) as { id: string }
+    const fields = async () =>
+      (JSON.parse(await this.gh(['project', 'field-list', String(number), '--owner', owner, '--format', 'json'])) as { fields: ProjectField[] }).fields
+    let field = (await fields()).find((candidate) => candidate.name === PROJECT_FIELD)
+    if (!field) {
+      await this.gh([
+        'project', 'field-create', String(number), '--owner', owner,
+        '--name', PROJECT_FIELD, '--data-type', 'SINGLE_SELECT', '--single-select-options', TASK_STATES.join(','),
+      ])
+      field = (await fields()).find((candidate) => candidate.name === PROJECT_FIELD)
+    }
+    if (!field?.options) throw new Error(`the project has no single-select field ${PROJECT_FIELD}`)
+    this.mirror = { projectId: project.id, fieldId: field.id, options: new Map(field.options.map((option) => [option.name, option.id])) }
+    return this.mirror
+  }
+
+  private owner() {
+    return this.project.split('/')[0] ?? this.project
   }
 
   private async branch() {
