@@ -1,5 +1,7 @@
 The `{{ stage }}` stage of the development conveyor waits for a human decision on task #{{ issue.id }}: {{ issue.title }}.
 
+Talk to the human in {{ language.chat }}. Write the answer file in {{ language.docs }}: the whole team reads it.
+
 ## Task
 
 {{ issue.body }}

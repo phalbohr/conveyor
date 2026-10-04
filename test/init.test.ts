@@ -19,6 +19,7 @@ describe('conveyor init', () => {
     for (const gate of ['idea-story', 'story-plan', 'merge']) expect(existsSync(join(settings, 'smart', `${gate}.md`))).toBe(true)
     expect(existsSync(join(settings, 'triage.md'))).toBe(true)
     for (const live of ['new', 'attach']) expect(existsSync(join(settings, 'live', `${live}.md`))).toBe(true)
+    expect(existsSync(join(settings, 'formats', 'story.md'))).toBe(true)
     expect(readFileSync(join(settings, '.gitignore'), 'utf8')).toContain('local.yaml')
   })
 

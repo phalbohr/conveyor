@@ -11,6 +11,7 @@ export type PromptInput = {
   workpad: string
   conversation?: { request: string; replies: string[]; approval: boolean }
   attempt: number
+  language: string
 }
 
 const MODES: Record<GateMode, string> = {
@@ -41,6 +42,9 @@ export function buildPrompt(input: PromptInput): string {
     sections.push(`## Conversation\n\n${note}\n\nYour request:\n\n${input.conversation.request.trim()}\n\nReplies:\n\n${replies}`)
   }
   if (input.attempt > 0) sections.push(`## Retry\n\nThis stage failed ${input.attempt} time(s) before. Check the workpad and change your approach.`)
+  sections.push(
+    `## Language\n\nWrite the artifact, the summary, the questions, and the workpad in ${input.language}. The whole team reads them.`,
+  )
   sections.push(
     '## Result\n\nReturn the structured result: `outcome` (`done`, `needs_input`, `approval`, or `failed`), a short `summary`, an `artifact` if this stage produces one, `questions` with `needs_input`, and an updated `workpad` in markdown (plan, checklist, validation, notes). Do not write to the issue tracker yourself.',
   )

@@ -87,6 +87,7 @@ const teamSchema = z.strictObject({
     })
     .prefault({}),
   retry: z.strictObject({ max_backoff: duration.prefault('5m'), max_attempts: count.default(5) }).prefault({}),
+  language: z.strictObject({ docs: name.default('English') }).prefault({}),
 })
 
 const localSchema = z.strictObject({
@@ -104,6 +105,7 @@ const localSchema = z.strictObject({
   poll_interval: duration.prefault('5m'),
   pickup: z.strictObject({ assignee: name.default('me'), include_unassigned: z.boolean().default(true) }).prefault({}),
   workspace: z.strictObject({ root: name.default('~/.conveyor/workspaces/{project}') }).prefault({}),
+  language: z.strictObject({ chat: name.optional() }).prefault({}),
 })
 
 type Team = z.output<typeof teamSchema>
@@ -120,8 +122,9 @@ export type Stage = StageSettings & {
 }
 export type Artifact = { store: 'board' | 'repo' | 'path'; path?: string; write: 'replace' | 'append' }
 
-export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages'> &
-  Omit<Local, 'artifacts'> & {
+export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' | 'language'> &
+  Omit<Local, 'artifacts' | 'language'> & {
+    language: { docs: string; chat?: string }
     artifacts: Record<ArtifactKind, Artifact>
     triage: StageSettings
     stages: Stage[]
@@ -149,11 +152,12 @@ export function loadConfig(settingsDir: string): LoadResult {
   const stages = resolveStages(team, errors)
   if (errors.length > 0) return { ok: false, errors }
 
-  const { artifacts: _teamArtifacts, defaults, triage, stages: _stages, ...teamRest } = team
-  const { artifacts: _localArtifacts, ...localRest } = local
+  const { artifacts: _teamArtifacts, defaults, triage, stages: _stages, language: teamLanguage, ...teamRest } = team
+  const { artifacts: _localArtifacts, language: localLanguage, ...localRest } = local
+  const language = { docs: teamLanguage.docs, ...(localLanguage.chat ? { chat: localLanguage.chat } : {}) }
   return {
     ok: true,
-    config: { ...teamRest, ...localRest, artifacts, triage: withDefaults(triage, defaults), stages },
+    config: { ...teamRest, ...localRest, language, artifacts, triage: withDefaults(triage, defaults), stages },
   }
 }
 

@@ -56,6 +56,15 @@ describe('loadConfig', () => {
     expect(c.workspace).toEqual({ root: '~/.conveyor/workspaces/{project}' })
   })
 
+  it('takes the documentation language from the team and the chat language from the member', () => {
+    expect(config(BOARD).language).toEqual({ docs: 'English' })
+    expect(config(`${BOARD}language: {docs: German}\n`, 'language: {chat: Russian}\n').language).toEqual({ docs: 'German', chat: 'Russian' })
+  })
+
+  it('keeps the documentation language out of the personal settings', () => {
+    expect(errors(BOARD, 'language: {docs: Russian}\n')).toContainEqual(expect.stringContaining('language'))
+  })
+
   it('fills missing stage values from defaults per field', () => {
     const c = config(`${BOARD}
 defaults: {harness: claude, model: sonnet, effort: medium}

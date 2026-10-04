@@ -38,6 +38,13 @@ Commands:
 | `conveyor attach <issue>` | answer the questions of a `needs-input` task in the terminal |
 | `conveyor release <issue>` | release the task claim manually |
 
+## Language and formats
+
+- `language.docs` in `config.yaml` is the team language for everything the team sees: artifacts, issue bodies, questions and approval requests on the board, the workpad, and the results of live sessions. Default: English.
+- `language.chat` in `local.yaml` is the personal language for live sessions. Default: the language the human uses.
+- `formats/story.md` holds the story structure (actors, story, current problem, main and alternative scenarios, acceptance criteria in Given/When/Then, dependencies, and writing rules). The `story` stage and `conveyor new` use it through the template variable `formats.story`.
+- Stage templates get the variables `language.docs` and `formats.story`.
+
 ## Live sessions
 
 - `conveyor new` and `conveyor attach <issue>` start a normal interactive session of the harness in the terminal. `new` uses the harness, model, and effort of the `story` stage; `attach` uses those of the waiting stage.
@@ -57,6 +64,7 @@ Commands:
   triage.md            triage instructions
   live/new.md          instructions for `conveyor new`
   live/attach.md       instructions for `conveyor attach`
+  formats/story.md     story structure for the story stage and `conveyor new`
 ```
 
 ### config.yaml

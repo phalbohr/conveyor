@@ -6,6 +6,8 @@ artifacts:
   story: {store: board, write: replace}
   plan: {store: board}
 pickup_from: plan
+language:
+  docs: English
 transitions:
   idea_to_story: interactive
   story_to_plan: interactive

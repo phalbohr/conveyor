@@ -10,7 +10,7 @@ import type { Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
 import { buildPrompt, type GateMode } from './prompt.js'
 import { releaseClaim } from './release.js'
-import { parseStageFile, renderInstructions } from './stage-file.js'
+import { parseStageFile, readFormat, renderInstructions } from './stage-file.js'
 import { waitingDeadline } from './time.js'
 import {
   agentComment,
@@ -321,6 +321,8 @@ export class Engine {
       attempt: context.attempt,
       artifacts: context.artifacts,
       review: '',
+      language: { docs: config.language.docs },
+      formats: { story: readFormat(this.options.settingsDir, 'story') },
     })
     if (!instructions.ok) return cannotStart(`stages/${stage.name}.md: ${instructions.error}`)
     try {
@@ -337,6 +339,7 @@ export class Engine {
       workpad: context.workpad,
       ...(context.conversation ? { conversation: context.conversation } : {}),
       attempt: context.attempt,
+      language: config.language.docs,
     })
 
     const controller = new AbortController()
