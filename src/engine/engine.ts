@@ -16,6 +16,7 @@ import {
   agentComment,
   commentText,
   findWorkpad,
+  isAgentComment,
   renderWorkpad,
   repliesSince,
   type Workpad,
@@ -38,6 +39,22 @@ type Running = { controller: AbortController; promise: Promise<void> }
 
 type StageAttempt = StageOutput & { fatal?: boolean }
 
+type TaskRun = {
+  id: string
+  config: Config
+  signal: AbortSignal
+  state: WorkpadState
+  text: string
+  padId: string | undefined
+  workspace: string
+  artifacts: Artifacts
+  save: () => Promise<void>
+}
+
+const LAND = 'land'
+const LAND_WAIT = 60_000
+const MERGE_LOCK = 'merge'
+
 type StageContext = {
   workspace: string
   artifacts: Record<string, string>
@@ -46,6 +63,8 @@ type StageContext = {
   conversation: { request: string; replies: string[]; approval: boolean } | undefined
   attempt: number
   signal: AbortSignal
+  review?: string | undefined
+  merge?: string | undefined
 }
 
 const PICKUP: Record<Config['pickup_from'], Task['state'][]> = {
@@ -91,8 +110,14 @@ export class Engine {
       if (task.owner && task.owner !== me) continue
       const owned = task.owner === me
       switch (task.state) {
-        case 'review':
-          if (owned) awaitingReview++
+        case 'review': {
+          const pull = await board.pullRequest(task.id)
+          if (pull?.state === 'merged' || pull?.review === 'changes_requested') (owned ? resumable : fresh).push(task)
+          else if (owned) awaitingReview++
+          break
+        }
+        case 'rework':
+          ;(owned ? resumable : fresh).push(task)
           break
         case 'needs-input': {
           const answered = await this.answered(task.id)
@@ -207,53 +232,149 @@ export class Engine {
   private async execute(initial: Task, config: Config, signal: AbortSignal) {
     const { board, workspaces } = this.options
     const id = initial.id
-    let comments = await board.listComments(id)
+    const comments = await board.listComments(id)
     const pad = findWorkpad(comments)
     const state: WorkpadState = { attempt: 0, ...pad?.state }
-    const stages = this.stagesToRun(initial, state, config)
-    const approvalStage = state.waiting?.kind === 'approval' ? state.waiting.stage : undefined
-    let conversation = state.waiting && state.waiting.kind !== 'review' ? this.conversation(comments, state.waiting) : undefined
+    const pull = initial.state === 'review' ? await board.pullRequest(id) : undefined
+    const rework = initial.state === 'rework' || pull?.review === 'changes_requested'
+    const waiting = state.waiting
+    const approvalStage = waiting?.kind === 'approval' ? waiting.stage : undefined
+    const conversation = waiting && waiting.kind !== 'review' ? this.conversation(comments, waiting) : undefined
+    if (waiting?.kind === 'error' && waiting.stage === LAND) state.landAttempts = 0
     delete state.waiting
     delete state.retryAt
     state.private = Object.values(config.artifacts).some((artifact) => artifact.store === 'path')
 
-    let workpadId = pad?.id
-    let workpadText = pad?.text ?? ''
-    const save = async () => {
-      state.heartbeat = new Date().toISOString()
-      const body = renderWorkpad(state, workpadText)
-      if (workpadId) await board.updateComment(workpadId, body)
-      else workpadId = (await board.addComment(id, body)).id
+    const run: TaskRun = {
+      id,
+      config,
+      signal,
+      state,
+      text: pad?.text ?? '',
+      padId: pad?.id,
+      workspace: '',
+      artifacts: new Artifacts(board, workspaces, config, this.options.home),
+      save: async () => {
+        state.heartbeat = new Date().toISOString()
+        const body = renderWorkpad(state, run.text)
+        if (run.padId) await board.updateComment(run.padId, body)
+        else run.padId = (await board.addComment(id, body)).id
+      },
     }
 
     await board.setState(id, 'in-progress')
-    await save()
-    const workspace = await workspaces.prepare(id)
-    const artifacts = new Artifacts(board, workspaces, config, this.options.home)
+    await run.save()
+    run.workspace = (await workspaces.prepare(id)).path
+
+    const names = config.stages.map((stage) => stage.name)
+    const mergeIndex = names.indexOf('merge')
+    if (rework) {
+      const since = waiting?.kind === 'review' ? waiting.since : ''
+      const replies = comments.filter((comment) => !isAgentComment(comment) && comment.createdAt >= since).map((comment) => comment.body)
+      const feedback = [...(pull?.feedback ?? []), ...replies]
+      if (pull?.state === 'open') await board.closePullRequest(id)
+      await workspaces.reset(id)
+      run.text = ''
+      for (const key of ['landing', 'mergeError', 'landAttempts', 'lastError'] as const) delete state[key]
+      state.attempt = 0
+      state.review = feedback.join('\n\n') || 'The reviewer asked for changes. Read the issue comments for details.'
+      state.stage = names[names.indexOf('plan') + 1] ?? 'merge'
+      this.log(`task ${id}: rework`)
+    } else if (initial.state === 'review' && pull?.state === 'merged') {
+      state.landing = 'success'
+      delete state.stage
+    }
+
+    if (!state.landing && state.stage !== LAND) {
+      const start = state.stage ?? (initial.state === 'idea' ? 'story' : initial.state === 'story' ? 'plan' : names[names.indexOf('plan') + 1])
+      const chain = await this.runChain(run, config.stages.slice(names.indexOf(start ?? 'merge'), mergeIndex + 1), {
+        approvalStage,
+        conversation,
+      })
+      if (chain.status !== 'done') return
+      delete state.review
+      const task = (await board.getTask(id)) ?? initial
+      await board.openPullRequest(id, task.title, `Conveyor task #${id}.\n\n${chain.summary}`)
+      if (chain.merge === 'review') {
+        delete state.stage
+        state.waiting = { kind: 'review', since: new Date().toISOString() }
+        await board.setState(id, 'review')
+        await run.save()
+        return
+      }
+      state.stage = LAND
+    }
+
+    if (state.stage === LAND) {
+      const landed = await this.land(run)
+      if (landed === 'stop') return
+      state.landing = landed
+      delete state.stage
+    }
+
+    const landing = state.landing ?? 'success'
+    const post = config.stages.slice(mergeIndex + 1).filter((stage) => stage.when === 'always' || stage.when === landing)
+    const resumeAt = state.stage ? post.findIndex((stage) => stage.name === state.stage) : 0
+    const merge =
+      landing === 'success'
+        ? 'The pull request is merged.'
+        : `The merge failed: ${state.mergeError ?? 'unknown error'}. Fix the cause on the task branch. The conveyor commits and pushes your changes and tries to merge again.`
+    const chain = await this.runChain(run, post.slice(Math.max(resumeAt, 0)), { merge })
+    if (chain.status !== 'done') return
+
+    if (landing === 'failure') {
+      delete state.landing
+      state.stage = LAND
+      await run.save()
+      return
+    }
+
+    for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError'] as const) delete state[key]
+    state.attempt = 0
+    await board.setState(id, 'done')
+    await run.save()
+    await board.closeTask(id)
+    await board.release(id)
+    await workspaces.remove(id)
+    this.log(`task ${id}: done`)
+  }
+
+  private async runChain(
+    run: TaskRun,
+    stages: Stage[],
+    options: { approvalStage?: string | undefined; conversation?: StageContext['conversation']; merge?: string },
+  ): Promise<{ status: 'done' | 'stopped'; merge?: 'land' | 'review'; summary: string }> {
+    const { board, workspaces } = this.options
+    const { id, config, signal, state } = run
+    let conversation = options.conversation
+    let summary = ''
+    let merge: 'land' | 'review' | undefined
 
     for (const stage of stages) {
-      if (signal.aborted) return
+      if (signal.aborted) return { status: 'stopped', summary }
       state.stage = stage.name
-      await save()
-      const task = (await board.getTask(id)) ?? initial
-      comments = await board.listComments(id)
+      await run.save()
+      const task = (await board.getTask(id)) ?? (await this.mustGetTask(id))
+      const comments = await board.listComments(id)
       const gate = this.gate(stage, config)
-      const heartbeat = setInterval(() => void save().catch(() => undefined), config.timeouts.heartbeat / 3)
+      const heartbeat = setInterval(() => void run.save().catch(() => undefined), config.timeouts.heartbeat / 3)
       let output: StageAttempt
       try {
         output = await this.runStage(task, stage, config, {
-          workspace: workspace.path,
-          artifacts: artifacts.read(task, comments, workspace.path),
-          workpad: workpadText,
+          workspace: run.workspace,
+          artifacts: run.artifacts.read(task, comments, run.workspace),
+          workpad: run.text,
           gate,
           conversation,
           attempt: state.attempt,
           signal,
+          review: state.review,
+          merge: options.merge,
         })
       } finally {
         clearInterval(heartbeat)
       }
-      if (signal.aborted) return
+      if (signal.aborted) return { status: 'stopped', summary }
       this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
       this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
       conversation = undefined
@@ -263,23 +384,29 @@ export class Engine {
       await workspaces.push(id).catch((error: unknown) => this.log(`task ${id}: push failed: ${(error as Error).message}`))
 
       let result = output.result
-      if (result.workpad) workpadText = result.workpad
-      if (result.outcome === 'done' && gate?.mode === 'interactive' && approvalStage !== stage.name) result = { ...result, outcome: 'approval' }
+      if (result.workpad) run.text = result.workpad
+      if (stage.name === 'merge' && (result.outcome === 'done' || result.outcome === 'approval')) {
+        const mode = config.transitions.merge
+        merge = mode === 'human' || (mode === 'smart' && result.outcome === 'approval') ? 'review' : 'land'
+        result = { ...result, outcome: 'done' }
+      }
+      if (result.outcome === 'done' && gate?.mode === 'interactive' && options.approvalStage !== stage.name) result = { ...result, outcome: 'approval' }
       if (result.outcome === 'approval' && gate?.mode === 'autonomous') result = { ...result, outcome: 'done' }
       if (result.artifact && result.outcome !== 'failed') {
         const kind = GATES[stage.name] ? stage.name : result.artifact.kind
-        await artifacts.store(task, kind, result.artifact.content, comments)
+        await run.artifacts.store(task, kind, result.artifact.content, comments)
       }
 
       if (result.outcome === 'done') {
         state.attempt = 0
         delete state.lastError
+        summary = result.summary
         continue
       }
       if (result.outcome === 'failed') {
         await this.fail(id, stage, state, result, config, output.fatal ?? false)
-        await save()
-        return
+        await run.save()
+        return { status: 'stopped', summary }
       }
       const kind = result.outcome === 'approval' ? 'approval' : 'questions'
       const comment = await board.addComment(id, agentComment(kind, this.request(stage.name, result)))
@@ -287,15 +414,66 @@ export class Engine {
       delete state.lastError
       state.waiting = { kind, stage: stage.name, commentId: comment.id, since: new Date().toISOString() }
       await board.setState(id, 'needs-input')
-      await save()
-      return
+      await run.save()
+      return { status: 'stopped', summary }
+    }
+    return { status: 'done', ...(merge ? { merge } : {}), summary }
+  }
+
+  private async land(run: TaskRun): Promise<'success' | 'failure' | 'stop'> {
+    const { board } = this.options
+    const { id, config, state } = run
+    const wait = async (reason: string) => {
+      state.stage = LAND
+      state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
+      await run.save()
+      this.log(`task ${id}: merge waits: ${reason}`)
+      return 'stop' as const
     }
 
-    delete state.stage
-    state.attempt = 0
-    state.waiting = { kind: 'review', since: new Date().toISOString() }
-    await board.setState(id, 'review')
-    await save()
+    const task = await this.mustGetTask(id)
+    if (task.openBlockers > 0) return wait('open blockers')
+    const pull = await board.pullRequest(id)
+    if (pull?.state === 'merged') return 'success'
+    let error: string | undefined
+    if (!pull || pull.state === 'closed') error = 'the pull request is closed'
+    else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait('checks are pending')
+    else if (pull.checks === 'failure') error = 'checks failed'
+    else if (pull.mergeable === 'no') error = 'the branch has conflicts with the base branch'
+    else {
+      if (!(await board.claim(MERGE_LOCK))) return wait('another workstation merges')
+      try {
+        const merged = await board.mergePullRequest(id, config.merge_method)
+        if (!merged.ok) error = merged.error
+      } finally {
+        await board.release(MERGE_LOCK)
+      }
+    }
+    if (!error) {
+      delete state.mergeError
+      return 'success'
+    }
+
+    state.mergeError = error
+    state.landAttempts = (state.landAttempts ?? 0) + 1
+    const names = config.stages.map((stage) => stage.name)
+    const repair = config.stages.slice(names.indexOf('merge') + 1).some((stage) => stage.when === 'failure' || stage.when === 'always')
+    this.log(`task ${id}: merge failed: ${error}`)
+    if (repair && state.landAttempts < config.retry.max_attempts) return 'failure'
+
+    const text = `**The merge failed.**\n\n${error}\n\nFix the cause, then reply in a comment to retry.`
+    const comment = await board.addComment(id, agentComment('error', text))
+    state.stage = LAND
+    state.waiting = { kind: 'error', stage: LAND, commentId: comment.id, since: new Date().toISOString() }
+    await board.setState(id, 'needs-input')
+    await run.save()
+    return 'stop'
+  }
+
+  private async mustGetTask(id: string) {
+    const task = await this.options.board.getTask(id)
+    if (!task) throw new Error(`task ${id} not found`)
+    return task
   }
 
   private async runStage(task: Task, stage: Stage, config: Config, context: StageContext): Promise<StageAttempt> {
@@ -320,7 +498,7 @@ export class Engine {
       stage: stage.name,
       attempt: context.attempt,
       artifacts: context.artifacts,
-      review: '',
+      review: context.review ?? '',
       language: { docs: config.language.docs },
       formats: { story: readFormat(this.options.settingsDir, 'story') },
     })
@@ -340,6 +518,9 @@ export class Engine {
       ...(context.conversation ? { conversation: context.conversation } : {}),
       attempt: context.attempt,
       language: config.language.docs,
+      ...(context.review ? { review: context.review } : {}),
+      ...(context.merge ? { merge: context.merge } : {}),
+      ...(stage.name === 'merge' && config.transitions.merge === 'smart' ? { mergeCriteria: this.read('smart', 'merge.md') } : {}),
     })
 
     const controller = new AbortController()
@@ -423,12 +604,6 @@ export class Engine {
       replies: repliesSince(comments, waiting.commentId).map((comment) => comment.body),
       approval: waiting.kind === 'approval',
     }
-  }
-
-  private stagesToRun(task: Task, state: WorkpadState, config: Config): Stage[] {
-    const names = config.stages.map((stage) => stage.name)
-    const start = state.stage ?? (task.state === 'idea' ? 'story' : task.state === 'story' ? 'plan' : names[names.indexOf('plan') + 1])
-    return config.stages.slice(names.indexOf(start ?? 'merge'), names.indexOf('merge') + 1)
   }
 
   private gate(stage: Stage, config: Config) {

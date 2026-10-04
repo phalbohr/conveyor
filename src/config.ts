@@ -88,6 +88,7 @@ const teamSchema = z.strictObject({
     .prefault({}),
   retry: z.strictObject({ max_backoff: duration.prefault('5m'), max_attempts: count.default(5) }).prefault({}),
   language: z.strictObject({ docs: name.default('English') }).prefault({}),
+  merge_method: z.enum(['merge', 'squash', 'rebase']).default('merge'),
 })
 
 const localSchema = z.strictObject({

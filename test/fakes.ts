@@ -10,6 +10,7 @@ export class FakeWorkspaces implements Workspaces {
   readonly pushes: string[] = []
   readonly stageCommits: string[] = []
   readonly removed: string[] = []
+  readonly resets: string[] = []
   failBeforeRun = false
 
   async prepare(taskId: string) {
@@ -34,6 +35,10 @@ export class FakeWorkspaces implements Workspaces {
   async commitAll(taskId: string, message: string) {
     this.stageCommits.push(`${taskId}:${message}`)
     return true
+  }
+
+  async reset(taskId: string) {
+    this.resets.push(taskId)
   }
 
   async push(taskId: string) {

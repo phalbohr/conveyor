@@ -2,7 +2,8 @@
 
 Prepare the change for merge.
 
-- Rebase the task branch on the main branch and resolve conflicts.
-- Push the branch and open or update the pull request with a summary of the change.
-- Wait for CI. If CI fails, fix the cause and push again.
-- Do not merge. The conveyor merges according to the merge mode.
+- Fetch the latest base branch and rebase the task branch on it. Resolve conflicts.
+- Run the full test suite and fix failures.
+- Do not push and do not open a pull request. The conveyor pushes the branch, opens the pull request, and merges according to the merge mode.
+
+This stage needs write access to git. With codex, use `sandbox: full-access` for this stage.
