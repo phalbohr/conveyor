@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { loadConfig } from '../src/config.js'
+import { PRESETS } from '../src/harness/presets.js'
 import { runCli, tempDir } from './helpers.js'
 
 const BOARD_FLAGS = ['--provider', 'github', '--project', 'owner/repo']
@@ -20,6 +21,8 @@ describe('conveyor init', () => {
     expect(existsSync(join(settings, 'triage.md'))).toBe(true)
     for (const live of ['new', 'attach']) expect(existsSync(join(settings, 'live', `${live}.md`))).toBe(true)
     expect(existsSync(join(settings, 'formats', 'story.md'))).toBe(true)
+    expect(readFileSync(join(settings, 'config.yaml'), 'utf8')).toContain('openhands:')
+    expect(loaded.config.harnesses).toEqual(PRESETS)
     expect(readFileSync(join(settings, '.gitignore'), 'utf8')).toContain('local.yaml')
   })
 
