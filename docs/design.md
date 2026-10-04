@@ -333,6 +333,17 @@ If the board read fails, running stages continue; the next cycle tries again.
 | `claude` | `claude -p --model <m> --effort <e> --output-format stream-json` |
 | `codex` | `codex exec -m <m> -c model_reasoning_effort=<e> --json` |
 
+Codex stages accept two options:
+
+| Option | Values | Default |
+|---|---|---|
+| `sandbox` | `workspace-write`, `full-access` | `workspace-write` |
+| `network` | `true`, `false` (only with `workspace-write`) | `true` |
+
+- In `workspace-write` codex cannot write to `.git` (verified on macOS), so the agent cannot commit. `full-access` removes the sandbox, like `bypassPermissions` for claude.
+- In every mode the CLI commits the remaining workspace changes after each stage (`<stage>: <summary>`) and pushes the task branch.
+- These options are an error on non-codex stages.
+
 Stage instructions for `claude` can use Dynamic Workflows for parallel work (for example a reviewer panel). This is a stage capability, not the orchestration layer.
 
 ## Spike: Workflow in headless mode (2026-10-03)

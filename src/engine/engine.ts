@@ -370,6 +370,8 @@ export class Engine {
         signal: controller.signal,
         onEvent: arm,
         skills: skills.filter((skill) => skill.source !== 'project'),
+        ...(stage.sandbox ? { sandbox: stage.sandbox } : {}),
+        ...(stage.network !== undefined ? { network: stage.network } : {}),
       })
       return reason ? { ...output, result: failed(reason) } : output
     } finally {

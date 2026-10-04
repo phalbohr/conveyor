@@ -121,6 +121,26 @@ describe('claude harness skills', () => {
   })
 })
 
+describe('codex sandbox options', () => {
+  const argv = async (options: { sandbox?: 'workspace-write' | 'full-access'; network?: boolean }) => {
+    const s = stub('codex-done.jsonl')
+    await new CodexHarness({ command: s.command }).runStage(run(options))
+    return (JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[] }).argv.join(' ')
+  }
+
+  it('uses the workspace-write sandbox with network by default', async () => {
+    expect(await argv({})).toContain('--sandbox workspace-write -c sandbox_workspace_write.network_access=true')
+  })
+
+  it('turns the network off', async () => {
+    expect(await argv({ network: false })).toContain('sandbox_workspace_write.network_access=false')
+  })
+
+  it('gives full access', async () => {
+    expect(await argv({ sandbox: 'full-access' })).toContain('--sandbox danger-full-access')
+  })
+})
+
 describe('parseResult', () => {
   it('drops null and empty optional fields', () => {
     expect(parseResult({ outcome: 'done', summary: 's', artifact: null, questions: [], workpad: null })).toEqual({

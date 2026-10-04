@@ -27,7 +27,9 @@ export class CodexHarness implements Harness {
       'exec',
       '-m', run.model,
       '-c', `model_reasoning_effort="${run.effort}"`,
-      '--sandbox', 'workspace-write',
+      ...(run.sandbox === 'full-access'
+        ? ['--sandbox', 'danger-full-access']
+        : ['--sandbox', 'workspace-write', '-c', `sandbox_workspace_write.network_access=${run.network ?? true}`]),
       '--skip-git-repo-check',
       '--ephemeral',
       '--json',

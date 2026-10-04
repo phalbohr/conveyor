@@ -65,7 +65,7 @@ stages:
   implement: {}
 `)
     expect(c.triage).toEqual({ harness: 'claude', model: 'opus', effort: 'medium' })
-    expect(c.stages).toContainEqual({ name: 'plan', harness: 'codex', model: 'gpt-5-codex', effort: 'medium' })
+    expect(c.stages).toContainEqual({ name: 'plan', harness: 'codex', model: 'gpt-5-codex', effort: 'medium', sandbox: 'workspace-write', network: true })
     expect(c.stages).toContainEqual({ name: 'implement', harness: 'claude', model: 'sonnet', effort: 'medium' })
   })
 
@@ -121,6 +121,21 @@ stages:
 stages:
   Bad_Name: {}
 `)).toContainEqual(expect.stringContaining('Bad_Name'))
+  })
+
+  it('accepts sandbox and network options for codex stages', () => {
+    const c = config(`${BOARD}
+stages:
+  implement: {harness: codex, sandbox: full-access, network: false}
+`)
+    expect(c.stages.find((s) => s.name === 'implement')).toMatchObject({ sandbox: 'full-access', network: false })
+  })
+
+  it('rejects sandbox and network options on non-codex stages', () => {
+    expect(errors(`${BOARD}
+stages:
+  implement: {harness: claude, network: true}
+`)).toContainEqual(expect.stringContaining('implement'))
   })
 
   it('rejects an unknown harness', () => {
