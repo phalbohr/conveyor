@@ -13,3 +13,4 @@ pickup:
   include_unassigned: true
 workspace:
   root: "~/.conveyor/workspaces/{project}"
+harnesses: {}
