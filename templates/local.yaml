@@ -3,6 +3,10 @@ limits:
   awaiting_me: 5
   awaiting_review: 2
   daily_tokens: 0
+  subscription:
+    five_hour_reserve: 10
+    seven_day_reserve: 15
+    probe: false
 poll_interval: 5m
 pickup:
   assignee: me

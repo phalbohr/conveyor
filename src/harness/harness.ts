@@ -25,10 +25,14 @@ export type StageRun = {
   network?: boolean
 }
 
-export type StageOutput = { result: StageResult; usage: Usage }
+export type QuotaWindow = { utilization: number; resetsAt: string }
+export type Quota = { fiveHour?: QuotaWindow; sevenDay?: QuotaWindow }
+
+export type StageOutput = { result: StageResult; usage: Usage; quota?: Quota }
 
 export interface Harness {
   runStage(run: StageRun): Promise<StageOutput>
+  probeQuota?(cwd: string): Promise<Quota | undefined>
 }
 
 export type HarnessOptions = { command?: string; env?: NodeJS.ProcessEnv }

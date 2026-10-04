@@ -321,6 +321,8 @@ If the board read fails, running stages continue; the next cycle tries again.
 
 - `running` is counted in the `conveyor run` process. A pid file in `~/.conveyor/run/` allows only one `run` process per project on a workstation.
 - Daily token usage is stored in `~/.conveyor/usage/<project>.json`.
+- Subscription reserve (`local.yaml`): `limits.subscription.five_hour_reserve` and `seven_day_reserve` in percent (0 = off). The claude adapter reads the utilization of both windows from every run. If a window of a harness has less than its reserve left, no stage of that harness starts until the window resets: the task waits without losing an attempt, and no new tasks are claimed. A running stage is never interrupted.
+- The conveyor only sees its own runs. `limits.subscription.probe: true` adds a cheap haiku run per harness when the last reading is older than 10 minutes, to see usage from interactive sessions too. Codex does not report its windows in `exec` mode yet.
 - A confirmed task leaves `awaiting_me`. If no `running` slot is free, it gets `conveyor::queued` and waits.
 - When a slot is free: first tasks from the resume queue, then new tasks from the board.
 - `awaiting_review` only blocks the claim of new tasks. It never stops a task that is ready for review.

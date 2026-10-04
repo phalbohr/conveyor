@@ -2,8 +2,13 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ResolvedSkill } from '../skills.js'
-import { NO_USAGE, RESULT_SCHEMA, childEnv, failed, parseResult, type Harness, type HarnessOptions, type StageOutput, type StageRun } from './harness.js'
+import { NO_USAGE, RESULT_SCHEMA, childEnv, failed, parseResult, type Harness, type HarnessOptions, type Quota, type StageOutput, type StageRun } from './harness.js'
 import { spawnLines } from './process.js'
+
+type RateLimitEvent = {
+  type: 'rate_limit_event'
+  rate_limit_info?: { unifiedWindows?: Record<string, { utilization?: number; resetsAt?: number }> }
+}
 
 type ResultEvent = {
   type: 'result'
@@ -25,8 +30,14 @@ export class ClaudeHarness implements Harness {
     }
   }
 
+  async probeQuota(cwd: string): Promise<Quota | undefined> {
+    const output = await this.execute({ prompt: 'Reply with the word ok.', model: 'haiku', effort: 'low', cwd }, [])
+    return output.quota
+  }
+
   private async execute(run: StageRun, skillArgs: string[]): Promise<StageOutput> {
     let last: ResultEvent | undefined
+    let quota: Quota | undefined
     const args = [
       '-p',
       '--model', run.model,
@@ -50,14 +61,16 @@ export class ClaudeHarness implements Harness {
         run.onEvent?.()
         const event = parseLine(line)
         if (event?.type === 'result') last = event as ResultEvent
+        if (event?.type === 'rate_limit_event') quota = toQuota(event as RateLimitEvent) ?? quota
       },
     })
 
-    if (exit.aborted) return { result: failed('stage aborted'), usage: usage(last) }
+    const extra = quota ? { quota } : {}
+    if (exit.aborted) return { result: failed('stage aborted'), usage: usage(last), ...extra }
     if (!last || last.is_error || exit.code !== 0) {
-      return { result: failed(last?.result ?? exit.error ?? (exit.stderr.trim() || `claude exited with code ${exit.code}`)), usage: usage(last) }
+      return { result: failed(last?.result ?? exit.error ?? (exit.stderr.trim() || `claude exited with code ${exit.code}`)), usage: usage(last), ...extra }
     }
-    return { result: parseResult(last.structured_output), usage: usage(last) }
+    return { result: parseResult(last.structured_output), usage: usage(last), ...extra }
   }
 }
 
@@ -86,6 +99,19 @@ function attachSkills(skills: ResolvedSkill[]): { args: string[]; cleanup: () =>
     args.push('--plugin-dir', dir)
   }
   return { args, cleanup: () => rmSync(root, { recursive: true, force: true }) }
+}
+
+function toQuota(event: RateLimitEvent): Quota | undefined {
+  const windows = event.rate_limit_info?.unifiedWindows
+  if (!windows) return undefined
+  const window = (name: string) => {
+    const value = windows[name]
+    if (value?.utilization === undefined || value.resetsAt === undefined) return undefined
+    return { utilization: value.utilization, resetsAt: new Date(value.resetsAt * 1000).toISOString() }
+  }
+  const fiveHour = window('five_hour')
+  const sevenDay = window('seven_day')
+  return { ...(fiveHour ? { fiveHour } : {}), ...(sevenDay ? { sevenDay } : {}) }
 }
 
 function usage(event: ResultEvent | undefined) {
