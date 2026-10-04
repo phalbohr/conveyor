@@ -9,6 +9,7 @@ import { manualRelease } from '../engine/release.js'
 import { parseStageFile } from '../engine/stage-file.js'
 import { ClaudeHarness } from '../harness/claude.js'
 import { CodexHarness } from '../harness/codex.js'
+import { CommandHarness } from '../harness/command.js'
 import { acquireRunLock } from '../lock.js'
 import { expandPath } from '../paths.js'
 import { findSettings } from '../settings.js'
@@ -79,7 +80,11 @@ export async function runCommand(context: Context, options: { once?: boolean }):
     await cleanupWorkspaces(prepared.board, workspaces, log)
     const engine = new Engine({
       board: prepared.board,
-      harnesses: { claude: new ClaudeHarness(), codex: new CodexHarness() },
+      harnesses: {
+        claude: new ClaudeHarness(),
+        codex: new CodexHarness(),
+        ...Object.fromEntries(Object.entries(config.harnesses).map(([harnessName, definition]) => [harnessName, new CommandHarness(definition)])),
+      },
       workspaces,
       settingsDir: settings,
       repo: context.cwd,

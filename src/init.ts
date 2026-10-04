@@ -2,7 +2,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from './cli.js'
-import { loadConfig, type Config, type Harness } from './config.js'
+import { loadConfig, type Config } from './config.js'
 import { SETTINGS_DIR, findSettings, linkSettings } from './settings.js'
 
 export type Board = Config['board']
@@ -13,7 +13,7 @@ type Check = [command: string, args: string[]]
 
 const TEMPLATES = fileURLToPath(new URL('../templates/', import.meta.url))
 const BOARD_TOOLS: Record<Board['provider'], Check> = { github: ['gh', ['auth', 'status']], gitlab: ['glab', ['auth', 'status']] }
-const HARNESS_TOOLS: Record<Harness, Check> = { claude: ['claude', ['--version']], codex: ['codex', ['--version']] }
+const HARNESS_TOOLS: Record<string, Check> = { claude: ['claude', ['--version']], codex: ['codex', ['--version']] }
 
 export function parseRemote(url: string): Board | undefined {
   const match = url.trim().match(/^(?:[\w.-]+@([^:/]+):|https?:\/\/(?:[^@/]+@)?([^/]+)\/)(.+?)(?:\.git)?\/?$/)
@@ -66,7 +66,10 @@ function createSettings(dir: string, board: Board) {
 
 async function checkTools(config: Config, context: Context): Promise<string[]> {
   const harnesses = new Set([config.triage.harness, ...config.stages.map((stage) => stage.harness)])
-  const checks = [BOARD_TOOLS[config.board.provider], ...[...harnesses].map((harness) => HARNESS_TOOLS[harness])]
+  const checks = [
+    BOARD_TOOLS[config.board.provider],
+    ...[...harnesses].map((harness): Check => HARNESS_TOOLS[harness] ?? ['sh', ['-c', `command -v ${config.harnesses[harness]?.command ?? harness}`]]),
+  ]
   const warnings: string[] = []
   for (const [command, args] of checks) {
     const { code } = await context.run(command, args)

@@ -391,6 +391,21 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 | `claude` | `claude -p --model <m> --effort <e> --output-format stream-json` |
 | `codex` | `codex exec -m <m> -c model_reasoning_effort=<e> --json` |
 
+Other harnesses run through a generic command adapter. Built-in presets:
+
+| Harness | Command | Model endpoint |
+|---|---|---|
+| `opencode` | `opencode run --auto -m {model} --dir {workspace} {prompt}` | custom provider in `opencode.json` (`@ai-sdk/openai-compatible`, `baseURL`) |
+| `pi` | `pi --mode json --model {model} --thinking {effort} -- {prompt}` | provider in `~/.pi/agent/models.json` (`api: openai-completions`, `baseUrl`) |
+| `openhands` | `openhands --headless --override-with-envs --json -t {prompt}` with `LLM_MODEL={model}`, `OPENHANDS_WORK_DIR={workspace}` | `LLM_BASE_URL`, `LLM_API_KEY` in `env` |
+| `agent-zero` | `a0 headless -p {prompt} --output jsonl --workspace {workspace}` | model set in the Agent Zero instance; host in `AGENT_ZERO_HOST` |
+
+- `harnesses` in `config.yaml` defines new harnesses or overrides presets (`command`, `args`, `env`); `harnesses` in `local.yaml` overrides personal values such as the endpoint or the key. `env` merges, `command` and `args` replace.
+- Placeholders in `args` and `env`: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`.
+- Result contract: the CLI appends the result schema to the prompt and asks the agent to write the result JSON to the file in `CONVEYOR_RESULT`. No result file means a failed stage.
+- Every output line counts as a progress event for stall detection. Token usage and subscription windows are not available; self-hosted models use the daily token limit of their router.
+- The presets come from the tools' documentation and are not yet verified with real runs.
+
 Codex stages accept two options:
 
 | Option | Values | Default |

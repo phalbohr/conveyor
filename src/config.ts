@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse } from 'yaml'
 import { z } from 'zod'
+import { PRESETS } from './harness/presets.js'
 
 const UNIT_MS = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const
 
@@ -15,7 +16,7 @@ const waiting = z
   .regex(/^\d+w?d$/, 'expected calendar days such as 4d or working days such as 2wd')
   .transform((text) => ({ days: Number.parseInt(text, 10), working: text.endsWith('wd') }))
 
-const harness = z.enum(['claude', 'codex'])
+const harness = z.string().regex(/^[a-z][a-z0-9-]*$/, 'harness names use lowercase letters, digits, and hyphens')
 const name = z.string().min(1)
 const count = z.int().positive()
 const store = z.enum(['board', 'repo', 'path'])
@@ -50,6 +51,14 @@ const teamArtifact = z
 const localArtifact = z
   .strictObject({ store, path: name.optional(), write: write.optional() })
   .refine(needsPath, pathRequired)
+
+const harnessOverride = z.strictObject({
+  command: name.optional(),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+})
+
+const BUILT_IN_HARNESSES = ['claude', 'codex']
 
 const teamSchema = z.strictObject({
   board: z.strictObject({ provider: z.enum(['github', 'gitlab']), project: name, github_project: count.optional() }),
@@ -90,6 +99,7 @@ const teamSchema = z.strictObject({
   language: z.strictObject({ docs: name.default('English') }).prefault({}),
   merge_method: z.enum(['merge', 'squash', 'rebase']).default('merge'),
   review: z.strictObject({ approvals: count.default(1) }).prefault({}),
+  harnesses: z.record(harness, harnessOverride).default({}),
 })
 
 const localSchema = z.strictObject({
@@ -115,6 +125,7 @@ const localSchema = z.strictObject({
   pickup: z.strictObject({ assignee: name.default('me'), include_unassigned: z.boolean().default(true) }).prefault({}),
   workspace: z.strictObject({ root: name.default('~/.conveyor/workspaces/{project}') }).prefault({}),
   language: z.strictObject({ chat: name.optional() }).prefault({}),
+  harnesses: z.record(harness, harnessOverride).default({}),
 })
 
 type Team = z.output<typeof teamSchema>
@@ -131,8 +142,11 @@ export type Stage = StageSettings & {
 }
 export type Artifact = { store: 'board' | 'repo' | 'path'; path?: string; write: 'replace' | 'append' }
 
-export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' | 'language'> &
-  Omit<Local, 'artifacts' | 'language'> & {
+export type HarnessDefinition = { command: string; args: string[]; env: Record<string, string> }
+
+export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' | 'language' | 'harnesses'> &
+  Omit<Local, 'artifacts' | 'language' | 'harnesses'> & {
+    harnesses: Record<string, HarnessDefinition>
     language: { docs: string; chat?: string }
     artifacts: Record<ArtifactKind, Artifact>
     triage: StageSettings
@@ -158,15 +172,20 @@ export function loadConfig(settingsDir: string): LoadResult {
   if (!team || !local || errors.length > 0) return { ok: false, errors }
 
   const artifacts = resolveArtifacts(team, local, errors)
+  const harnesses = resolveHarnesses(team, local, errors)
   const stages = resolveStages(team, errors)
+  const triageHarness = team.triage.harness ?? team.defaults.harness
+  for (const [path, used] of [['defaults.harness', team.defaults.harness], ['triage.harness', triageHarness], ...stages.map((stage) => [`stages.${stage.name}.harness`, stage.harness])]) {
+    if (used && !BUILT_IN_HARNESSES.includes(used) && !harnesses[used]) errors.push(`${CONFIG_FILE}: ${path}: unknown harness ${used}`)
+  }
   if (errors.length > 0) return { ok: false, errors }
 
-  const { artifacts: _teamArtifacts, defaults, triage, stages: _stages, language: teamLanguage, ...teamRest } = team
-  const { artifacts: _localArtifacts, language: localLanguage, ...localRest } = local
+  const { artifacts: _teamArtifacts, defaults, triage, stages: _stages, language: teamLanguage, harnesses: _teamHarnesses, ...teamRest } = team
+  const { artifacts: _localArtifacts, language: localLanguage, harnesses: _localHarnesses, ...localRest } = local
   const language = { docs: teamLanguage.docs, ...(localLanguage.chat ? { chat: localLanguage.chat } : {}) }
   return {
     ok: true,
-    config: { ...teamRest, ...localRest, language, artifacts, triage: withDefaults(triage, defaults), stages },
+    config: { ...teamRest, ...localRest, language, harnesses, artifacts, triage: withDefaults(triage, defaults), stages },
   }
 }
 
@@ -198,6 +217,26 @@ function resolveArtifacts(team: Team, local: Local, errors: string[]): Record<Ar
       return [kind, { ...override, write: override.write ?? shared.write }]
     }),
   ) as Record<ArtifactKind, Artifact>
+}
+
+function resolveHarnesses(team: Team, local: Local, errors: string[]): Record<string, HarnessDefinition> {
+  const harnesses: Record<string, HarnessDefinition> = structuredClone(PRESETS)
+  const layers: [string, Record<string, z.output<typeof harnessOverride>>][] = [
+    [CONFIG_FILE, team.harnesses],
+    [LOCAL_FILE, local.harnesses],
+  ]
+  for (const [file, overrides] of layers) {
+    for (const [harnessName, override] of Object.entries(overrides)) {
+      const base = harnesses[harnessName]
+      const command = override.command ?? base?.command
+      if (!command) {
+        errors.push(`${file}: harnesses.${harnessName}: command is required for a harness without a preset or a team definition`)
+        continue
+      }
+      harnesses[harnessName] = { command, args: override.args ?? base?.args ?? ['{prompt}'], env: { ...base?.env, ...override.env } }
+    }
+  }
+  return harnesses
 }
 
 function resolveStages(team: Team, errors: string[]): Stage[] {
