@@ -7,6 +7,7 @@ import { NO_USAGE, failed } from '../harness/harness.js'
 import type { Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
 import { buildPrompt, type GateMode } from './prompt.js'
+import { waitingDeadline } from './time.js'
 import {
   agentComment,
   commentText,
@@ -29,6 +30,16 @@ export type EngineOptions = {
 
 type Running = { controller: AbortController; promise: Promise<void> }
 
+type StageContext = {
+  workspace: string
+  artifacts: Record<string, string>
+  workpad: string
+  gate: { mode: GateMode; criteria: string } | undefined
+  conversation: { request: string; replies: string[]; approval: boolean } | undefined
+  attempt: number
+  signal: AbortSignal
+}
+
 const PICKUP: Record<Config['pickup_from'], Task['state'][]> = {
   idea: ['idea', 'story', 'plan'],
   story: ['story', 'plan'],
@@ -40,6 +51,8 @@ const GATES: Record<string, { transition: 'idea_to_story' | 'story_to_plan'; cri
   plan: { transition: 'story_to_plan', criteria: 'story-plan' },
 }
 
+const WAITING_STATES: Task['state'][] = ['needs-input', 'queued', 'review']
+
 export class Engine {
   private readonly running = new Map<string, Running>()
   private me?: string
@@ -47,14 +60,16 @@ export class Engine {
   constructor(private readonly options: EngineOptions) {}
 
   async tick() {
+    const { board } = this.options
+    const me = (this.me ??= await board.user())
+    await this.reconcile(me)
+
     const loaded = this.options.loadConfig()
     if (!loaded.ok) {
       this.log(`configuration is invalid, no new tasks are claimed:\n${loaded.errors.join('\n')}`)
       return
     }
     const config = loaded.config
-    const { board } = this.options
-    const me = (this.me ??= await board.user())
 
     const resumable: Task[] = []
     const fresh: Task[] = []
@@ -62,8 +77,10 @@ export class Engine {
     let awaitingReview = 0
     const now = Date.now()
 
-    for (const task of await board.listTasks()) {
-      if (this.running.has(task.id) || (task.owner && task.owner !== me)) continue
+    for (const listed of await board.listTasks()) {
+      if (this.running.has(listed.id)) continue
+      const task = (await this.releaseIfExpired(listed, me, config, now)) ? withoutOwner(listed) : listed
+      if (task.owner && task.owner !== me) continue
       const owned = task.owner === me
       switch (task.state) {
         case 'review':
@@ -119,6 +136,52 @@ export class Engine {
     while (this.running.size > 0) await Promise.all([...this.running.values()].map((running) => running.promise))
   }
 
+  async release(id: string, reason: string) {
+    const running = this.running.get(id)
+    running?.controller.abort()
+    await running?.promise
+    await this.options.board.release(id)
+    await this.options.board.setOwner(id, undefined)
+    await this.options.board.addComment(id, agentComment('release', reason))
+  }
+
+  private async reconcile(me: string) {
+    for (const [id, running] of this.running) {
+      let task: Task | undefined
+      try {
+        task = await this.options.board.getTask(id)
+      } catch (error) {
+        this.log(`task ${id}: reconciliation skipped: ${(error as Error).message}`)
+        continue
+      }
+      if (!task || task.closed) {
+        running.controller.abort()
+        void running.promise.then(() => this.options.workspaces.remove(id)).catch((error: unknown) => this.log(`task ${id}: ${(error as Error).message}`))
+      } else if (!task.state || task.owner !== me) {
+        running.controller.abort()
+      }
+    }
+  }
+
+  private async releaseIfExpired(task: Task, me: string, config: Config, now: number) {
+    if (!task.owner || !task.state) return false
+    const waiting = WAITING_STATES.includes(task.state)
+    if (!waiting && (task.state !== 'in-progress' || task.owner === me)) return false
+    const { pad } = await this.workpad(task.id)
+    if (!pad || pad.state.private) return false
+
+    if (waiting) {
+      const since = pad.state.waiting?.since
+      if (!since || now < waitingDeadline(new Date(since), config.timeouts.waiting).getTime()) return false
+      await this.release(task.id, `Released the claim of @${task.owner}: the task waited longer than the waiting timeout.`)
+      return true
+    }
+    const heartbeat = pad.state.heartbeat
+    if (heartbeat && now - Date.parse(heartbeat) <= config.timeouts.heartbeat) return false
+    await this.release(task.id, `Released the claim of @${task.owner}: no heartbeat for longer than the heartbeat timeout.`)
+    return true
+  }
+
   private start(task: Task, config: Config) {
     const controller = new AbortController()
     const promise = this.execute(task, config, controller.signal)
@@ -155,20 +218,28 @@ export class Engine {
     const artifacts = new Artifacts(board, workspaces, config, this.options.home)
 
     for (const stage of stages) {
+      if (signal.aborted) return
       state.stage = stage.name
       await save()
       const task = (await board.getTask(id)) ?? initial
       comments = await board.listComments(id)
       const gate = this.gate(stage, config)
-      const output = await this.runStage(task, stage, config, {
-        workspace: workspace.path,
-        artifacts: artifacts.read(task, comments, workspace.path),
-        workpad: workpadText,
-        gate,
-        conversation,
-        attempt: state.attempt,
-        signal,
-      })
+      const heartbeat = setInterval(() => void save().catch(() => undefined), config.timeouts.heartbeat / 3)
+      let output: StageOutput
+      try {
+        output = await this.runStage(task, stage, config, {
+          workspace: workspace.path,
+          artifacts: artifacts.read(task, comments, workspace.path),
+          workpad: workpadText,
+          gate,
+          conversation,
+          attempt: state.attempt,
+          signal,
+        })
+      } finally {
+        clearInterval(heartbeat)
+      }
+      if (signal.aborted) return
       conversation = undefined
       await workspaces.push(id).catch((error: unknown) => this.log(`task ${id}: push failed: ${(error as Error).message}`))
 
@@ -183,6 +254,7 @@ export class Engine {
 
       if (result.outcome === 'done') {
         state.attempt = 0
+        delete state.lastError
         continue
       }
       if (result.outcome === 'failed') {
@@ -193,6 +265,7 @@ export class Engine {
       const kind = result.outcome === 'approval' ? 'approval' : 'questions'
       const comment = await board.addComment(id, agentComment(kind, this.request(stage.name, result)))
       state.attempt = 0
+      delete state.lastError
       state.waiting = { kind, stage: stage.name, commentId: comment.id, since: new Date().toISOString() }
       await board.setState(id, 'needs-input')
       await save()
@@ -206,20 +279,7 @@ export class Engine {
     await save()
   }
 
-  private async runStage(
-    task: Task,
-    stage: Stage,
-    config: Config,
-    context: {
-      workspace: string
-      artifacts: Record<string, string>
-      workpad: string
-      gate: { mode: GateMode; criteria: string } | undefined
-      conversation: { request: string; replies: string[]; approval: boolean } | undefined
-      attempt: number
-      signal: AbortSignal
-    },
-  ): Promise<StageOutput> {
+  private async runStage(task: Task, stage: Stage, config: Config, context: StageContext): Promise<StageOutput> {
     const harness = this.options.harnesses[stage.harness]
     if (!harness) return { result: failed(`harness ${stage.harness} is not available`), usage: NO_USAGE }
     try {
@@ -237,21 +297,50 @@ export class Engine {
       ...(context.conversation ? { conversation: context.conversation } : {}),
       attempt: context.attempt,
     })
-    const output = await harness.runStage({
-      taskId: task.id,
-      stage: stage.name,
-      prompt,
-      model: stage.model,
-      effort: stage.effort,
-      cwd: context.workspace,
-      signal: context.signal,
-    })
-    await this.options.workspaces.runHook('after_run', context.workspace)
-    return output
+
+    const controller = new AbortController()
+    const stop = () => controller.abort()
+    context.signal.addEventListener('abort', stop, { once: true })
+    let reason: string | undefined
+    const { stage: stageTimeout, stall } = config.timeouts
+    const deadline = setTimeout(() => {
+      reason = `stage timed out after ${stageTimeout / 60_000} min`
+      controller.abort()
+    }, stageTimeout)
+    let watchdog: ReturnType<typeof setTimeout> | undefined
+    const arm = () => {
+      if (!stall) return
+      clearTimeout(watchdog)
+      watchdog = setTimeout(() => {
+        reason = `stage stalled: no harness events for ${stall / 60_000} min`
+        controller.abort()
+      }, stall)
+    }
+    arm()
+
+    try {
+      const output = await harness.runStage({
+        taskId: task.id,
+        stage: stage.name,
+        prompt,
+        model: stage.model,
+        effort: stage.effort,
+        cwd: context.workspace,
+        signal: controller.signal,
+        onEvent: arm,
+      })
+      return reason ? { ...output, result: failed(reason) } : output
+    } finally {
+      clearTimeout(deadline)
+      clearTimeout(watchdog)
+      context.signal.removeEventListener('abort', stop)
+      if (!context.signal.aborted) await this.options.workspaces.runHook('after_run', context.workspace)
+    }
   }
 
   private async fail(id: string, stage: Stage, state: WorkpadState, result: StageResult, config: Config) {
     state.attempt++
+    state.lastError = result.summary
     if (state.attempt < config.retry.max_attempts) {
       const delay = Math.min(10_000 * 2 ** (state.attempt - 1), config.retry.max_backoff)
       state.retryAt = new Date(Date.now() + delay).toISOString()
@@ -333,4 +422,9 @@ export class Engine {
   private log(message: string) {
     this.options.log?.(message)
   }
+}
+
+function withoutOwner(task: Task): Task {
+  const { owner: _owner, ...rest } = task
+  return rest
 }
