@@ -122,6 +122,28 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 - Init creates `stages/<stage>.md` for each stage.
 - Stage files are strict templates. Variables: `issue` (id, title, body, labels, comments, blockers), `stage`, `attempt` (null on the first run), `artifacts` (idea, story, plan), `review` (feedback on rework). An unknown variable fails rendering; the stage does not start.
 
+## Stage skills and isolation
+
+- Harness sessions run isolated: no personal settings, plugins, hooks, or MCP servers (claude: `--setting-sources project,local --strict-mcp-config`). Behavior is the same on every workstation, and each call costs less.
+- A stage file declares the skills it needs in its frontmatter:
+
+  ```markdown
+  ---
+  skills: [brainstorming, grilling]
+  ---
+  Write the story from the idea. Use the grilling skill to clarify requirements.
+  ```
+
+- Before the stage runs, the CLI makes exactly these skills available in the session. `config.yaml` describes resources (harness, model, effort); stage files describe behavior and its dependencies.
+- Skill lookup order, first match wins (as in Claude Code):
+  1. the project's `.claude/skills/`;
+  2. personal skills in `~/.claude/skills/`;
+  3. installed plugins, by name `plugin:skill`.
+- A missing skill blocks the stage with an error that names the skill and the stage. The stage never runs without a declared skill.
+- `conveyor run` checks the frontmatter of all configured stages once at start, so a missing skill shows up at once and not hours later.
+- For teams, skills belong in the repository (committed copies) or in a plugin. Symlinks to personal paths break on other workstations.
+- Fallback: `settings: full` per stage in `local.yaml` only. It loads all personal settings for that stage on this workstation. It is a personal choice and never part of the team configuration.
+
 ## Stage result contract
 
 Every stage returns one structured result. The harness adapter enforces the schema with the harness's native support (for example an output schema flag); otherwise it validates the final JSON block.

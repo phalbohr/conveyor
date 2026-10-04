@@ -1,0 +1,126 @@
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { ClaudeHarness } from '../src/harness/claude.js'
+import { CodexHarness } from '../src/harness/codex.js'
+import { childEnv, parseResult, type Harness } from '../src/harness/harness.js'
+import { tempDir } from './helpers.js'
+import { harnessContract } from './harness-contract.js'
+
+const FIXTURES = new URL('./fixtures/', import.meta.url).pathname
+
+type Stub = { command: string; argsFile: string; envFile: string }
+
+function stub(fixture: string, options: { exitCode?: number; hang?: boolean } = {}): Stub {
+  const dir = tempDir('conveyor-stub-')
+  const command = join(dir, 'agent')
+  const argsFile = join(dir, 'args.json')
+  const envFile = join(dir, 'env.json')
+  writeFileSync(
+    command,
+    `#!/usr/bin/env node
+const fs = require('node:fs')
+fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }))
+fs.writeFileSync(${JSON.stringify(envFile)}, JSON.stringify(Object.keys(process.env)))
+process.stdout.write(fs.readFileSync(${JSON.stringify(join(FIXTURES, fixture))}, 'utf8'))
+${options.hang ? 'setInterval(() => {}, 1000)' : `process.exit(${options.exitCode ?? 0})`}
+`,
+  )
+  chmodSync(command, 0o755)
+  return { command, argsFile, envFile }
+}
+
+const run = (overrides: Partial<Parameters<Harness['runStage']>[0]> = {}) => ({
+  prompt: 'do the stage',
+  model: 'some-model',
+  effort: 'high',
+  cwd: tempDir('conveyor-workspace-'),
+  ...overrides,
+})
+
+const harnesses = [
+  { name: 'claude', fixture: 'claude-done.jsonl', make: (s: Stub, env?: NodeJS.ProcessEnv) => new ClaudeHarness({ command: s.command, env }) },
+  { name: 'codex', fixture: 'codex-done.jsonl', make: (s: Stub, env?: NodeJS.ProcessEnv) => new CodexHarness({ command: s.command, env }) },
+]
+
+describe.each(harnesses)('$name harness adapter', ({ fixture, make }) => {
+  it('returns the structured result and token usage', async () => {
+    const output = await make(stub(fixture)).runStage(run())
+    expect(output.result).toEqual({ outcome: 'done', summary: 'hello-from-file' })
+    expect(output.usage.inputTokens).toBeGreaterThan(0)
+    expect(output.usage.outputTokens).toBeGreaterThan(0)
+  })
+
+  it('passes model, effort, prompt, and workspace to the agent', async () => {
+    const s = stub(fixture)
+    const options = run()
+    await make(s).runStage(options)
+    const { argv, cwd } = JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[]; cwd: string }
+    expect(argv.join(' ')).toContain('some-model')
+    expect(argv.join(' ')).toContain('high')
+    expect(argv.at(-1)).toBe('do the stage')
+    expect(cwd).toContain('conveyor-workspace-')
+  })
+
+  it('reports progress events', async () => {
+    let events = 0
+    await make(stub(fixture)).runStage(run({ onEvent: () => events++ }))
+    expect(events).toBeGreaterThan(0)
+  })
+
+  it('returns failed when the agent exits with an error', async () => {
+    const output = await make(stub('empty.jsonl', { exitCode: 3 })).runStage(run())
+    expect(output.result.outcome).toBe('failed')
+  })
+
+  it('stops the agent on abort', async () => {
+    const controller = new AbortController()
+    const pending = make(stub(fixture, { hang: true })).runStage(run({ signal: controller.signal }))
+    setTimeout(() => controller.abort(), 200)
+    const output = await pending
+    expect(output.result).toMatchObject({ outcome: 'failed', summary: expect.stringContaining('aborted') })
+  })
+
+  it('removes board credentials from the agent environment', async () => {
+    const s = stub(fixture)
+    await make(s, { PATH: process.env.PATH, GH_TOKEN: 'secret', GITLAB_TOKEN: 'secret', KEEP_ME: '1' }).runStage(run())
+    const keys = JSON.parse(readFileSync(s.envFile, 'utf8')) as string[]
+    expect(keys).toContain('KEEP_ME')
+    expect(keys).not.toContain('GH_TOKEN')
+    expect(keys).not.toContain('GITLAB_TOKEN')
+  })
+})
+
+describe('parseResult', () => {
+  it('drops null and empty optional fields', () => {
+    expect(parseResult({ outcome: 'done', summary: 's', artifact: null, questions: [], workpad: null })).toEqual({
+      outcome: 'done',
+      summary: 's',
+    })
+  })
+
+  it('keeps artifact, questions, and workpad', () => {
+    expect(
+      parseResult({ outcome: 'needs_input', summary: 's', artifact: { kind: 'story', content: 'c' }, questions: ['q?'], workpad: 'w' }),
+    ).toEqual({ outcome: 'needs_input', summary: 's', artifact: { kind: 'story', content: 'c' }, questions: ['q?'], workpad: 'w' })
+  })
+
+  it('turns an invalid result into failed', () => {
+    expect(parseResult({ outcome: 'shipped' })).toMatchObject({ outcome: 'failed', summary: expect.stringContaining('invalid') })
+  })
+})
+
+describe('childEnv', () => {
+  it('removes known board credentials only', () => {
+    expect(childEnv({ GH_TOKEN: 'a', GITHUB_TOKEN: 'b', GL_TOKEN: 'c', GITLAB_TOKEN: 'd', HOME: '/h' })).toEqual({ HOME: '/h' })
+  })
+})
+
+const real = process.env.CONVEYOR_HARNESS_REAL
+if (real) {
+  for (const entry of real.split(',')) {
+    const [name, model = ''] = entry.split(':')
+    if (name === 'claude') harnessContract('claude', () => new ClaudeHarness(), model)
+    if (name === 'codex') harnessContract('codex', () => new CodexHarness(), model)
+  }
+}

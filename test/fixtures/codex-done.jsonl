@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a10707-4d1c-75a3-b285-af43a340a572"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll read `note.txt` and return its contents as the summary."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc 'cat note.txt'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc 'cat note.txt'","aggregated_output":"hello-from-file\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"{\"outcome\":\"done\",\"summary\":\"hello-from-file\",\"artifact\":null,\"questions\":[],\"workpad\":null}"}}
+{"type":"turn.completed","usage":{"input_tokens":43530,"cached_input_tokens":21248,"cache_write_input_tokens":0,"output_tokens":91,"reasoning_output_tokens":0}}
