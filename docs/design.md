@@ -94,7 +94,7 @@ retry:
 
 ```yaml
 artifacts:
-  plan: {store: path, path: ~/Plans/{project}}   # allowed only if allow_private: true
+  plan: {store: path, path: "~/Plans/{project}"}   # allowed only if allow_private: true
 limits:
   running: 3             # tasks executing at the same time
   awaiting_me: 5         # tasks in discussion, waiting for my answer
@@ -102,7 +102,7 @@ limits:
   daily_tokens: 0        # 0 = no limit
 poll_interval: 5m
 pickup: {assignee: me, include_unassigned: true}
-workspace: {root: ~/.conveyor/workspaces/{project}}
+workspace: {root: "~/.conveyor/workspaces/{project}"}
 ```
 
 ## Artifacts

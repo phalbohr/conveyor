@@ -1,0 +1,11 @@
+limits:
+  running: 3
+  awaiting_me: 5
+  awaiting_review: 2
+  daily_tokens: 0
+poll_interval: 5m
+pickup:
+  assignee: me
+  include_unassigned: true
+workspace:
+  root: "~/.conveyor/workspaces/{project}"

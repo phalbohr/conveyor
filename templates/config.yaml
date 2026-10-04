@@ -1,0 +1,30 @@
+board:
+  provider: {{provider}}
+  project: {{project}}
+artifacts:
+  idea: {store: board}
+  story: {store: board, write: replace}
+  plan: {store: board}
+pickup_from: plan
+transitions:
+  idea_to_story: interactive
+  story_to_plan: interactive
+  merge: human
+defaults: {harness: claude, model: sonnet, effort: medium}
+triage: {model: opus, effort: high}
+stages:
+  story: {model: opus, effort: high}
+  plan: {model: opus, effort: high}
+  implement: {}
+  review: {model: opus, effort: high}
+  merge: {model: haiku, effort: low}
+hooks:
+  timeout: 60s
+timeouts:
+  stage: 60m
+  stall: 5m
+  heartbeat: 30m
+  waiting: 4d
+retry:
+  max_backoff: 5m
+  max_attempts: 5
