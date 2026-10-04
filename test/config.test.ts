@@ -50,7 +50,13 @@ describe('loadConfig', () => {
     })
     expect(c.retry).toEqual({ max_backoff: 5 * 60_000, max_attempts: 5 })
     expect(c.hooks).toEqual({ timeout: 60_000 })
-    expect(c.limits).toEqual({ running: 3, awaiting_me: 5, awaiting_review: 2, daily_tokens: 0 })
+    expect(c.limits).toEqual({
+      running: 3,
+      awaiting_me: 5,
+      awaiting_review: 2,
+      daily_tokens: 0,
+      subscription: { five_hour_reserve: 0, seven_day_reserve: 0, probe: false },
+    })
     expect(c.poll_interval).toBe(5 * 60_000)
     expect(c.pickup).toEqual({ assignee: 'me', include_unassigned: true })
     expect(c.workspace).toEqual({ root: '~/.conveyor/workspaces/{project}' })
@@ -195,7 +201,7 @@ artifacts:
 
   it('reads personal limits from local.yaml', () => {
     const c = config(BOARD, 'limits: {running: 1, daily_tokens: 2000000}\n')
-    expect(c.limits).toEqual({ running: 1, awaiting_me: 5, awaiting_review: 2, daily_tokens: 2_000_000 })
+    expect(c.limits).toMatchObject({ running: 1, awaiting_me: 5, awaiting_review: 2, daily_tokens: 2_000_000 })
   })
 
   it('reports a missing config.yaml', () => {

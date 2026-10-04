@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { join } from 'node:path'
 import type { Board, Comment, PullRequest, Task } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
-import type { Harness, StageOutput, StageResult } from '../harness/harness.js'
+import type { Harness, Quota, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { NO_USAGE, failed } from '../harness/harness.js'
 import { resolveSkills } from '../skills.js'
 import type { UsageLedger } from '../usage.js'
@@ -76,6 +76,7 @@ const triageSchema = z.object({
   ),
 })
 
+const QUOTA_FRESH = 10 * 60_000
 const LAND = 'land'
 const LAND_WAIT = 60_000
 const MERGE_LOCK = 'merge'
@@ -108,8 +109,10 @@ const WAITING_STATES: Task['state'][] = ['needs-input', 'queued', 'review']
 
 export class Engine {
   private readonly running = new Map<string, Running>()
+  private readonly cleanups = new Set<Promise<void>>()
   private me?: string
   private triageRetryAt = 0
+  private readonly quotas = new Map<HarnessName, { quota: Quota; observedAt: number }>()
 
   constructor(private readonly options: EngineOptions) {}
 
@@ -124,6 +127,7 @@ export class Engine {
       return
     }
     const config = loaded.config
+    await this.probeQuotas(config)
     await this.triage(config).catch((error: unknown) => this.log(`triage failed: ${(error as Error).message}`))
 
     const resumable: Task[] = []
@@ -183,7 +187,9 @@ export class Engine {
       if (task.state === 'needs-input') await board.setState(task.id, 'queued')
     }
 
-    const overBudget = config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens
+    const overBudget =
+      (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) ||
+      config.stages.some((stage) => this.quotaBlock(stage.harness, config) !== undefined)
     if (waiting > 0 || overBudget || awaitingMe >= config.limits.awaiting_me || awaitingReview >= config.limits.awaiting_review) return
 
     for (const task of this.sorted(fresh, me)) {
@@ -197,7 +203,9 @@ export class Engine {
   }
 
   async idle() {
-    while (this.running.size > 0) await Promise.all([...this.running.values()].map((running) => running.promise))
+    while (this.running.size > 0 || this.cleanups.size > 0) {
+      await Promise.all([...[...this.running.values()].map((running) => running.promise), ...this.cleanups])
+    }
   }
 
   async stop() {
@@ -224,7 +232,11 @@ export class Engine {
       }
       if (!task || task.closed) {
         running.controller.abort()
-        void running.promise.then(() => this.options.workspaces.remove(id)).catch((error: unknown) => this.log(`task ${id}: ${(error as Error).message}`))
+        const cleanup = running.promise
+          .then(() => this.options.workspaces.remove(id))
+          .catch((error: unknown) => this.log(`task ${id}: ${(error as Error).message}`))
+          .finally(() => this.cleanups.delete(cleanup))
+        this.cleanups.add(cleanup)
       } else if (!task.state || task.owner !== me) {
         running.controller.abort()
       }
@@ -395,6 +407,13 @@ export class Engine {
     for (const stage of stages) {
       if (signal.aborted) return { status: 'stopped', summary }
       state.stage = stage.name
+      const blockedUntil = this.quotaBlock(stage.harness, config)
+      if (blockedUntil) {
+        state.retryAt = blockedUntil
+        await run.save()
+        this.log(`task ${id}: stage ${stage.name} waits for the ${stage.harness} subscription window until ${blockedUntil}`)
+        return { status: 'stopped', summary }
+      }
       await run.save()
       const task = (await board.getTask(id)) ?? (await this.mustGetTask(id))
       const comments = await board.listComments(id)
@@ -419,6 +438,7 @@ export class Engine {
       }
       if (signal.aborted) return { status: 'stopped', summary }
       this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
+      if (output.quota) this.quotas.set(stage.harness, { quota: output.quota, observedAt: Date.now() })
       this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
       conversation = undefined
       await workspaces
@@ -513,10 +533,39 @@ export class Engine {
     return 'stop'
   }
 
+  private quotaBlock(harness: HarnessName, config: Config): string | undefined {
+    const known = this.quotas.get(harness)?.quota
+    if (!known) return undefined
+    const { five_hour_reserve, seven_day_reserve } = config.limits.subscription
+    const checks: [QuotaWindow | undefined, number][] = [
+      [known.fiveHour, five_hour_reserve],
+      [known.sevenDay, seven_day_reserve],
+    ]
+    const blocked = checks
+      .filter(([window, reserve]) => window && reserve > 0 && Date.parse(window.resetsAt) > Date.now() && window.utilization * 100 >= 100 - reserve)
+      .map(([window]) => (window as QuotaWindow).resetsAt)
+      .sort()
+    return blocked.at(-1)
+  }
+
+  private async probeQuotas(config: Config) {
+    const { probe, five_hour_reserve, seven_day_reserve } = config.limits.subscription
+    if (!probe || (five_hour_reserve === 0 && seven_day_reserve === 0)) return
+    const names = new Set([config.triage.harness, ...config.stages.map((stage) => stage.harness)])
+    for (const name of names) {
+      const harness = this.options.harnesses[name]
+      const observed = this.quotas.get(name)?.observedAt ?? 0
+      if (!harness?.probeQuota || Date.now() - observed < QUOTA_FRESH) continue
+      const quota = await harness.probeQuota(this.options.repo).catch(() => undefined)
+      if (quota) this.quotas.set(name, { quota, observedAt: Date.now() })
+    }
+  }
+
   private async triage(config: Config) {
     const { board } = this.options
     if (Date.now() < this.triageRetryAt) return
     if (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) return
+    if (this.quotaBlock(config.triage.harness, config)) return
     const tasks = await board.listTasks()
     const fresh = tasks.filter((task) => !task.owner && NEW_STATES.includes(task.state) && task.priority === undefined).map((task) => task.id)
     if (fresh.length === 0) return

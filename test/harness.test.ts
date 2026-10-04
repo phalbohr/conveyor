@@ -95,6 +95,24 @@ describe.each(harnesses)('$name harness adapter', ({ fixture, make }) => {
   })
 })
 
+describe('claude harness quota', () => {
+  it('reports the subscription windows from the rate limit event', async () => {
+    const output = await new ClaudeHarness({ command: stub('claude-done.jsonl').command }).runStage(run())
+    expect(output.quota).toEqual({
+      fiveHour: { utilization: 0.61, resetsAt: new Date(1791153000 * 1000).toISOString() },
+      sevenDay: { utilization: 0.15, resetsAt: new Date(1791698400 * 1000).toISOString() },
+    })
+  })
+
+  it('probes the quota with a cheap run', async () => {
+    const s = stub('claude-done.jsonl')
+    const quota = await new ClaudeHarness({ command: s.command }).probeQuota(tempDir())
+    expect(quota?.fiveHour?.utilization).toBe(0.61)
+    const { argv } = JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[] }
+    expect(argv.join(' ')).toContain('--model haiku')
+  })
+})
+
 describe('claude harness skills', () => {
   it('attaches personal and plugin skills for the run and removes them afterwards', async () => {
     const s = stub('claude-done.jsonl')

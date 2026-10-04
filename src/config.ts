@@ -102,6 +102,13 @@ const localSchema = z.strictObject({
       awaiting_me: count.default(5),
       awaiting_review: count.default(2),
       daily_tokens: z.int().nonnegative().default(0),
+      subscription: z
+        .strictObject({
+          five_hour_reserve: z.number().min(0).max(100).default(0),
+          seven_day_reserve: z.number().min(0).max(100).default(0),
+          probe: z.boolean().default(false),
+        })
+        .prefault({}),
     })
     .prefault({}),
   poll_interval: duration.prefault('5m'),
