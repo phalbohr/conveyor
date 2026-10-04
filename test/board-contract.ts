@@ -1,0 +1,104 @@
+import { afterAll, describe, expect, it, vi } from 'vitest'
+import type { Board, Task, TaskState } from '../src/board/board.js'
+
+const eventually = (assertion: () => Promise<void>) => vi.waitFor(assertion, { timeout: 30_000, interval: 1_000 })
+
+export function boardContract(name: string, makeBoard: () => Board, options: { timeout?: number } = {}) {
+  describe(`${name} board contract`, { timeout: options.timeout ?? 5_000 }, () => {
+    const board = makeBoard()
+    const created: string[] = []
+
+    async function task(state?: TaskState, title = 'contract test task'): Promise<Task> {
+      const result = await board.createTask(title, 'body', state)
+      created.push(result.id)
+      return result
+    }
+
+    afterAll(async () => {
+      for (const id of created) await board.closeTask(id)
+    }, 120_000)
+
+    it('creates a task with a state and lists it', async () => {
+      const created = await task('idea')
+      expect(created).toMatchObject({ title: 'contract test task', body: 'body', state: 'idea', closed: false, openBlockers: 0 })
+      await eventually(async () => {
+        expect((await board.listTasks()).map((t) => t.id)).toContain(created.id)
+      })
+      expect(await board.getTask(created.id)).toMatchObject({ id: created.id, state: 'idea' })
+    })
+
+    it('does not list tasks without a conveyor state', async () => {
+      const plain = await task()
+      expect(plain.state).toBeUndefined()
+      expect((await board.listTasks()).map((t) => t.id)).not.toContain(plain.id)
+    })
+
+    it('does not list closed tasks', async () => {
+      const closed = await task('plan')
+      await board.closeTask(closed.id)
+      await eventually(async () => {
+        expect((await board.listTasks()).map((t) => t.id)).not.toContain(closed.id)
+      })
+      expect(await board.getTask(closed.id)).toMatchObject({ closed: true })
+    })
+
+    it('replaces the state', async () => {
+      const t = await task('story')
+      await board.setState(t.id, 'in-progress')
+      await board.setState(t.id, 'needs-input')
+      expect((await board.getTask(t.id))?.state).toBe('needs-input')
+    })
+
+    it('sets and clears the owner', async () => {
+      const t = await task('plan')
+      await board.setOwner(t.id, 'someone')
+      expect((await board.getTask(t.id))?.owner).toBe('someone')
+      await board.setOwner(t.id, undefined)
+      expect((await board.getTask(t.id))?.owner).toBeUndefined()
+    })
+
+    it('updates the body', async () => {
+      const t = await task('idea')
+      await board.updateBody(t.id, 'story text')
+      expect((await board.getTask(t.id))?.body).toBe('story text')
+    })
+
+    it('adds, lists, and updates comments', async () => {
+      const t = await task('plan')
+      const user = await board.user()
+      const first = await board.addComment(t.id, 'first')
+      await board.addComment(t.id, 'second')
+      await board.updateComment(first.id, 'first, edited')
+      const comments = await board.listComments(t.id)
+      expect(comments.map((c) => c.body)).toEqual(['first, edited', 'second'])
+      expect(comments[0]?.author).toBe(user)
+    })
+
+    it('counts open blockers', async () => {
+      const blocked = await task('plan', 'blocked task')
+      const blocker = await task('plan', 'blocker task')
+      await board.addBlocker(blocked.id, blocker.id)
+      await eventually(async () => {
+        expect((await board.getTask(blocked.id))?.openBlockers).toBe(1)
+      })
+      await board.closeTask(blocker.id)
+      await eventually(async () => {
+        expect((await board.getTask(blocked.id))?.openBlockers).toBe(0)
+      })
+    })
+
+    it('claims a task only once until release', async () => {
+      const t = await task('plan')
+      expect(await board.claim(t.id)).toBe(true)
+      expect(await board.claim(t.id)).toBe(false)
+      await board.release(t.id)
+      expect(await board.claim(t.id)).toBe(true)
+      await board.release(t.id)
+    })
+
+    it('releases an unclaimed task without error', async () => {
+      const t = await task('plan')
+      await board.release(t.id)
+    })
+  })
+}

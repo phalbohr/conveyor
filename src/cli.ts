@@ -5,13 +5,15 @@ import { detectBoard, initProject, type Board, type InitResult, type Target } fr
 import { findSettings } from './settings.js'
 import { promptInit } from './ui/init-prompt.js'
 
+export type Run = (command: string, args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>
+
 export type Context = {
   stdout: (text: string) => void
   stderr: (text: string) => void
   cwd: string
   home: string
   interactive: boolean
-  run: (command: string, args: string[]) => Promise<{ code: number; stdout: string }>
+  run: Run
 }
 
 type InitOptions = { path?: string; use?: string; provider?: Board['provider']; project?: string }
