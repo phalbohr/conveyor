@@ -1,4 +1,15 @@
-import { OWNER_LABEL, STATE_LABEL, labelsToTask, type Board, type Comment, type Task, type TaskState } from './board.js'
+import {
+  OWNER_LABEL,
+  PRIORITY_LABEL,
+  STATE_LABEL,
+  labelsToTask,
+  type Board,
+  type Comment,
+  type MergeMethod,
+  type PullRequest,
+  type Task,
+  type TaskState,
+} from './board.js'
 
 type Issue = {
   title: string
@@ -14,6 +25,9 @@ export class FakeBoard implements Board {
   private readonly issues = new Map<string, Issue>()
   private readonly comments = new Map<string, Comment & { taskId: string }>()
   private readonly locks = new Set<string>()
+  private readonly pulls = new Map<string, PullRequest>()
+  readonly merges: { id: string; method: MergeMethod }[] = []
+  mergeError: string | undefined
   private nextId = 1
 
   constructor(
@@ -94,6 +108,51 @@ export class FakeBoard implements Board {
 
   async release(id: string) {
     this.locks.delete(id)
+  }
+
+  async setPriority(id: string, priority: number) {
+    this.replaceLabel(id, PRIORITY_LABEL, PRIORITY_LABEL + priority)
+  }
+
+  async openPullRequest(id: string) {
+    const existing = this.pulls.get(id)
+    if (existing?.state === 'open') return { ...existing }
+    const pull: PullRequest = {
+      number: String(1000 + this.pulls.size),
+      url: `https://example.test/pull/${id}`,
+      state: 'open',
+      checks: 'none',
+      mergeable: 'yes',
+      review: 'none',
+      feedback: [],
+    }
+    this.pulls.set(id, pull)
+    return { ...pull }
+  }
+
+  async pullRequest(id: string) {
+    const pull = this.pulls.get(id)
+    return pull ? { ...pull, feedback: [...pull.feedback] } : undefined
+  }
+
+  async mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }> {
+    const pull = this.pulls.get(id)
+    if (!pull || pull.state !== 'open') return { ok: false, error: 'no open pull request' }
+    if (this.mergeError) return { ok: false, error: this.mergeError }
+    pull.state = 'merged'
+    this.merges.push({ id, method })
+    return { ok: true }
+  }
+
+  async closePullRequest(id: string) {
+    const pull = this.pulls.get(id)
+    if (pull) pull.state = 'closed'
+  }
+
+  updatePullRequest(id: string, patch: Partial<PullRequest>) {
+    const pull = this.pulls.get(id)
+    if (!pull) throw new Error(`no pull request for task ${id}`)
+    Object.assign(pull, patch)
   }
 
   assign(id: string, ...logins: string[]) {

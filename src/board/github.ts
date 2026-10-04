@@ -1,5 +1,16 @@
 import type { Run } from '../cli.js'
-import { OWNER_LABEL, STATE_LABEL, labelsToTask, type Board, type Comment, type Task, type TaskState } from './board.js'
+import {
+  OWNER_LABEL,
+  PRIORITY_LABEL,
+  STATE_LABEL,
+  labelsToTask,
+  type Board,
+  type Comment,
+  type MergeMethod,
+  type PullRequest,
+  type Task,
+  type TaskState,
+} from './board.js'
 
 type Issue = {
   number: number
@@ -16,14 +27,30 @@ type Issue = {
 
 type GitHubComment = { id: number; user: { login: string }; body: string; created_at: string; updated_at: string }
 
+type Check = { status?: string; conclusion?: string; state?: string }
+
+type GitHubPull = {
+  number: number
+  url: string
+  state: 'OPEN' | 'MERGED' | 'CLOSED'
+  mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+  reviewDecision: string
+  statusCheckRollup: Check[] | null
+  reviews: { state: string; body: string }[]
+  comments: { body: string }[]
+}
+
+const PULL_FIELDS = 'number,url,state,mergeable,reviewDecision,statusCheckRollup,reviews,comments'
+
 const LOCK_PREFIX = 'conveyor-lock/'
 
 export class GitHubBoard implements Board {
   private readonly repo: string
   private login?: string
+  private defaultBranch?: string
 
   constructor(
-    project: string,
+    private readonly project: string,
     private readonly run: Run,
   ) {
     this.repo = `repos/${project}`
@@ -89,8 +116,7 @@ export class GitHubBoard implements Board {
   }
 
   async claim(id: string) {
-    const { default_branch } = await this.api<{ default_branch: string }>([this.repo])
-    const head = await this.api<{ object: { sha: string } }>([`${this.repo}/git/ref/heads/${default_branch}`])
+    const head = await this.api<{ object: { sha: string } }>([`${this.repo}/git/ref/heads/${await this.branch()}`])
     const result = await this.call(['-X', 'POST', `${this.repo}/git/refs`, '-f', `ref=refs/heads/${LOCK_PREFIX}${id}`, '-f', `sha=${head.object.sha}`])
     if (result.status === 422) return false
     this.parse(result)
@@ -100,6 +126,55 @@ export class GitHubBoard implements Board {
   async release(id: string) {
     const result = await this.call(['-X', 'DELETE', `${this.repo}/git/refs/heads/${LOCK_PREFIX}${id}`])
     if (result.status !== 404 && result.status !== 422) this.parse(result)
+  }
+
+  async setPriority(id: string, priority: number) {
+    await this.replaceLabel(id, PRIORITY_LABEL, PRIORITY_LABEL + priority)
+  }
+
+  async openPullRequest(id: string, title: string, body: string) {
+    const existing = await this.pullRequest(id)
+    if (existing?.state === 'open') return existing
+    const base = await this.branch()
+    await this.gh(['pr', 'create', '-R', this.project, '--head', `conveyor/${id}`, '--base', base, '--title', title, '--body', body])
+    const opened = await this.pullRequest(id)
+    if (!opened) throw new Error(`pull request for task ${id} not found after creation`)
+    return opened
+  }
+
+  async pullRequest(id: string) {
+    const output = await this.gh(['pr', 'list', '-R', this.project, '--head', `conveyor/${id}`, '--state', 'all', '--limit', '1', '--json', PULL_FIELDS])
+    const pull = (JSON.parse(output) as GitHubPull[])[0]
+    if (!pull) return undefined
+    const inline = await this.api<{ path: string; line: number | null; body: string }[][]>([
+      '--paginate',
+      '--slurp',
+      `${this.repo}/pulls/${pull.number}/comments?per_page=100`,
+    ])
+    return toPull(pull, inline.flat().map((comment) => `${comment.path}${comment.line ? `:${comment.line}` : ''}: ${comment.body}`))
+  }
+
+  async mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }> {
+    const pull = await this.pullRequest(id)
+    if (!pull || pull.state !== 'open') return { ok: false, error: 'no open pull request' }
+    const result = await this.run('gh', ['pr', 'merge', pull.number, '-R', this.project, `--${method}`])
+    return result.code === 0 ? { ok: true } : { ok: false, error: result.stderr.trim() || `gh pr merge exited with code ${result.code}` }
+  }
+
+  async closePullRequest(id: string) {
+    const pull = await this.pullRequest(id)
+    if (pull?.state === 'open') await this.gh(['pr', 'close', pull.number, '-R', this.project])
+  }
+
+  private async branch() {
+    this.defaultBranch ??= (await this.api<{ default_branch: string }>([this.repo])).default_branch
+    return this.defaultBranch
+  }
+
+  private async gh(args: string[]) {
+    const result = await this.run('gh', args)
+    if (result.code !== 0) throw new Error(`gh ${args.slice(0, 2).join(' ')} failed: ${result.stderr.trim()}`)
+    return result.stdout
   }
 
   private async replaceLabel(id: string, prefix: string, label: string | undefined) {
@@ -140,6 +215,27 @@ function toTask(issue: Issue): Task {
     closed: issue.state === 'closed',
     createdAt: issue.created_at,
     ...labelsToTask(issue.labels.map(({ name }) => name)),
+  }
+}
+
+function toPull(pull: GitHubPull, inline: string[]): PullRequest {
+  const checks = pull.statusCheckRollup ?? []
+  const failed = checks.some((check) =>
+    ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(check.conclusion ?? check.state ?? ''),
+  )
+  const pending = checks.some((check) => (check.status && check.status !== 'COMPLETED') || ['PENDING', 'EXPECTED'].includes(check.state ?? ''))
+  return {
+    number: String(pull.number),
+    url: pull.url,
+    state: pull.state === 'OPEN' ? 'open' : pull.state === 'MERGED' ? 'merged' : 'closed',
+    checks: checks.length === 0 ? 'none' : failed ? 'failure' : pending ? 'pending' : 'success',
+    mergeable: pull.mergeable === 'MERGEABLE' ? 'yes' : pull.mergeable === 'CONFLICTING' ? 'no' : 'unknown',
+    review: pull.reviewDecision === 'APPROVED' ? 'approved' : pull.reviewDecision === 'CHANGES_REQUESTED' ? 'changes_requested' : 'none',
+    feedback: [
+      ...pull.reviews.filter((review) => review.state === 'CHANGES_REQUESTED' && review.body.trim()).map((review) => review.body),
+      ...pull.comments.map((comment) => comment.body).filter((body) => body.trim()),
+      ...inline,
+    ],
   }
 }
 
