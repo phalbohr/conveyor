@@ -96,6 +96,14 @@ export class FakeBoard implements Board {
     this.locks.delete(id)
   }
 
+  assign(id: string, ...logins: string[]) {
+    this.issue(id).assignees = logins
+  }
+
+  addLabel(id: string, label: string) {
+    this.issue(id).labels.push(label)
+  }
+
   private issue(id: string): Issue {
     const issue = this.issues.get(id)
     if (!issue) throw new Error(`task ${id} not found`)

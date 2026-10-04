@@ -11,6 +11,8 @@ export type StageResult = {
 export type Usage = { inputTokens: number; outputTokens: number }
 
 export type StageRun = {
+  taskId?: string
+  stage?: string
   prompt: string
   model: string
   effort: string
