@@ -66,10 +66,15 @@ export async function runCommand(context: Context, options: { once?: boolean }):
   const log = (message: string) => context.stdout(`${new Date().toISOString()} ${message}\n`)
   try {
     const project = config.board.project
+    let hooks = config.hooks
     const workspaces = new GitWorkspaces({
       repo: context.cwd,
       root: expandPath(config.workspace.root, { home: context.home, project }),
-      hooks: config.hooks,
+      hooks: () => {
+        const current = loadConfig(settings)
+        if (current.ok) hooks = current.config.hooks
+        return hooks
+      },
     })
     await cleanupWorkspaces(prepared.board, workspaces, log)
     const engine = new Engine({

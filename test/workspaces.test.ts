@@ -25,8 +25,8 @@ function repository() {
   return { origin, project, seed }
 }
 
-function workspaces(project: string, hooks: Partial<ConstructorParameters<typeof GitWorkspaces>[0]['hooks']> = {}) {
-  return new GitWorkspaces({ repo: project, root: join(tempDir('conveyor-ws-'), 'workspaces'), hooks: { timeout: 5_000, ...hooks } })
+function workspaces(project: string, hooks: Partial<ReturnType<ConstructorParameters<typeof GitWorkspaces>[0]['hooks']>> = {}) {
+  return new GitWorkspaces({ repo: project, root: join(tempDir('conveyor-ws-'), 'workspaces'), hooks: () => ({ timeout: 5_000, ...hooks }) })
 }
 
 describe('GitWorkspaces', () => {
@@ -79,6 +79,17 @@ describe('GitWorkspaces', () => {
     await expect(failing.runHook('after_run', path)).resolves.toBeUndefined()
   })
 
+  it('uses the current hooks on every call', async () => {
+    const { project } = repository()
+    let script = 'echo first >> hook.log'
+    const manager = new GitWorkspaces({ repo: project, root: join(tempDir(), 'ws'), hooks: () => ({ timeout: 5_000, before_run: script }) })
+    const { path } = await manager.prepare('1')
+    await manager.runHook('before_run', path)
+    script = 'echo second >> hook.log'
+    await manager.runHook('before_run', path)
+    expect(readFileSync(join(path, 'hook.log'), 'utf8')).toBe('first\nsecond\n')
+  })
+
   it('stops a hook after the timeout', async () => {
     const { project } = repository()
     const manager = workspaces(project, { before_run: 'sleep 30', timeout: 200 })
@@ -96,6 +107,21 @@ describe('GitWorkspaces', () => {
     await manager.push('4')
     expect(git(origin, 'show', 'conveyor/4:docs/plans/4-plan.md')).toBe('# Plan')
     expect(existsSync(join(path, 'docs/plans/4-plan.md'))).toBe(true)
+  })
+
+  it('commits all stage changes and skips a clean workspace', async () => {
+    const { project, origin } = repository()
+    const manager = workspaces(project)
+    const { path } = await manager.prepare('6')
+    writeFileSync(join(path, 'feature.txt'), 'new\n')
+    writeFileSync(join(path, 'README.md'), 'changed\n')
+
+    expect(await manager.commitAll('6', 'implement: add feature')).toBe(true)
+    expect(await manager.commitAll('6', 'review: nothing')).toBe(false)
+    await manager.push('6')
+
+    expect(git(origin, 'log', '-1', '--format=%s', 'conveyor/6')).toBe('implement: add feature')
+    expect(git(origin, 'show', 'conveyor/6:feature.txt')).toBe('new')
   })
 
   it('runs before_remove and removes the workspace', async () => {

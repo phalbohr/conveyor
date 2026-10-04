@@ -11,6 +11,7 @@ export interface Workspaces {
   prepare(taskId: string): Promise<{ path: string; created: boolean }>
   runHook(hook: 'before_run' | 'after_run', path: string): Promise<void>
   commitFile(taskId: string, file: string, content: string, message: string): Promise<void>
+  commitAll(taskId: string, message: string): Promise<boolean>
   push(taskId: string): Promise<void>
   remove(taskId: string): Promise<void>
   list(): Promise<string[]>
@@ -19,7 +20,7 @@ export interface Workspaces {
 export const taskBranch = (taskId: string) => `conveyor/${taskId}`
 
 export class GitWorkspaces implements Workspaces {
-  constructor(private readonly options: { repo: string; root: string; hooks: Hooks }) {}
+  constructor(private readonly options: { repo: string; root: string; hooks: () => Hooks }) {}
 
   async prepare(taskId: string) {
     const path = this.path(taskId)
@@ -53,6 +54,14 @@ export class GitWorkspaces implements Workspaces {
     await this.git(path, 'commit', '--quiet', '-m', message, '--', file)
   }
 
+  async commitAll(taskId: string, message: string) {
+    const path = this.path(taskId)
+    await this.git(path, 'add', '--all')
+    if ((await this.tryGit(path, 'diff', '--cached', '--quiet')) !== undefined) return false
+    await this.git(path, 'commit', '--quiet', '-m', message)
+    return true
+  }
+
   async push(taskId: string) {
     await this.git(this.path(taskId), 'push', '--quiet', 'origin', `HEAD:refs/heads/${taskBranch(taskId)}`)
   }
@@ -81,15 +90,16 @@ export class GitWorkspaces implements Workspaces {
   }
 
   private async hook(name: HookName, path: string) {
-    const script = this.options.hooks[name]
+    const hooks = this.options.hooks()
+    const script = hooks[name]
     if (!script) return
     const result = await spawnLines('sh', ['-c', script], {
       cwd: path,
       env: process.env,
-      signal: AbortSignal.timeout(this.options.hooks.timeout),
+      signal: AbortSignal.timeout(hooks.timeout),
       onLine: () => undefined,
     })
-    if (result.aborted) throw new Error(`hook ${name} timed out after ${this.options.hooks.timeout} ms`)
+    if (result.aborted) throw new Error(`hook ${name} timed out after ${hooks.timeout} ms`)
     if (result.code !== 0) throw new Error(`hook ${name} failed with code ${result.code}: ${result.stderr.trim()}`)
   }
 
