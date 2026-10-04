@@ -385,6 +385,29 @@ describe('Engine stage files', () => {
   })
 })
 
+describe('Engine language and formats', () => {
+  it('asks for team-visible output in the documentation language', async () => {
+    const { board, cycle, harness } = setup({ config: 'language: {docs: German}\n', local: 'language: {chat: Russian}\n' })
+    await board.createTask('Login', 'p', 'plan')
+    await cycle()
+    expect(harness.runs[0]?.prompt).toContain('German')
+    expect(harness.runs[0]?.prompt).not.toContain('Russian')
+  })
+
+  it('gives stage templates the story format and the documentation language', async () => {
+    const { board, cycle, harness, settings } = setup({
+      config: 'pickup_from: idea\n',
+      instructions: { story: 'Write in {{ language.docs }}.\n\n{{ formats.story }}' },
+    })
+    mkdirSync(join(settings, 'formats'))
+    writeFileSync(join(settings, 'formats', 'story.md'), '**Story:** As a <role>...')
+    await board.createTask('Login', 'idea', 'idea')
+    await cycle()
+    expect(harness.runs[0]?.prompt).toContain('Write in English.')
+    expect(harness.runs[0]?.prompt).toContain('**Story:** As a <role>...')
+  })
+})
+
 describe('Engine token budget', () => {
   it('stops claiming new tasks when the daily token limit is reached', async () => {
     const { board, cycle, runs, usage } = setup({ local: 'limits: {daily_tokens: 300, awaiting_review: 10}\n' })

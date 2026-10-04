@@ -7,7 +7,7 @@ import { z } from 'zod'
 import type { Context } from '../cli.js'
 import type { Config, Stage } from '../config.js'
 import { Artifacts } from '../engine/artifacts.js'
-import { renderInstructions } from '../engine/stage-file.js'
+import { readFormat, renderInstructions } from '../engine/stage-file.js'
 import { commentText, findWorkpad } from '../engine/workpad.js'
 import { childEnv } from '../harness/harness.js'
 import { prepare } from './run.js'
@@ -21,7 +21,7 @@ export async function newCommand(context: Context, json: boolean): Promise<numbe
   if (!prepared) return 1
   const { config, settings, board } = prepared
   const stage = stageNamed(config, 'story')
-  const text = await session(context, settings, 'new.md', stage, { project: config.board.project })
+  const text = await session(context, settings, config, 'new.md', stage, { project: config.board.project })
   if (!text.ok) return fail(context, text.error)
 
   const parsed = parseNewTask(text.value)
@@ -44,7 +44,7 @@ export async function attachCommand(context: Context, id: string): Promise<numbe
   const request = comments.find((comment) => comment.id === waiting?.commentId)
   const stage = stageNamed(config, waiting?.stage ?? 'story')
   const artifacts = new Artifacts(board, unavailableWorkspaces, config, context.home).read(task, comments, context.cwd)
-  const text = await session(context, settings, 'attach.md', stage, {
+  const text = await session(context, settings, config, 'attach.md', stage, {
     issue: { id: task.id, title: task.title, body: task.body },
     stage: stage.name,
     request: request ? commentText(request) : '(no request found)',
@@ -62,6 +62,7 @@ export async function attachCommand(context: Context, id: string): Promise<numbe
 async function session(
   context: Context,
   settings: string,
+  config: Config,
   template: string,
   stage: Stage,
   variables: Record<string, unknown>,
@@ -71,7 +72,12 @@ async function session(
   try {
     const custom = join(settings, 'live', template)
     const source = readFileSync(existsSync(custom) ? custom : join(TEMPLATES, template), 'utf8')
-    const prompt = renderInstructions(source, { ...variables, result })
+    const prompt = renderInstructions(source, {
+      ...variables,
+      result,
+      language: { docs: config.language.docs, chat: config.language.chat ?? 'the language the human uses' },
+      formats: { story: readFormat(settings, 'story') },
+    })
     if (!prompt.ok) return { ok: false, error: `live/${template}: ${prompt.error}` }
 
     const args =

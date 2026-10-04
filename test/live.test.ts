@@ -53,6 +53,18 @@ describe('conveyor new', () => {
     expect(sessions[0]?.env.GH_TOKEN).toBeUndefined()
   })
 
+  it('talks in the chat language, writes in the documentation language, and uses the story format', async () => {
+    const board = new FakeBoard('me')
+    const { interact, sessions } = agent('---\ntitle: T\nstate: idea\n---\nAn idea.\n')
+    const { cwd, home } = await project('language: {docs: English}\n')
+    writeFileSync(`${cwd}/.conveyor/local.yaml`, 'language: {chat: Russian}\n')
+    await runCli(['new'], { cwd, home, board, interact })
+    const prompt = sessions[0]?.args.at(-1) ?? ''
+    expect(prompt).toContain('Talk to the human in Russian')
+    expect(prompt).toContain('in English')
+    expect(prompt).toContain('**Acceptance criteria:**')
+  })
+
   it('creates nothing when the session ends without a result', async () => {
     const board = new FakeBoard('me')
     const result = await runCli(['new'], { ...(await project()), board, interact: agent().interact })

@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Liquid } from 'liquidjs'
 import { parse } from 'yaml'
 import { z } from 'zod'
@@ -6,6 +9,7 @@ export type StageFile = { ok: true; skills: string[]; template: string } | { ok:
 
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n?/
 const frontmatter = z.strictObject({ skills: z.array(z.string().min(1)).default([]) })
+const FORMATS = fileURLToPath(new URL('../../templates/formats/', import.meta.url))
 const liquid = new Liquid({ strictVariables: true, strictFilters: true, lenientIf: true })
 
 export function parseStageFile(text: string): StageFile {
@@ -30,4 +34,9 @@ export function renderInstructions(template: string, variables: Record<string, u
   } catch (error) {
     return { ok: false, error: (error as Error).message.split('\n')[0] ?? 'template error' }
   }
+}
+
+export function readFormat(settingsDir: string, name: string) {
+  const custom = join(settingsDir, 'formats', `${name}.md`)
+  return readFileSync(existsSync(custom) ? custom : join(FORMATS, `${name}.md`), 'utf8').trim()
 }
