@@ -354,10 +354,16 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 | Signal | Action |
 |---|---|
 | the pull request is merged by a human | post-merge stages, then `done` |
-| a "Request changes" review or a comment starting with `/rework` | rework; the comment text and review comments become the feedback |
+| a comment starting with `/rework` | rework: close the pull request, reset the branch, restart after `plan` |
+| a "Request changes" review or a comment starting with `/fix` | fix on the existing branch from the `plan` stage; the pull request stays open |
+| a comment `/fix_from: <stage>` | fix on the existing branch from the named stage (`plan` … `merge`) |
 | enough distinct approvers: "Approve" reviews plus authors of comments starting with `/merge` | landing |
 
-- `review.approvals` in `config.yaml` sets the number of distinct approvers (default 1). `/rework` wins over approvals.
+- The text after a command and the review comments become the feedback for the stages. Fix and rework keep the plan artifact; fix also keeps the workpad.
+- Precedence: `/rework` > `/fix_from` > `/fix` > approvals.
+- Only reviews and comments after the task entered `review` count, so a stale "Request changes" does not trigger a fix loop.
+- An unknown stage in `/fix_from` gets one error comment with the allowed stages; the command is then ignored.
+- `review.approvals` in `config.yaml` sets the number of distinct approvers (default 1).
 - Comments count because GitHub does not let the author approve their own pull request, and pull requests are opened with the personal token.
 - Branch protection on GitHub (required reviews, required checks) still applies: if it rejects the merge, the task goes to the failure path.
 

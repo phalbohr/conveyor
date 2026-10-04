@@ -29,9 +29,8 @@ export type PullRequest = {
   state: 'open' | 'merged' | 'closed'
   checks: 'pending' | 'success' | 'failure' | 'none'
   mergeable: 'yes' | 'no' | 'unknown'
-  review: 'approved' | 'changes_requested' | 'none'
   feedback: string[]
-  approvedBy: string[]
+  reviews: { author: string; state: 'approved' | 'changes_requested' | 'commented' | 'dismissed'; body: string; submittedAt: string }[]
   comments: { author: string; body: string; createdAt: string }[]
 }
 

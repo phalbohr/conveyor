@@ -12,13 +12,13 @@ import { tempDir } from './helpers.js'
 
 const done: StageResult = { outcome: 'done', summary: 'ok' }
 
-function setup(options: { mode?: 'human' | 'ai' | 'smart'; stages?: string; config?: string; script?: Script } = {}) {
+function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; stages?: string; config?: string; script?: Script } = {}) {
   const settings = tempDir('conveyor-settings-')
   writeFileSync(
     join(settings, 'config.yaml'),
     [
       'board: {provider: github, project: acme/app}',
-      `transitions: {merge: ${options.mode ?? 'human'}}`,
+      `transitions: {merge: ${options.mode ?? 'human'}${options.plan ? `, story_to_plan: ${options.plan}` : ''}}`,
       'stages:',
       options.stages ?? '  implement: {}\n  merge: {}',
       options.config ?? '',
@@ -121,12 +121,12 @@ describe('merge mode human', () => {
     await cycle()
     expect(board.merges).toEqual([])
 
-    board.updatePullRequest('1', { approvedBy: ['alice'] })
+    board.updatePullRequest('1', { reviews: [{ author: 'alice', state: 'approved', body: '', submittedAt: new Date().toISOString() }] })
     await cycle()
     expect(board.merges).toHaveLength(1)
   })
 
-  it('restarts after a /rework comment with its text as feedback', async () => {
+  it('lets a /rework comment on the pull request win over approvals', async () => {
     const { board, cycle, harness } = setup()
     await board.createTask('Add login', 'p', 'plan')
     await cycle()
@@ -259,20 +259,86 @@ describe('merge mode smart', () => {
   })
 })
 
-describe('rework', () => {
-  it('restarts after the reviewer requests changes', async () => {
+describe('fix and rework', () => {
+  const now = () => new Date().toISOString()
+
+  it('fixes on the existing branch from the plan stage after a Request changes review', async () => {
+    const { board, cycle, runs, harness, workspaces } = setup({ plan: 'autonomous' })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    const pull = await board.pullRequest('1')
+    board.updatePullRequest('1', {
+      reviews: [{ author: 'alice', state: 'changes_requested', body: 'Use bcrypt for passwords.', submittedAt: now() }],
+      feedback: ['Use bcrypt for passwords.'],
+    })
+
+    await cycle()
+
+    expect(runs()).toEqual(['1:implement', '1:merge', '1:plan', '1:implement', '1:merge'])
+    expect(stageRuns(harness)[2]?.prompt).toContain('Use bcrypt for passwords.')
+    expect(stageRuns(harness)[2]?.prompt).toContain('existing branch')
+    expect(workspaces.resets).toEqual([])
+    expect(await board.pullRequest('1')).toMatchObject({ number: pull?.number, state: 'open' })
+    expect((await board.getTask('1'))?.state).toBe('review')
+  })
+
+  it('fixes from the plan stage after a /fix comment', async () => {
+    const { board, cycle, runs } = setup({ plan: 'autonomous' })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/fix Rename the helper.')
+    await cycle()
+    expect(runs().slice(2)).toEqual(['1:plan', '1:implement', '1:merge'])
+  })
+
+  it('fixes from the named stage after a /fix_from comment', async () => {
+    const { board, cycle, runs, harness } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/fix_from: merge Remove the extra comments.')
+    await cycle()
+    expect(runs().slice(2)).toEqual(['1:merge'])
+    expect(stageRuns(harness)[2]?.prompt).toContain('Remove the extra comments.')
+    expect(stageRuns(harness)[2]?.prompt).not.toContain('/fix_from')
+  })
+
+  it('answers once when /fix_from names an unknown stage', async () => {
+    const { board, cycle, runs } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/fix_from: deploy now')
+    await cycle()
+    await cycle()
+    const errors = (await board.listComments('1')).filter((c) => c.body.includes('deploy') && c.body.startsWith('<!-- conveyor'))
+    expect(errors).toHaveLength(1)
+    expect(errors[0]?.body).toContain('implement')
+    expect(runs()).toEqual(['1:implement', '1:merge'])
+    expect((await board.getTask('1'))?.state).toBe('review')
+  })
+
+  it('ignores reviews from before the task entered review', async () => {
+    const { board, cycle, runs } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    board.updatePullRequest('1', { reviews: [{ author: 'alice', state: 'changes_requested', body: 'old', submittedAt: '2000-01-01T00:00:00.000Z' }] })
+    await cycle()
+    expect(runs()).toEqual(['1:implement', '1:merge'])
+  })
+
+  it('restarts from a fresh branch after a /rework comment', async () => {
     const { board, cycle, runs, harness, workspaces } = setup()
     await board.createTask('Add login', 'p', 'plan')
     await cycle()
-    board.updatePullRequest('1', { review: 'changes_requested', feedback: ['Use bcrypt for passwords.'] })
+    const pull = await board.pullRequest('1')
+    await board.addComment('1', '/rework Use a different storage approach.')
 
     await cycle()
 
     expect(runs()).toEqual(['1:implement', '1:merge', '1:implement', '1:merge'])
-    expect(stageRuns(harness)[2]?.prompt).toContain('Use bcrypt for passwords.')
+    expect(stageRuns(harness)[2]?.prompt).toContain('Use a different storage approach.')
+    expect(stageRuns(harness)[2]?.prompt).toContain('fresh branch')
     expect(workspaces.resets).toEqual(['1'])
-    expect(await board.pullRequest('1')).toMatchObject({ state: 'open', review: 'none' })
-    expect((await board.getTask('1'))?.state).toBe('review')
+    expect((await board.pullRequest('1'))?.number).not.toBe(pull?.number)
   })
 
   it('restarts when a human sets the rework state, with the comments as feedback', async () => {

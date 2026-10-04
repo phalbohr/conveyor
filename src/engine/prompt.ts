@@ -13,6 +13,7 @@ export type PromptInput = {
   attempt: number
   language: string
   review?: string
+  reviewMode?: 'fix' | 'rework'
   merge?: string
   mergeCriteria?: string
 }
@@ -46,7 +47,11 @@ export function buildPrompt(input: PromptInput): string {
   }
   if (input.review) {
     const feedback = `> ${input.review.trim().replaceAll('\n', '\n> ')}`
-    sections.push(`## Review feedback\n\nA reviewer asked for changes. The task restarts from a fresh branch. Address every point:\n\n${feedback}`)
+    const intro =
+      input.reviewMode === 'fix'
+        ? 'A reviewer asked for fixes. Work on the existing branch and change only what the feedback asks for. Keep the rest of the work.'
+        : 'A reviewer asked for a different approach. The task restarts from a fresh branch.'
+    sections.push(`## Review feedback\n\n${intro} Address every point:\n\n${feedback}`)
   }
   if (input.merge) sections.push(`## Merge\n\n${input.merge}`)
   if (input.mergeCriteria !== undefined) {

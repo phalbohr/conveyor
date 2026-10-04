@@ -19,6 +19,7 @@ export type WorkpadState = {
   mergeError?: string
   landAttempts?: number
   review?: string
+  reviewMode?: 'fix' | 'rework'
 }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
