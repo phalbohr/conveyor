@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { z } from 'zod'
 import { join } from 'node:path'
-import type { Board, Comment, Task } from '../board/board.js'
+import type { Board, Comment, PullRequest, Task } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, StageOutput, StageResult } from '../harness/harness.js'
 import { NO_USAGE, failed } from '../harness/harness.js'
@@ -127,8 +127,8 @@ export class Engine {
       const owned = task.owner === me
       switch (task.state) {
         case 'review': {
-          const pull = await board.pullRequest(task.id)
-          if (pull?.state === 'merged' || pull?.review === 'changes_requested') (owned ? resumable : fresh).push(task)
+          const signal = await this.reviewSignal(task.id, config)
+          if (signal.kind !== 'wait') (owned ? resumable : fresh).push(task)
           else if (owned) awaitingReview++
           break
         }
@@ -251,8 +251,9 @@ export class Engine {
     const comments = await board.listComments(id)
     const pad = findWorkpad(comments)
     const state: WorkpadState = { attempt: 0, ...pad?.state }
-    const pull = initial.state === 'review' ? await board.pullRequest(id) : undefined
-    const rework = initial.state === 'rework' || pull?.review === 'changes_requested'
+    const verdict = initial.state === 'review' ? await this.reviewSignal(id, config) : undefined
+    const pull = verdict?.pull
+    const rework = initial.state === 'rework' || verdict?.kind === 'rework'
     const waiting = state.waiting
     const approvalStage = waiting?.kind === 'approval' ? waiting.stage : undefined
     const conversation = waiting && waiting.kind !== 'review' ? this.conversation(comments, waiting) : undefined
@@ -286,8 +287,12 @@ export class Engine {
     const mergeIndex = names.indexOf('merge')
     if (rework) {
       const since = waiting?.kind === 'review' ? waiting.since : ''
-      const replies = comments.filter((comment) => !isAgentComment(comment) && comment.createdAt >= since).map((comment) => comment.body)
-      const feedback = [...(pull?.feedback ?? []), ...replies]
+      const replies = [...comments.filter((comment) => !isAgentComment(comment)), ...(pull?.comments ?? [])]
+        .filter((comment) => comment.createdAt >= since)
+        .map((comment) => comment.body)
+      const feedback = [...(pull?.feedback ?? []).filter((text) => !isCommand(text, 'merge')), ...replies.filter((text) => !isCommand(text, 'merge'))].map(
+        (text: string) => (isCommand(text, 'rework') ? text.trim().slice('/rework'.length).trim() : text),
+      ).filter(Boolean)
       if (pull?.state === 'open') await board.closePullRequest(id)
       await workspaces.reset(id)
       run.text = ''
@@ -296,9 +301,12 @@ export class Engine {
       state.review = feedback.join('\n\n') || 'The reviewer asked for changes. Read the issue comments for details.'
       state.stage = names[names.indexOf('plan') + 1] ?? 'merge'
       this.log(`task ${id}: rework`)
-    } else if (initial.state === 'review' && pull?.state === 'merged') {
+    } else if (verdict?.kind === 'merged') {
       state.landing = 'success'
       delete state.stage
+    } else if (verdict?.kind === 'merge') {
+      state.stage = LAND
+      this.log(`task ${id}: approved by ${verdict.approvers.join(', ')}`)
     }
 
     if (!state.landing && state.stage !== LAND) {
@@ -537,6 +545,26 @@ export class Engine {
     }
   }
 
+  private async reviewSignal(
+    id: string,
+    config: Config,
+  ): Promise<{ kind: 'merged' | 'rework' | 'merge' | 'wait'; pull: PullRequest | undefined; approvers: string[] }> {
+    const { board } = this.options
+    const pull = await board.pullRequest(id)
+    if (pull?.state === 'merged') return { kind: 'merged', pull, approvers: [] }
+    const { comments, pad } = await this.workpad(id)
+    const since = pad?.state.waiting?.kind === 'review' ? pad.state.waiting.since : ''
+    const commands = [
+      ...comments.filter((comment) => !isAgentComment(comment)),
+      ...(pull?.comments ?? []),
+    ].filter((comment) => comment.createdAt >= since)
+    if (pull?.review === 'changes_requested' || commands.some((comment) => isCommand(comment.body, 'rework'))) {
+      return { kind: 'rework', pull, approvers: [] }
+    }
+    const approvers = [...new Set([...(pull?.approvedBy ?? []), ...commands.filter((comment) => isCommand(comment.body, 'merge')).map((comment) => comment.author)])]
+    return { kind: pull?.state === 'open' && approvers.length >= config.review.approvals ? 'merge' : 'wait', pull, approvers }
+  }
+
   private async mustGetTask(id: string) {
     const task = await this.options.board.getTask(id)
     if (!task) throw new Error(`task ${id} not found`)
@@ -732,4 +760,8 @@ function parseJson(text: string): unknown {
   } catch {
     return undefined
   }
+}
+
+function isCommand(text: string, command: 'merge' | 'rework') {
+  return new RegExp(`^/${command}(\\s|$)`, 'i').test(text.trim())
 }

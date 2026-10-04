@@ -82,14 +82,60 @@ describe('merge mode human', () => {
     expect(workspaces.deletedBranches).toEqual(['1'])
   })
 
-  it('keeps waiting while the pull request is under review', async () => {
+  it('keeps waiting for a plain comment', async () => {
     const { board, cycle, runs } = setup()
     await board.createTask('Add login', 'p', 'plan')
     await cycle()
-    board.updatePullRequest('1', { review: 'approved' })
+    await board.addComment('1', 'Looks good so far, I will check it tomorrow.')
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:merge'])
     expect((await board.getTask('1'))?.state).toBe('review')
+    expect(board.merges).toEqual([])
+  })
+
+  it('merges after a /merge comment on the issue', async () => {
+    const { board, cycle } = setup({ stages: '  implement: {}\n  merge: {}\n  verify: {when: success}' })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/merge')
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: true })
+  })
+
+  it('merges after a /merge comment on the pull request', async () => {
+    const { board, cycle } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    board.updatePullRequest('1', { comments: [{ author: 'alice', body: '/merge looks right', createdAt: new Date().toISOString() }] })
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+  })
+
+  it('waits for the configured number of distinct approvals', async () => {
+    const { board, cycle } = setup({ config: 'review: {approvals: 2}' })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/merge')
+    await board.addComment('1', '/merge again')
+    await cycle()
+    expect(board.merges).toEqual([])
+
+    board.updatePullRequest('1', { approvedBy: ['alice'] })
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+  })
+
+  it('restarts after a /rework comment with its text as feedback', async () => {
+    const { board, cycle, harness } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/merge')
+    board.updatePullRequest('1', { comments: [{ author: 'alice', body: '/rework Validate the email format.', createdAt: new Date().toISOString() }] })
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect(stageRuns(harness)[2]?.stage).toBe('implement')
+    expect(stageRuns(harness)[2]?.prompt).toContain('Validate the email format.')
   })
 })
 

@@ -125,6 +125,8 @@ export class FakeBoard implements Board {
       mergeable: 'yes',
       review: 'none',
       feedback: [],
+      approvedBy: [],
+      comments: [],
     }
     this.pulls.set(id, pull)
     return { ...pull }
@@ -132,7 +134,7 @@ export class FakeBoard implements Board {
 
   async pullRequest(id: string) {
     const pull = this.pulls.get(id)
-    return pull ? { ...pull, feedback: [...pull.feedback] } : undefined
+    return pull ? { ...pull, feedback: [...pull.feedback], approvedBy: [...pull.approvedBy], comments: [...pull.comments] } : undefined
   }
 
   async mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }> {
