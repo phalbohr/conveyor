@@ -37,8 +37,8 @@ type GitHubPull = {
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
   reviewDecision: string
   statusCheckRollup: Check[] | null
-  reviews: { state: string; body: string }[]
-  comments: { body: string }[]
+  reviews: { state: string; body: string; author: { login: string } | null }[]
+  comments: { body: string; createdAt: string; author: { login: string } | null }[]
 }
 
 type ProjectField = { id: string; name: string; type: string; options?: { id: string; name: string }[] }
@@ -284,10 +284,19 @@ function toPull(pull: GitHubPull, inline: string[]): PullRequest {
     review: pull.reviewDecision === 'APPROVED' ? 'approved' : pull.reviewDecision === 'CHANGES_REQUESTED' ? 'changes_requested' : 'none',
     feedback: [
       ...pull.reviews.filter((review) => review.state === 'CHANGES_REQUESTED' && review.body.trim()).map((review) => review.body),
-      ...pull.comments.map((comment) => comment.body).filter((body) => body.trim()),
       ...inline,
     ],
+    approvedBy: approvers(pull.reviews),
+    comments: pull.comments.map((comment) => ({ author: comment.author?.login ?? '', body: comment.body, createdAt: comment.createdAt })),
   }
+}
+
+function approvers(reviews: GitHubPull['reviews']): string[] {
+  const latest = new Map<string, string>()
+  for (const review of reviews) {
+    if (review.author && ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state)) latest.set(review.author.login, review.state)
+  }
+  return [...latest].filter(([, state]) => state === 'APPROVED').map(([login]) => login)
 }
 
 function toComment(comment: GitHubComment): Comment {

@@ -349,7 +349,17 @@ Landing is a deterministic CLI step, retried every minute while it waits:
 4. Otherwise take the lock `conveyor-lock/merge`, merge with `merge_method` (`merge`, `squash`, `rebase`; default `merge`), release the lock.
 5. Success → post-merge stages with `when: success` or `always` → `conveyor::done`: the CLI closes the issue, deletes the claim lock, the workspace, and the merged task branch.
 
-In `review` the CLI checks the pull request every cycle: merged by a human → post-merge stages; changes requested → rework.
+In `review` the CLI checks every cycle for signals since the task entered `review`, on the pull request and on the issue:
+
+| Signal | Action |
+|---|---|
+| the pull request is merged by a human | post-merge stages, then `done` |
+| a "Request changes" review or a comment starting with `/rework` | rework; the comment text and review comments become the feedback |
+| enough distinct approvers: "Approve" reviews plus authors of comments starting with `/merge` | landing |
+
+- `review.approvals` in `config.yaml` sets the number of distinct approvers (default 1). `/rework` wins over approvals.
+- Comments count because GitHub does not let the author approve their own pull request, and pull requests are opened with the personal token.
+- Branch protection on GitHub (required reviews, required checks) still applies: if it rejects the merge, the task goes to the failure path.
 
 ## Triage
 

@@ -31,6 +31,8 @@ export type PullRequest = {
   mergeable: 'yes' | 'no' | 'unknown'
   review: 'approved' | 'changes_requested' | 'none'
   feedback: string[]
+  approvedBy: string[]
+  comments: { author: string; body: string; createdAt: string }[]
 }
 
 export type MergeMethod = 'merge' | 'squash' | 'rebase'
