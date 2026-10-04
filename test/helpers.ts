@@ -1,7 +1,8 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { main, type Context } from '../src/cli.js'
+import type { Board } from '../src/board/board.js'
+import { main, type Context, type Interact } from '../src/cli.js'
 
 export type Responses = Record<string, { code: number; stdout?: string }>
 
@@ -9,7 +10,10 @@ export function tempDir(prefix = 'conveyor-') {
   return mkdtempSync(join(tmpdir(), prefix))
 }
 
-export async function runCli(argv: string[], options: Partial<Omit<Context, 'run'>> & { responses?: Responses } = {}) {
+export async function runCli(
+  argv: string[],
+  options: Partial<Omit<Context, 'run' | 'interact' | 'boardFor'>> & { responses?: Responses; board?: Board; interact?: Interact } = {},
+) {
   let stdout = ''
   let stderr = ''
   const calls: string[] = []
@@ -19,6 +23,8 @@ export async function runCli(argv: string[], options: Partial<Omit<Context, 'run
     cwd: options.cwd ?? tempDir(),
     home: options.home ?? tempDir('conveyor-home-'),
     interactive: options.interactive ?? false,
+    interact: options.interact ?? (async () => 0),
+    ...(options.board ? { boardFor: () => options.board as Board } : {}),
     run: async (command, args) => {
       const call = [command, ...args].join(' ')
       calls.push(call)
