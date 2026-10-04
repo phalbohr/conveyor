@@ -137,7 +137,7 @@ export async function releaseCommand(context: Context, id: string, force: boolea
   return 0
 }
 
-function prepare(context: Context): Prepared | undefined {
+export function prepare(context: Context): Prepared | undefined {
   const settings = findSettings(context.cwd, context.home)
   if (!settings) {
     context.stderr(`No conveyor settings found in ${context.cwd}. Run \`conveyor init\`.\n`)
@@ -152,5 +152,5 @@ function prepare(context: Context): Prepared | undefined {
     context.stderr('The GitLab board adapter is not available yet.\n')
     return undefined
   }
-  return { settings, config: loaded.config, board: new GitHubBoard(loaded.config.board.project, context.run) }
+  return { settings, config: loaded.config, board: context.boardFor?.(loaded.config) ?? new GitHubBoard(loaded.config.board.project, context.run) }
 }

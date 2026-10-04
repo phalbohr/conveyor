@@ -54,7 +54,7 @@ export async function initProject(context: Context, target: Target, board?: Boar
 
 function createSettings(dir: string, board: Board) {
   mkdirSync(dir, { recursive: true })
-  for (const entry of ['stages', 'smart', 'triage.md', 'local.yaml']) {
+  for (const entry of ['stages', 'smart', 'live', 'triage.md', 'local.yaml']) {
     cpSync(join(TEMPLATES, entry), join(dir, entry), { recursive: true })
   }
   cpSync(join(TEMPLATES, 'gitignore'), join(dir, '.gitignore'))

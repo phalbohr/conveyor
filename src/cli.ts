@@ -1,12 +1,16 @@
 import { createRequire } from 'node:module'
 import { Command, CommanderError, Option } from 'commander'
+import type { Board as BoardPort } from './board/board.js'
+import { attachCommand, newCommand } from './commands/live.js'
 import { releaseCommand, runCommand } from './commands/run.js'
-import { loadConfig } from './config.js'
+import { loadConfig, type Config } from './config.js'
 import { detectBoard, initProject, type Board, type InitResult, type Target } from './init.js'
 import { findSettings } from './settings.js'
 import { promptInit } from './ui/init-prompt.js'
 
 export type Run = (command: string, args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>
+
+export type Interact = (command: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) => Promise<number>
 
 export type Context = {
   stdout: (text: string) => void
@@ -15,6 +19,8 @@ export type Context = {
   home: string
   interactive: boolean
   run: Run
+  interact: Interact
+  boardFor?: (config: Config) => BoardPort
 }
 
 type InitOptions = { path?: string; use?: string; provider?: Board['provider']; project?: string }
@@ -64,6 +70,21 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .option('--once', 'run one cycle, wait for the started stages, and exit')
     .action(async (options: { once?: boolean }) => {
       exitCode = await runCommand(context, options)
+    })
+
+  program
+    .command('new')
+    .description('shape a new task in a live session with an agent and put it on the board')
+    .action(async () => {
+      exitCode = await newCommand(context, json())
+    })
+
+  program
+    .command('attach')
+    .description('answer the questions of a waiting task in a live session with an agent')
+    .argument('<issue>', 'task id on the board')
+    .action(async (issue: string) => {
+      exitCode = await attachCommand(context, issue)
     })
 
   program
