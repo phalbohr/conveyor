@@ -153,6 +153,45 @@ stages:
 `)).toContainEqual(expect.stringContaining('implement'))
   })
 
+  it('accepts harnesses defined in the configuration and merges personal overrides', () => {
+    const c = config(
+      `${BOARD}
+harnesses:
+  opencode:
+    command: opencode
+    args: [run, --model, "{model}", "{prompt}"]
+    env: {OPENAI_BASE_URL: "http://team-proxy:4000", LOG: "1"}
+stages:
+  implement: {harness: opencode, model: litellm/qwen3-coder}
+`,
+      'harnesses:\n  opencode:\n    env: {OPENAI_BASE_URL: "http://localhost:4000"}\n',
+    )
+    expect(c.harnesses.opencode).toEqual({
+      command: 'opencode',
+      args: ['run', '--model', '{model}', '{prompt}'],
+      env: { OPENAI_BASE_URL: 'http://localhost:4000', LOG: '1' },
+    })
+    expect(c.stages.find((stage) => stage.name === 'implement')).toMatchObject({ harness: 'opencode', model: 'litellm/qwen3-coder' })
+  })
+
+  it('provides presets for opencode, pi, openhands, and agent-zero', () => {
+    const c = config(`${BOARD}
+harnesses:
+  openhands:
+    env: {LLM_BASE_URL: "http://litellm:4000"}
+stages:
+  implement: {harness: pi, model: litellm/qwen3-coder}
+  review: {harness: openhands, model: litellm_proxy/qwen3-coder}
+`)
+    expect(Object.keys(c.harnesses).sort()).toEqual(['agent-zero', 'opencode', 'openhands', 'pi'])
+    expect(c.harnesses.pi?.command).toBe('pi')
+    expect(c.harnesses.openhands?.env).toEqual({ LLM_MODEL: '{model}', OPENHANDS_WORK_DIR: '{workspace}', LLM_BASE_URL: 'http://litellm:4000' })
+  })
+
+  it('rejects a personal harness without a command', () => {
+    expect(errors(BOARD, 'harnesses:\n  mine:\n    args: ["{prompt}"]\n')).toContainEqual(expect.stringContaining('harnesses.mine'))
+  })
+
   it('rejects an unknown harness', () => {
     expect(errors(`${BOARD}
 stages:
