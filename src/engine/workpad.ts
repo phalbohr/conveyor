@@ -14,6 +14,7 @@ export type WorkpadState = {
   waiting?: Waiting
   heartbeat?: string
   private?: boolean
+  lastError?: string
 }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
@@ -37,7 +38,7 @@ export function findWorkpad(comments: Comment[]): Workpad | undefined {
   for (const comment of comments) {
     const match = comment.body.match(WORKPAD)
     if (!match?.[1]) continue
-    const text = comment.body.slice(match[0].length).replace(/^### Conveyor workpad\n\n(?:Stage: .*\n\n)?/, '')
+    const text = comment.body.slice(match[0].length).replace(/^### Conveyor workpad\n\n(?:Stage: .*\n\n)?(?:Last error: .*\n\n)?/, '')
     return { id: comment.id, state: JSON.parse(match[1]) as WorkpadState, text }
   }
   return undefined
@@ -45,7 +46,8 @@ export function findWorkpad(comments: Comment[]): Workpad | undefined {
 
 export function renderWorkpad(state: WorkpadState, text: string) {
   const stage = state.stage ? `Stage: \`${state.stage}\`${state.attempt ? ` · failed attempts: ${state.attempt}` : ''}\n\n` : ''
-  return `${AGENT_MARKER}:workpad ${JSON.stringify(state)} -->\n### Conveyor workpad\n\n${stage}${text}`
+  const error = state.lastError ? `Last error: ${state.lastError.replaceAll('\n', ' ')}\n\n` : ''
+  return `${AGENT_MARKER}:workpad ${JSON.stringify(state).replaceAll('>', '\\u003e')} -->\n### Conveyor workpad\n\n${stage}${error}${text}`
 }
 
 export function repliesSince(comments: Comment[], commentId: string | undefined): Comment[] {
