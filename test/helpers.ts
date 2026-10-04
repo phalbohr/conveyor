@@ -23,7 +23,7 @@ export async function runCli(argv: string[], options: Partial<Omit<Context, 'run
       const call = [command, ...args].join(' ')
       calls.push(call)
       const response = options.responses?.[call] ?? { code: 0 }
-      return { code: response.code, stdout: response.stdout ?? '' }
+      return { code: response.code, stdout: response.stdout ?? '', stderr: '' }
     },
   }
   const code = await main(argv, context)
