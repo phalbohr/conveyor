@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import { FakeHarness, type Script } from '../src/harness/fake.js'
+import type { StageRun } from '../src/harness/harness.js'
 import type { Workspaces } from '../src/workspaces.js'
 import { tempDir } from './helpers.js'
 
@@ -11,6 +13,7 @@ export class FakeWorkspaces implements Workspaces {
   readonly stageCommits: string[] = []
   readonly removed: string[] = []
   readonly resets: string[] = []
+  readonly deletedBranches: string[] = []
   failBeforeRun = false
 
   async prepare(taskId: string) {
@@ -41,6 +44,10 @@ export class FakeWorkspaces implements Workspaces {
     this.resets.push(taskId)
   }
 
+  async deleteBranch(taskId: string) {
+    this.deletedBranches.push(taskId)
+  }
+
   async push(taskId: string) {
     this.pushes.push(taskId)
   }
@@ -59,4 +66,17 @@ export function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => (resolve = done))
   return { promise, resolve }
+}
+
+export function stageHarness(script: Script = () => ({ outcome: 'done', summary: 'ok' })) {
+  let stages = 0
+  return new FakeHarness((run) =>
+    run.stage === 'triage'
+      ? { outcome: 'done', summary: 'triaged', artifact: { kind: 'triage', content: '{"tasks": []}' } }
+      : script(run, stages++),
+  )
+}
+
+export function stageRuns(harness: FakeHarness): StageRun[] {
+  return harness.runs.filter((run) => run.stage !== 'triage')
 }

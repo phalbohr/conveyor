@@ -63,3 +63,22 @@ export function buildPrompt(input: PromptInput): string {
   )
   return `${sections.join('\n\n')}\n`
 }
+
+export function buildTriagePrompt(input: { instructions: string; tasks: Task[]; fresh: string[]; language: string }): string {
+  const tasks = input.tasks
+    .map((task) => {
+      const marks = [
+        `state: ${task.state ?? 'none'}`,
+        `priority: ${task.priority ?? 'none'}`,
+        input.fresh.includes(task.id) ? 'NEW' : '',
+      ].filter(Boolean)
+      return `### #${task.id} ${task.title} (${marks.join(', ')})\n\n${task.body.trim().slice(0, 1500) || '(empty)'}`
+    })
+    .join('\n\n')
+  return `${[
+    'You run the triage of the development conveyor. Do not change files and do not write to the issue tracker.',
+    `## Instructions\n\n${input.instructions.trim() || 'Order the tasks and find dependencies between them.'}`,
+    `## Open tasks\n\n${tasks}`,
+    `## Result\n\nSet a priority (1 is the most urgent, 4 the least) for every task marked NEW. For any task, list the tasks that must be done before it in \`blocked_by\`. Return outcome \`done\`, a short \`summary\` in ${input.language}, and an \`artifact\` with kind \`triage\` whose content is JSON:\n\n\`\`\`json\n{"tasks": [{"id": "12", "priority": 2, "blocked_by": ["10"]}]}\n\`\`\``,
+  ].join('\n\n')}\n`
+}

@@ -140,6 +140,16 @@ describe('GitWorkspaces', () => {
     expect(git(origin, 'rev-parse', 'conveyor/8')).toBe(git(origin, 'rev-parse', 'main'))
   })
 
+  it('deletes the remote task branch and ignores a missing one', async () => {
+    const { project, origin } = repository()
+    const manager = workspaces(project)
+    await manager.prepare('11')
+    await manager.push('11')
+    await manager.deleteBranch('11')
+    await manager.deleteBranch('11')
+    expect(git(origin, 'branch', '--list', 'conveyor/11')).toBe('')
+  })
+
   it('runs before_remove and removes the workspace', async () => {
     const { project } = repository()
     const marker = join(tempDir(), 'removed')

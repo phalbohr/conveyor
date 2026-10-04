@@ -13,6 +13,7 @@ export interface Workspaces {
   commitFile(taskId: string, file: string, content: string, message: string): Promise<void>
   commitAll(taskId: string, message: string): Promise<boolean>
   reset(taskId: string): Promise<void>
+  deleteBranch(taskId: string): Promise<void>
   push(taskId: string): Promise<void>
   remove(taskId: string): Promise<void>
   list(): Promise<string[]>
@@ -69,6 +70,10 @@ export class GitWorkspaces implements Workspaces {
     await this.git(path, 'reset', '--quiet', '--hard', await this.baseRef())
     await this.git(path, 'clean', '-fdq')
     await this.push(taskId)
+  }
+
+  async deleteBranch(taskId: string) {
+    await this.tryGit(this.options.repo, 'push', '--quiet', 'origin', '--delete', taskBranch(taskId))
   }
 
   async push(taskId: string) {

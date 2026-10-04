@@ -6,9 +6,9 @@ import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
 import { UsageLedger } from '../src/usage.js'
 import { renderWorkpad, type WorkpadState } from '../src/engine/workpad.js'
-import { FakeHarness, type Script } from '../src/harness/fake.js'
+import type { Script } from '../src/harness/fake.js'
 import type { StageResult } from '../src/harness/harness.js'
-import { FakeWorkspaces } from './fakes.js'
+import { FakeWorkspaces, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
 const MINUTE = 60_000
@@ -26,7 +26,7 @@ function setup(options: { config?: string; script?: Script } = {}) {
   const repo = tempDir('conveyor-repo-')
   const usage = new UsageLedger()
   const board = new FakeBoard('me')
-  const harness = new FakeHarness(options.script)
+  const harness = stageHarness(options.script)
   const workspaces = new FakeWorkspaces()
   const engine = new Engine({
     board,
@@ -42,7 +42,7 @@ function setup(options: { config?: string; script?: Script } = {}) {
     await engine.tick()
     await engine.idle()
   }
-  const runs = () => harness.runs.map((run) => `${run.taskId}:${run.stage}`)
+  const runs = () => stageRuns(harness).map((run) => `${run.taskId}:${run.stage}`)
   const workpad = async (id = '1') => (await board.listComments(id)).find((c) => c.body.includes('conveyor:workpad'))?.body ?? ''
   const started = (expected: string[]) => vi.waitFor(() => expect(runs()).toEqual(expected))
   return { settings, board, harness, workspaces, engine, cycle, runs, workpad, started }
