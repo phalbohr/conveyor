@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Board } from '../board/board.js'
 import { GitHubBoard } from '../board/github.js'
+import { GitLabBoard } from '../board/gitlab.js'
 import type { Context } from '../cli.js'
 import { loadConfig, type Config, type LoadResult } from '../config.js'
 import { Engine } from '../engine/engine.js'
@@ -153,16 +154,12 @@ export function prepare(context: Context): Prepared | undefined {
     context.stderr(`${loaded.errors.join('\n')}\n`)
     return undefined
   }
-  if (loaded.config.board.provider !== 'github') {
-    context.stderr('The GitLab board adapter is not available yet.\n')
-    return undefined
-  }
-  const { project, github_project } = loaded.config.board
+  const { provider, project, github_project } = loaded.config.board
+  const warn = (message: string) => context.stderr(`warning: ${message}\n`)
   const board =
     context.boardFor?.(loaded.config) ??
-    new GitHubBoard(project, context.run, {
-      ...(github_project ? { projectNumber: github_project } : {}),
-      warn: (message) => context.stderr(`warning: ${message}\n`),
-    })
+    (provider === 'gitlab'
+      ? new GitLabBoard(project, context.run)
+      : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), warn }))
   return { settings, config: loaded.config, board }
 }

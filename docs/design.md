@@ -15,7 +15,7 @@ A configurable development conveyor. Tasks live on a kanban board (GitHub or Git
 | Component | Responsibility |
 |---|---|
 | CLI `conveyor` (TypeScript + Ink) | init, settings TUI, board polling, task claim, stage execution, limits and token accounting |
-| Board adapters | `github`, `gitlab`: labels, comments, links, branches, PR/MR |
+| Board adapters | `github` via `gh`, `gitlab` via `glab`: labels, comments, links, branches, PR/MR. The GitLab adapter reads tasks and open blockers with one GraphQL query, retries transient network errors (reads always, writes only when the connection was not established), and falls back to a `Blocked by: #N` line in the description on GitLab Free. |
 | Harness adapters | `claude`, `codex`, more later: run a stage, enforce the stage result schema, collect token usage |
 | Workspace manager | one git worktree per task, lifecycle hooks, cleanup of closed tasks |
 | Templates | default `stages/*.md`, `smart/*.md`, `triage.md`, copied on init |

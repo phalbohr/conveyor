@@ -1,13 +1,14 @@
 # conveyor
 
-A configurable development conveyor. Tasks live on a GitHub board. Agents from different harnesses move each task through stages — story, plan, implement, review, merge — and a human decides at the gates you choose. Several workstations can work on one board at the same time.
+A configurable development conveyor. Tasks live on a GitHub or GitLab board. Agents from different harnesses move each task through stages — story, plan, implement, review, merge — and a human decides at the gates you choose. Several workstations can work on one board at the same time.
 
 The design is in [docs/design.md](docs/design.md).
 
 ## Requirements
 
 - Node.js 20 or later.
-- `gh`, signed in (`gh auth login`), with the `project` scope if you mirror states to GitHub Projects.
+- GitHub: `gh`, signed in (`gh auth login`), with the `project` scope if you mirror states to GitHub Projects.
+- GitLab: `glab`, signed in (`glab auth login`).
 - The CLI of every harness your stages use: `claude`, `codex`, `opencode`, `pi`, `openhands`, or `a0`.
 
 ## Install
@@ -114,6 +115,10 @@ The conveyor writes on the board; you answer in comments.
 | | `/rework <notes>` | new branch, new attempt after `plan` |
 | any task | label `conveyor::rework` | same as `/rework` |
 
+On GitLab, `/merge` in a merge request comment is a GitLab quick action and never reaches the conveyor. Approve the merge request (button or `/approve`) or write `/merge` on the issue. `/fix`, `/fix_from:`, and `/rework` work on both.
+
+GitLab boards use labels as lists: create an issue board with lists for the `conveyor::*` labels. On GitLab Free, issue links are not available; the conveyor keeps blockers in a `Blocked by: #N` line in the issue description.
+
 ## Development
 
 ```bash
@@ -132,7 +137,11 @@ CONVEYOR_GITHUB_SANDBOX=owner/sandbox-repo npx vitest run test/board.test.ts
 CONVEYOR_HARNESS_REAL=claude:haiku,codex:gpt-6-luna npx vitest run test/harness.test.ts
 ```
 
-Do not run the GitHub contract tests while a conveyor works on the same sandbox board: it may claim the test tasks.
+```bash
+CONVEYOR_GITLAB_SANDBOX=group/sandbox-project npx vitest run test/board.test.ts
+```
+
+Do not run the board contract tests while a conveyor works on the same sandbox board: it may claim the test tasks.
 
 ## License
 
