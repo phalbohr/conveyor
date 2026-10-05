@@ -2,10 +2,13 @@ import { createRequire } from 'node:module'
 import { Command, CommanderError, Option } from 'commander'
 import type { Board as BoardPort } from './board/board.js'
 import { attachCommand, newCommand } from './commands/live.js'
-import { releaseCommand, runCommand } from './commands/run.js'
+import { prepare, releaseCommand, runCommand } from './commands/run.js'
 import { loadConfig, type Config } from './config.js'
 import { detectBoard, initProject, type Board, type InitResult, type Target } from './init.js'
 import { findSettings } from './settings.js'
+import { collectStatus, type StatusSnapshot } from './status.js'
+import { statusLines } from './ui/status-lines.js'
+import { showStatus } from './ui/status-screen.js'
 import { promptInit } from './ui/init-prompt.js'
 
 export type Run = (command: string, args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>
@@ -118,14 +121,34 @@ async function status(context: Context, json: boolean): Promise<number> {
   }
 
   const loaded = loadConfig(settings)
-  if (json) {
-    context.stdout(`${JSON.stringify(loaded.ok ? { settings, valid: true } : { settings, valid: false, errors: loaded.errors })}\n`)
-  } else if (loaded.ok) {
-    context.stdout(`Settings: ${settings}\nConfiguration is valid.\n`)
-  } else {
-    context.stderr(`Settings: ${settings}\n${loaded.errors.join('\n')}\n`)
+  if (!loaded.ok) {
+    if (json) context.stdout(`${JSON.stringify({ settings, valid: false, errors: loaded.errors })}\n`)
+    else context.stderr(`Settings: ${settings}\n${loaded.errors.join('\n')}\n`)
+    return 1
   }
-  return loaded.ok ? 0 : 1
+  const prepared = prepare(context)
+  if (!prepared) return 1
+  const load = () => collectStatus({ board: prepared.board, config: loaded.config, settings, home: context.home })
+  if (context.interactive && !json) {
+    await showStatus(load)
+    return 0
+  }
+
+  let status: StatusSnapshot | undefined
+  let boardError: string | undefined
+  try {
+    status = await load()
+  } catch (error) {
+    boardError = (error as Error).message
+  }
+  if (json) {
+    context.stdout(`${JSON.stringify({ settings, valid: true, ...(status ? { status } : { boardError }) })}\n`)
+    return 0
+  }
+  context.stdout(`Settings: ${settings}\nConfiguration is valid.\n`)
+  if (status) context.stdout(`\n${statusLines(status).map((line) => line.text).join('\n')}\n`)
+  else context.stderr(`Board error: ${boardError}\n`)
+  return 0
 }
 
 async function resolveBoard(context: Context, options: InitOptions): Promise<Board | undefined> {

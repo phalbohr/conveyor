@@ -6,7 +6,7 @@ import type { Config, Harness as HarnessName, LoadResult, Stage } from '../confi
 import type { Harness, Quota, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { NO_USAGE, failed } from '../harness/harness.js'
 import { resolveSkills } from '../skills.js'
-import type { UsageLedger } from '../usage.js'
+import { QuotaStore, type UsageLedger } from '../usage.js'
 import type { Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
 import { buildPrompt, buildTriagePrompt, type GateMode } from './prompt.js'
@@ -32,6 +32,7 @@ export type EngineOptions = {
   repo: string
   home: string
   usage: UsageLedger
+  quotas?: QuotaStore
   loadConfig: () => LoadResult
   log?: (message: string) => void
 }
@@ -112,9 +113,12 @@ export class Engine {
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
   private triageRetryAt = 0
-  private readonly quotas = new Map<HarnessName, { quota: Quota; observedAt: number }>()
 
-  constructor(private readonly options: EngineOptions) {}
+  private readonly quotas: QuotaStore
+
+  constructor(private readonly options: EngineOptions) {
+    this.quotas = options.quotas ?? new QuotaStore()
+  }
 
   async tick() {
     const { board } = this.options
@@ -438,7 +442,7 @@ export class Engine {
       }
       if (signal.aborted) return { status: 'stopped', summary }
       this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
-      if (output.quota) this.quotas.set(stage.harness, { quota: output.quota, observedAt: Date.now() })
+      if (output.quota) this.quotas.set(stage.harness, output.quota)
       this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
       conversation = undefined
       await workspaces
@@ -557,7 +561,7 @@ export class Engine {
       const observed = this.quotas.get(name)?.observedAt ?? 0
       if (!harness?.probeQuota || Date.now() - observed < QUOTA_FRESH) continue
       const quota = await harness.probeQuota(this.options.repo).catch(() => undefined)
-      if (quota) this.quotas.set(name, { quota, observedAt: Date.now() })
+      if (quota) this.quotas.set(name, quota)
     }
   }
 

@@ -10,9 +10,20 @@ const alive = (pid: number) => {
   }
 }
 
+function lockFile(home: string, project: string) {
+  return join(home, '.conveyor', 'run', `${project.replaceAll('/', '-')}.pid`)
+}
+
+export function runningPid(home: string, project: string): number | undefined {
+  const file = lockFile(home, project)
+  if (!existsSync(file)) return undefined
+  const pid = Number(readFileSync(file, 'utf8'))
+  return Number.isInteger(pid) && pid > 0 && alive(pid) ? pid : undefined
+}
+
 export function acquireRunLock(home: string, project: string): { ok: true; release: () => void } | { ok: false; pid: number } {
+  const file = lockFile(home, project)
   const dir = join(home, '.conveyor', 'run')
-  const file = join(dir, `${project.replaceAll('/', '-')}.pid`)
   if (existsSync(file)) {
     const pid = Number(readFileSync(file, 'utf8'))
     if (Number.isInteger(pid) && pid > 0 && alive(pid)) return { ok: false, pid }

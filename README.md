@@ -37,7 +37,7 @@ conveyor new
 
 | Command | What it does |
 |---|---|
-| `conveyor` | Shows the settings and validates them; without settings, starts the init menu |
+| `conveyor` | Status screen: whether `run` works, my tasks with stage, retries, errors, and pending answers, my limits, token use, subscription windows, the team queue. Keys: `r` refresh, `q` quit. Without a terminal it prints a text summary; `--json` prints the snapshot. Without settings it starts the init menu |
 | `conveyor init` | Creates settings or links existing ones |
 | `conveyor run` | Works the board: claims tasks within your limits and runs their stages. `--once` runs one cycle |
 | `conveyor new` | Live session with an agent; creates a task from the result |
