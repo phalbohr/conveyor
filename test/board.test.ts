@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { labelsToTask } from '../src/board/board.js'
 import { FakeBoard } from '../src/board/fake.js'
 import { GitHubBoard } from '../src/board/github.js'
+import { GitLabBoard } from '../src/board/gitlab.js'
 import { boardContract } from './board-contract.js'
 import { createRun } from '../src/run.js'
 
@@ -65,5 +66,28 @@ if (sandbox && projectNumber) {
         await board.closeTask(task.id)
       }
     })
+  })
+}
+
+const gitlab = process.env.CONVEYOR_GITLAB_SANDBOX
+if (gitlab) {
+  const api = `projects/${encodeURIComponent(gitlab)}`
+  const glab = async (...args: string[]) => {
+    for (let attempt = 1; ; attempt++) {
+      const result = await createRun()('glab', ['api', ...args])
+      if (result.code === 0) return result.stdout.trim()
+      if (attempt >= 4 || !/dial tcp|i\/o timeout|connection reset|EOF/i.test(result.stderr)) throw new Error(result.stderr)
+      await new Promise((resolve) => setTimeout(resolve, 2_000))
+    }
+  }
+  boardContract('gitlab', () => new GitLabBoard(gitlab, createRun()), {
+    timeout: 180_000,
+    prepareBranch: async (id) => {
+      await glab('-X', 'POST', `${api}/repository/branches`, '-f', `branch=conveyor/${id}`, '-f', 'ref=main')
+      await glab('-X', 'POST', `${api}/repository/files/${encodeURIComponent(`contract/${id}.txt`)}`, '-f', 'branch=conveyor/' + id, '-f', `content=task ${id}`, '-f', `commit_message=Contract test ${id}`)
+    },
+    removeBranch: async (id) => {
+      await glab('-X', 'DELETE', `${api}/repository/branches/${encodeURIComponent(`conveyor/${id}`)}`).catch(() => undefined)
+    },
   })
 }
