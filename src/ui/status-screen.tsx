@@ -5,9 +5,9 @@ import { statusLines, type Line } from './status-lines.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 
-type Props = { load: () => Promise<StatusSnapshot>; refreshMs: number }
+type Props = { load: () => Promise<StatusSnapshot>; refreshMs: number; onSettings?: () => void }
 
-export function StatusScreen({ load, refreshMs }: Props) {
+export function StatusScreen({ load, refreshMs, onSettings }: Props) {
   const { exit } = useApp()
   const [status, setStatus] = useState<StatusSnapshot>()
   const [error, setError] = useState<string>()
@@ -32,6 +32,10 @@ export function StatusScreen({ load, refreshMs }: Props) {
   useInput((input) => {
     if (input === 'q') exit()
     if (input === 'r') refresh()
+    if (input === 's' && onSettings) {
+      onSettings()
+      exit()
+    }
   })
 
   return (
@@ -45,13 +49,15 @@ export function StatusScreen({ load, refreshMs }: Props) {
         ))}
       {error && <Text color="red">Board error: {error}</Text>}
       <Text color="gray">
-        [r] refresh · [q] quit{updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}
+        [r] refresh · [s] settings · [q] quit{updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}
       </Text>
     </Box>
   )
 }
 
-export async function showStatus(load: () => Promise<StatusSnapshot>, refreshMs = 30_000) {
-  const app = render(<StatusScreen load={load} refreshMs={refreshMs} />)
+export async function showStatus(load: () => Promise<StatusSnapshot>, refreshMs = 30_000): Promise<'settings' | 'quit'> {
+  let next: 'settings' | 'quit' = 'quit'
+  const app = render(<StatusScreen load={load} refreshMs={refreshMs} onSettings={() => (next = 'settings')} />)
   await app.waitUntilExit()
+  return next
 }
