@@ -15,7 +15,7 @@ import { acquireRunLock } from '../lock.js'
 import { expandPath } from '../paths.js'
 import { findSettings } from '../settings.js'
 import { resolveSkills } from '../skills.js'
-import { UsageLedger } from '../usage.js'
+import { QuotaStore, UsageLedger } from '../usage.js'
 import { GitWorkspaces, type Workspaces } from '../workspaces.js'
 
 type Prepared = { settings: string; config: Config; board: Board }
@@ -90,7 +90,8 @@ export async function runCommand(context: Context, options: { once?: boolean }):
       settingsDir: settings,
       repo: context.cwd,
       home: context.home,
-      usage: new UsageLedger(join(context.home, '.conveyor', 'usage', `${project.replaceAll('/', '-')}.json`)),
+      usage: new UsageLedger(usageFile(context.home, project)),
+      quotas: new QuotaStore(quotaFile(context.home, project)),
       loadConfig: () => loadConfig(settings),
       log,
     })
@@ -162,4 +163,12 @@ export function prepare(context: Context): Prepared | undefined {
       ? new GitLabBoard(project, context.run)
       : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), warn }))
   return { settings, config: loaded.config, board }
+}
+
+export function usageFile(home: string, project: string) {
+  return join(home, '.conveyor', 'usage', `${project.replaceAll('/', '-')}.json`)
+}
+
+export function quotaFile(home: string, project: string) {
+  return join(home, '.conveyor', 'usage', `${project.replaceAll('/', '-')}.quota.json`)
 }
