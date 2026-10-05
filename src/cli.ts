@@ -8,6 +8,8 @@ import { detectBoard, initProject, type Board, type InitResult, type Target } fr
 import { findSettings } from './settings.js'
 import { collectStatus, type StatusSnapshot } from './status.js'
 import { statusLines } from './ui/status-lines.js'
+import { SettingsDocument } from './settings-editor.js'
+import { showSettings } from './ui/settings-screen.js'
 import { showStatus } from './ui/status-screen.js'
 import { promptInit } from './ui/init-prompt.js'
 
@@ -76,6 +78,24 @@ export async function main(argv: string[], context: Context): Promise<number> {
     })
 
   program
+    .command('settings')
+    .description('edit the team and personal settings')
+    .action(async () => {
+      const settings = findSettings(context.cwd, context.home)
+      if (!settings) {
+        context.stderr(`No conveyor settings found in ${context.cwd}. Run \`conveyor init\`.\n`)
+        exitCode = 1
+        return
+      }
+      if (!context.interactive) {
+        context.stderr(`The settings editor needs a terminal. Edit ${settings}/config.yaml and local.yaml directly.\n`)
+        exitCode = 1
+        return
+      }
+      await showSettings(new SettingsDocument(settings))
+    })
+
+  program
     .command('new')
     .description('shape a new task in a live session with an agent and put it on the board')
     .action(async () => {
@@ -128,9 +148,13 @@ async function status(context: Context, json: boolean): Promise<number> {
   }
   const prepared = prepare(context)
   if (!prepared) return 1
-  const load = () => collectStatus({ board: prepared.board, config: loaded.config, settings, home: context.home })
+  const load = async () => {
+    const current = loadConfig(settings)
+    if (!current.ok) throw new Error(current.errors.join('; '))
+    return collectStatus({ board: prepared.board, config: current.config, settings, home: context.home })
+  }
   if (context.interactive && !json) {
-    await showStatus(load)
+    while ((await showStatus(load)) === 'settings') await showSettings(new SettingsDocument(settings))
     return 0
   }
 
