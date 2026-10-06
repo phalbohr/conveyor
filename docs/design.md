@@ -411,6 +411,7 @@ Other harnesses run through a generic command adapter. Built-in presets:
 - Result contract: the CLI appends the result schema to the prompt and asks the agent to write the result JSON to the file in `CONVEYOR_RESULT`. No result file means a failed stage.
 - Every output line counts as a progress event for stall detection. Token usage and subscription windows are not available; self-hosted models use the daily token limit of their router.
 - The presets come from the tools' documentation and are not yet verified with real runs.
+- Model catalogs: claude from a built-in list (aliases and full names, efforts `low` … `max`), codex from `codex debug models` (efforts per model), other harnesses from `models: {command, args}` in their definition (one model per output line) and `efforts` from the definition. Catalogs are cached per project in `~/.conveyor/models/<project>.json`. `run` warns about models outside a catalog; a stage failure that names an unknown or unsupported model is a configuration error and goes to a human without retries.
 
 Codex stages accept two options:
 

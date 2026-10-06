@@ -5,11 +5,14 @@ export const PRESETS: Record<string, CommandDefinition> = {
     command: 'opencode',
     args: ['run', '--auto', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
     env: {},
+    models: { args: ['models'] },
   },
   pi: {
     command: 'pi',
     args: ['--mode', 'json', '--model', '{model}', '--thinking', '{effort}', '--', '{prompt}'],
     env: {},
+    models: { args: ['--list-models'] },
+    efforts: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
   },
   openhands: {
     command: 'openhands',

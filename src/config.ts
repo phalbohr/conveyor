@@ -56,6 +56,8 @@ const harnessOverride = z.strictObject({
   command: name.optional(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  models: z.strictObject({ command: name.optional(), args: z.array(z.string()) }).optional(),
+  efforts: z.array(name).optional(),
 })
 
 const BUILT_IN_HARNESSES = ['claude', 'codex']
@@ -142,7 +144,13 @@ export type Stage = StageSettings & {
 }
 export type Artifact = { store: 'board' | 'repo' | 'path'; path?: string; write: 'replace' | 'append' }
 
-export type HarnessDefinition = { command: string; args: string[]; env: Record<string, string> }
+export type HarnessDefinition = {
+  command: string
+  args: string[]
+  env: Record<string, string>
+  models?: { command?: string; args: string[] }
+  efforts?: string[]
+}
 
 export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' | 'language' | 'harnesses'> &
   Omit<Local, 'artifacts' | 'language' | 'harnesses'> & {
@@ -233,7 +241,15 @@ function resolveHarnesses(team: Team, local: Local, errors: string[]): Record<st
         errors.push(`${file}: harnesses.${harnessName}: command is required for a harness without a preset or a team definition`)
         continue
       }
-      harnesses[harnessName] = { command, args: override.args ?? base?.args ?? ['{prompt}'], env: { ...base?.env, ...override.env } }
+      const models = override.models ?? base?.models
+      const efforts = override.efforts ?? base?.efforts
+      harnesses[harnessName] = {
+        command,
+        args: override.args ?? base?.args ?? ['{prompt}'],
+        env: { ...base?.env, ...override.env },
+        ...(models ? { models } : {}),
+        ...(efforts ? { efforts } : {}),
+      }
     }
   }
   return harnesses

@@ -13,11 +13,12 @@ const LEFT = '\u001B[D'
 const until = (assertion: () => void) => vi.waitFor(assertion, { timeout: 5_000 })
 const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
 
-function setup() {
+function setup(options: { catalogs?: ConstructorParameters<typeof SettingsDocument>[1]['catalogs']; refresh?: () => Promise<Record<string, never>> } = {}) {
   const dir = tempDir('conveyor-settings-')
   writeFileSync(join(dir, 'config.yaml'), 'board:\n  provider: github\n  project: acme/app\ntransitions:\n  merge: human\nstages:\n  implement: {}\n  merge: {}\n')
   writeFileSync(join(dir, 'local.yaml'), 'limits:\n  running: 3\n')
-  const rendered = render(<SettingsScreen doc={new SettingsDocument(dir)} />)
+  const doc = new SettingsDocument(dir, { catalogs: options.catalogs ?? {} })
+  const rendered = render(<SettingsScreen doc={doc} {...(options.refresh ? { refreshModels: options.refresh } : {})} />)
   const press = async (...keys: string[]) => {
     for (const key of keys) {
       await settle()
@@ -66,6 +67,33 @@ describe('SettingsScreen', () => {
     await until(() => expect(rendered.lastFrame()).toMatch(/implement: effort\s+max/))
     await press(RIGHT)
     await until(() => expect(rendered.lastFrame()).toMatch(/implement: effort\s+\(inherit\)/))
+  })
+
+  it('takes a model name outside the list through other…', async () => {
+    const catalogs = { claude: { models: [{ id: 'opus' }, { id: 'sonnet' }], efforts: ['low', 'high'], fetchedAt: '' } }
+    const { dir, rendered, press } = setup({ catalogs })
+    const row = new SettingsDocument(dir, { catalogs }).fields().findIndex((field) => field.key === 'stages.implement.model')
+    await until(() => expect(rendered.lastFrame()).toContain('Merge mode'))
+    await press(...Array.from({ length: row }, () => DOWN), ENTER)
+    await until(() => expect(rendered.lastFrame()).toContain('other…'))
+    await press(DOWN, DOWN, DOWN, ENTER)
+    await until(() => expect(rendered.lastFrame()).toContain('Model name'))
+    await press('claude-opus-5', ENTER)
+    await until(() => expect(rendered.lastFrame()).toMatch(/implement: model\s+claude-opus-5/))
+  })
+
+  it('refreshes the model lists with m', async () => {
+    let refreshed = 0
+    const { rendered, press } = setup({
+      refresh: async () => {
+        refreshed++
+        return {}
+      },
+    })
+    await until(() => expect(rendered.lastFrame()).toContain('Merge mode'))
+    await press('m')
+    await until(() => expect(refreshed).toBe(1))
+    await until(() => expect(rendered.lastFrame()).toContain('Model lists updated'))
   })
 
   it('adds a stage before merge', async () => {

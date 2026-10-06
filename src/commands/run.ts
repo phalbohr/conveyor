@@ -16,6 +16,8 @@ import { expandPath } from '../paths.js'
 import { findSettings } from '../settings.js'
 import { resolveSkills } from '../skills.js'
 import { undescribedNotice, undescribedStages } from '../stage-catalog.js'
+import { ModelCache, catalogsFor, modelKnown } from '../models.js'
+import { harnessesInUse, modelsFile } from './models.js'
 import { checkSettingsSync, syncNotice } from '../settings-sync.js'
 import { QuotaStore, UsageLedger } from '../usage.js'
 import { GitWorkspaces, type Workspaces } from '../workspaces.js'
@@ -61,6 +63,12 @@ export async function runCommand(context: Context, options: { once?: boolean }):
     return 1
   }
   for (const notice of undescribedNotice(undescribedStages(settings, config))) context.stderr(`warning: ${notice}\n`)
+  const catalogs = await catalogsFor(harnessesInUse(config), config, context.run, new ModelCache(modelsFile(context.home, config.board.project)), false)
+  for (const stage of [...config.stages, { name: 'triage', ...config.triage }]) {
+    if (!modelKnown(catalogs[stage.harness], stage.model)) {
+      context.stderr(`warning: Stage ${stage.name} uses model ${stage.model}, which ${stage.harness} does not list. Check \`conveyor models ${stage.harness}\`.\n`)
+    }
+  }
 
   const lock = acquireRunLock(context.home, config.board.project)
   if (!lock.ok) {
