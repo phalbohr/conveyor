@@ -12,6 +12,7 @@ const snapshot: StatusSnapshot = {
   provider: 'github',
   me: 'me',
   runner: { running: false },
+  settingsSync: { state: 'current' },
   mine: [
     { id: '3', title: 'Store users', state: 'needs-input', stage: 'plan', attempt: 0, waitingSince: '2026-10-05T09:00:00.000Z', answered: false },
     { id: '4', title: 'Login', state: 'in-progress', stage: 'implement', attempt: 1, lastError: 'tests are red' },
@@ -34,6 +35,12 @@ const snapshot: StatusSnapshot = {
 }
 
 describe('statusLines', () => {
+  it('warns about newer team settings', () => {
+    const lines = statusLines({ ...snapshot, settingsSync: { state: 'behind', base: 'origin/main', commits: ['abc123 alice, 2 hours ago: Squash merges'] } })
+    expect(lines[1]).toMatchObject({ text: expect.stringContaining('Team settings are behind origin/main by 1 commit'), tone: 'warning' })
+    expect(lines[2]?.text).toContain('Squash merges')
+  })
+
   it('shows the runner, limits, subscription windows, my tasks, and the team queue', () => {
     const lines = statusLines(snapshot)
     const text = lines.map((line) => line.text).join('\n')

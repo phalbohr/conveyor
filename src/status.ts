@@ -4,6 +4,7 @@ import type { Config } from './config.js'
 import { findWorkpad, repliesSince } from './engine/workpad.js'
 import type { QuotaWindow } from './harness/harness.js'
 import { runningPid } from './lock.js'
+import { checkSettingsSync, type SettingsSync } from './settings-sync.js'
 import { QuotaStore, UsageLedger } from './usage.js'
 
 export type MyTask = {
@@ -28,6 +29,7 @@ export type StatusSnapshot = {
   provider: Config['board']['provider']
   me: string
   runner: { running: boolean; pid?: number }
+  settingsSync: SettingsSync
   mine: MyTask[]
   team: { unclaimed: number; claimedByOthers: number }
   limits: {
@@ -40,6 +42,9 @@ export type StatusSnapshot = {
 }
 
 const NEW_STATES: Task['state'][] = ['idea', 'story', 'plan']
+
+const FETCH_EVERY = 5 * 60_000
+let lastFetch = 0
 
 export async function collectStatus(options: { board: Board; config: Config; settings: string; home: string }): Promise<StatusSnapshot> {
   const { board, config, home } = options
@@ -68,6 +73,9 @@ export async function collectStatus(options: { board: Board; config: Config; set
   mine.sort((a, b) => Number(a.id) - Number(b.id))
 
   const pid = runningPid(home, project)
+  const fetch = Date.now() - lastFetch >= FETCH_EVERY
+  if (fetch) lastFetch = Date.now()
+  const settingsSync = await checkSettingsSync(options.settings, { fetch })
   const { subscription } = config.limits
   const readings = new QuotaStore(quotaFile(home, project)).all()
   return {
@@ -76,6 +84,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     provider: config.board.provider,
     me,
     runner: pid ? { running: true, pid } : { running: false },
+    settingsSync,
     mine,
     team: {
       unclaimed: tasks.filter((task) => !task.owner && NEW_STATES.includes(task.state)).length,

@@ -1,3 +1,4 @@
+import { syncNotice } from '../settings-sync.js'
 import type { StatusSnapshot } from '../status.js'
 
 export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title' }
@@ -11,6 +12,7 @@ export function statusLines(status: StatusSnapshot): Line[] {
   const runner = status.runner.running ? `running (pid ${status.runner.pid})` : 'stopped'
   const lines: Line[] = [
     { text: `conveyor · ${status.project} (${status.provider}) · @${status.me} · ${runner}`, tone: 'title' },
+    ...(status.settingsSync.state === 'behind' ? syncNotice(status.settingsSync).split('\n').map((text): Line => ({ text, tone: 'warning' })) : []),
     {
       text: [
         `running ${limits.running.used}/${limits.running.limit}`,
