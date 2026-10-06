@@ -10,11 +10,11 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 |---|---|---|---|
 | 1 | Write an idea, story, or story with plan as an issue, or shape it in `conveyor new` | human | `conveyor::idea` / `story` / `plan` |
 | 2 | Triage: priorities 1–4 and "blocked by" links for new tasks | agent (triage settings) | `priority::N` |
-| 3 | Claim: the first workstation with free limits locks the task (branch `conveyor-lock/<id>`) | conveyor | `claimed-by::<user>`, `conveyor::in-progress` |
+| 3 | Claim: the first workstation with free limits locks the task (branch `conveyor-lock/<number>`) | conveyor | `claimed-by::<user>`, `conveyor::in-progress` |
 | 4 | `story` stage (only if `pickup_from: idea`): idea → user story in `formats/story.md` | agent | in-progress |
 | 5 | Gate idea → story: questions or approval in issue comments, depending on `transitions.idea_to_story` | human or agent | `conveyor::needs-input` while waiting |
 | 6 | `plan` stage (if `pickup_from` is `idea` or `story`) and gate story → plan | agent, human | in-progress / needs-input |
-| 7 | `implement`, `review`, and custom stages before `merge`, each in the task worktree on branch `conveyor/<id>`; the conveyor commits and pushes after every stage | agents | in-progress |
+| 7 | `implement`, `review`, and custom stages before `merge`, each in the task worktree on branch `conveyor/<number>`; the conveyor commits and pushes after every stage | agents | in-progress |
 | 8 | `merge` stage prepares the branch; the conveyor opens a pull/merge request | agent, conveyor | — |
 | 9 | Merge gate by `transitions.merge`: `human` → review; `ai` → merge; `smart` → the merge stage decides by `smart/merge.md` | human or agent | `conveyor::review` while waiting |
 | 10 | Review: `/merge` or Approve → merge; `/fix`, `/fix_from:`, `/rework` → back to work | human | review / in-progress |
@@ -22,7 +22,15 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 | 12 | Post-merge stages with `when: success`, `failure`, or `always` (for example `fix-ci`) | agents | in-progress |
 | 13 | Done: issue closed, lock, workspace, and task branch removed | conveyor | `conveyor::done` |
 
-Questions, approvals, and errors always go to the issue as comments. Any reply without the conveyor marker is the answer; the next cycle continues the stage. `conveyor attach <id>` answers in a live session instead.
+Questions, approvals, and errors always go to the issue as comments. Any reply without the conveyor marker is the answer; the next cycle continues the stage. `conveyor attach <number>` answers in a live session instead.
+
+## Task numbers
+
+A task is an issue on the board, and the conveyor names it by the issue number: GitHub `github.com/owner/repo/issues/51` and GitLab issue `#51` are task `51`.
+
+- Commands take the bare number: `conveyor attach 51`, `conveyor release 51`. In a shell, `#51` starts a comment, so write `51`.
+- Branches carry the number: `conveyor/51` (work), `conveyor-lock/51` (claim).
+- Own identifiers, such as `US-E4-01`, can stay in the issue title; the conveyor ignores them.
 
 ## Setup
 
@@ -38,11 +46,11 @@ Questions, approvals, and errors always go to the issue as comments. Any reply w
 | see my tasks, limits, subscription windows | `conveyor` (status screen; `h` help) |
 | start working the board | `conveyor run` (Ctrl+C stops; tasks resume on the next start) |
 | add a task | `conveyor new`, or an issue with a `conveyor::idea`, `story`, or `plan` label |
-| answer a question | reply in the issue, or `conveyor attach <id>` |
+| answer a question | reply in the issue, or `conveyor attach <number>` |
 | merge a reviewed task | `/merge` on the issue or pull request, or Approve. GitLab: Approve the MR or `/merge` on the issue (`/merge` in an MR is a GitLab quick action) |
 | request small fixes | `/fix <notes>` (from `plan`) or `/fix_from: <stage> <notes>`; branch and pull request stay |
 | start over | `/rework <notes>` or the label `conveyor::rework`; new branch from `plan` on |
-| give a task back | `conveyor release <id>` (`--force` for private tasks of others) |
+| give a task back | `conveyor release <number>` (`--force` for private tasks of others) |
 | change settings | `conveyor settings`, or `conveyor config list|get|set`, `conveyor config stage add|remove|move` |
 
 ## Files and what they control

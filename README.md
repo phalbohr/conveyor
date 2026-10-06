@@ -44,8 +44,8 @@ conveyor new
 | `conveyor settings` | Settings editor (also `s` on the status screen): team, stage, and personal fields; `a` add a stage, `x` remove, `[` `]` move, `s` save after validation, `q` quit. Formatting and comments of the YAML files stay as they are |
 | `conveyor run` | Works the board: claims tasks within your limits and runs their stages. `--once` runs one cycle |
 | `conveyor new` | Live session with an agent; creates a task from the result |
-| `conveyor attach <issue>` | Live session to answer the questions of a waiting task |
-| `conveyor release <issue>` | Releases the claim of a task (`--force` for private tasks of others) |
+| `conveyor attach <number>` | Live session to answer the questions of a waiting task; `<number>` is the issue number on the board, e.g. `51` |
+| `conveyor release <number>` | Releases the claim of a task (`--force` for private tasks of others) |
 | `conveyor config list` | Every setting with value, options, and description (`--json` for scripts) |
 | `conveyor config get/set <key> [value]` | Reads or changes one setting; validates before saving |
 | `conveyor config stage add/remove/move` | Adds (`--after-merge --when …`), removes, or moves a stage |
