@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { Context } from '../cli.js'
+import { probesOf, type Context } from '../cli.js'
 import { loadConfig, type Config } from '../config.js'
 import { ModelCache, catalogsFor } from '../models.js'
 import { findSettings } from '../settings.js'
@@ -31,7 +31,7 @@ export async function modelsCommand(context: Context, harness: string | undefine
     return 1
   }
   const cache = new ModelCache(modelsFile(context.home, config.board.project))
-  const catalogs = await catalogsFor(harness ? [harness] : harnessesInUse(config), config, context.run, cache, options.refresh ?? false)
+  const catalogs = await catalogsFor(harness ? [harness] : harnessesInUse(config), config, probesOf(context), cache, options.refresh ?? false)
   if (json) {
     context.stdout(`${JSON.stringify(catalogs)}\n`)
     return 0
@@ -40,7 +40,10 @@ export async function modelsCommand(context: Context, harness: string | undefine
     context.stdout(`${name}${catalog.efforts ? ` (efforts: ${catalog.efforts.join(', ')})` : ''}\n`)
     if (catalog.error) context.stdout(`  could not list models: ${catalog.error}\n`)
     else if (catalog.models.length === 0) context.stdout('  no model list: any model name the harness accepts works\n')
-    for (const model of catalog.models) context.stdout(`  ${model.id}${model.efforts?.length ? `  (${model.efforts.join(', ')})` : ''}\n`)
+    for (const model of catalog.models) {
+      const name = [model.label, model.aliases?.length ? `alias ${model.aliases.join(', ')}` : ''].filter(Boolean).join(', ')
+      context.stdout(`  ${model.id}${name ? ` — ${name}` : ''}${model.efforts?.length ? `  (${model.efforts.join(', ')})` : ''}\n`)
+    }
   }
   return 0
 }

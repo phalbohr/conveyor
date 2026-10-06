@@ -4,7 +4,7 @@ import type { Board as BoardPort } from './board/board.js'
 import { configEdit, configGet, configList } from './commands/config.js'
 import { attachCommand, newCommand } from './commands/live.js'
 import { modelsCommand, modelsFile } from './commands/models.js'
-import { ModelCache, catalogsFor } from './models.js'
+import { ModelCache, catalogsFor, type ClaudeModel, type Probes } from './models.js'
 import { skillInstall } from './commands/skill.js'
 import { prepare, releaseCommand, runCommand } from './commands/run.js'
 import { loadConfig, type Config } from './config.js'
@@ -29,6 +29,7 @@ export type Context = {
   interactive: boolean
   run: Run
   interact: Interact
+  claudeModels?: () => Promise<ClaudeModel[]>
   boardFor?: (config: Config) => BoardPort
 }
 
@@ -285,6 +286,11 @@ async function openSettings(context: Context, settings: string) {
   const config = loaded.config
   const cache = new ModelCache(modelsFile(context.home, config.board.project))
   const harnesses = ['claude', 'codex', ...Object.keys(config.harnesses)]
-  const catalogs = await catalogsFor(harnesses, config, context.run, cache, false)
-  await showSettings(new SettingsDocument(settings, { catalogs }), () => catalogsFor(harnesses, config, context.run, cache, true))
+  const probes = probesOf(context)
+  const catalogs = await catalogsFor(harnesses, config, probes, cache, false)
+  await showSettings(new SettingsDocument(settings, { catalogs }), () => catalogsFor(harnesses, config, probes, cache, true))
+}
+
+export function probesOf(context: Context): Probes {
+  return { run: context.run, ...(context.claudeModels ? { claudeModels: context.claudeModels } : {}) }
 }

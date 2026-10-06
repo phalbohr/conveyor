@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { Board } from '../board/board.js'
 import { GitHubBoard } from '../board/github.js'
 import { GitLabBoard } from '../board/gitlab.js'
-import type { Context } from '../cli.js'
+import { probesOf, type Context } from '../cli.js'
 import { loadConfig, type Config, type LoadResult } from '../config.js'
 import { Engine } from '../engine/engine.js'
 import { manualRelease } from '../engine/release.js'
@@ -63,7 +63,7 @@ export async function runCommand(context: Context, options: { once?: boolean }):
     return 1
   }
   for (const notice of undescribedNotice(undescribedStages(settings, config))) context.stderr(`warning: ${notice}\n`)
-  const catalogs = await catalogsFor(harnessesInUse(config), config, context.run, new ModelCache(modelsFile(context.home, config.board.project)), false)
+  const catalogs = await catalogsFor(harnessesInUse(config), config, probesOf(context), new ModelCache(modelsFile(context.home, config.board.project)), false)
   for (const stage of [...config.stages, { name: 'triage', ...config.triage }]) {
     if (!modelKnown(catalogs[stage.harness], stage.model)) {
       context.stderr(`warning: Stage ${stage.name} uses model ${stage.model}, which ${stage.harness} does not list. Check \`conveyor models ${stage.harness}\`.\n`)
