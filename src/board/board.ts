@@ -6,6 +6,7 @@ export type Task = {
   id: string
   title: string
   body: string
+  author: string
   state?: TaskState
   owner?: string
   assignees: string[]
@@ -29,7 +30,7 @@ export type PullRequest = {
   state: 'open' | 'merged' | 'closed'
   checks: 'pending' | 'success' | 'failure' | 'none'
   mergeable: 'yes' | 'no' | 'unknown'
-  feedback: string[]
+  feedback: { author: string; body: string }[]
   reviews: { author: string; state: 'approved' | 'changes_requested' | 'commented' | 'dismissed'; body: string; submittedAt: string }[]
   comments: { author: string; body: string; createdAt: string }[]
 }
@@ -38,6 +39,7 @@ export type MergeMethod = 'merge' | 'squash' | 'rebase'
 
 export interface Board {
   user(): Promise<string>
+  canWrite(user: string): Promise<boolean>
   createTask(title: string, body: string, state?: TaskState): Promise<Task>
   listTasks(): Promise<Task[]>
   getTask(id: string): Promise<Task | undefined>

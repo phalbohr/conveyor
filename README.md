@@ -108,7 +108,9 @@ harnesses:
 
 Placeholders: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`. The agent writes its result as JSON to the file in `CONVEYOR_RESULT`; the conveyor adds the schema to the prompt.
 
-Codex stages also accept `sandbox: workspace-write | full-access` and `network: true | false`.
+Codex stages also accept `sandbox: workspace-write | full-access` (default `workspace-write`) and `network: true | false` (default `false`).
+
+Claude stages accept `permission_mode: bypassPermissions | auto | acceptEdits | dontAsk` (default `bypassPermissions`: the agent runs every tool without asking). With another mode, the agent runs only the tools that the mode or the allow rules in the repository's `.claude/settings.json` permit; a denied tool fails that step of the agent, not the stage.
 
 ## Talking to the conveyor
 
@@ -122,6 +124,8 @@ The conveyor writes on the board; you answer in comments.
 | | `/fix_from: <stage> <notes>` | fixes on the same branch, from that stage |
 | | `/rework <notes>` | new branch, new attempt after `plan` |
 | any task | label `conveyor::rework` | same as `/rework` |
+
+The conveyor reads commands, reviews, replies, and its own hidden markers only from users with write access to the repository (GitHub: write, maintain, or admin; GitLab: Developer or higher). It takes only tasks whose author has write access; to run a task from an outside contributor, create a new issue with its content.
 
 On GitLab, `/merge` in a merge request comment is a GitLab quick action and never reaches the conveyor. Approve the merge request (button or `/approve`) or write `/merge` on the issue. `/fix`, `/fix_from:`, and `/rework` work on both.
 

@@ -269,7 +269,7 @@ describe('fix and rework', () => {
     const pull = await board.pullRequest('1')
     board.updatePullRequest('1', {
       reviews: [{ author: 'alice', state: 'changes_requested', body: 'Use bcrypt for passwords.', submittedAt: now() }],
-      feedback: ['Use bcrypt for passwords.'],
+      feedback: [{ author: 'alice', body: 'Use bcrypt for passwords.' }],
     })
 
     await cycle()

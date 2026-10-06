@@ -139,6 +139,22 @@ describe('claude harness skills', () => {
   })
 })
 
+describe('claude permission mode', () => {
+  const argv = async (options: Partial<Parameters<Harness['runStage']>[0]>) => {
+    const s = stub('claude-done.jsonl')
+    await new ClaudeHarness({ command: s.command }).runStage(run(options))
+    return (JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[] }).argv.join(' ')
+  }
+
+  it('bypasses permissions by default', async () => {
+    expect(await argv({})).toContain('--permission-mode bypassPermissions')
+  })
+
+  it('passes the configured permission mode', async () => {
+    expect(await argv({ permissionMode: 'acceptEdits' })).toContain('--permission-mode acceptEdits')
+  })
+})
+
 describe('codex sandbox options', () => {
   const argv = async (options: { sandbox?: 'workspace-write' | 'full-access'; network?: boolean }) => {
     const s = stub('codex-done.jsonl')
@@ -146,12 +162,12 @@ describe('codex sandbox options', () => {
     return (JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[] }).argv.join(' ')
   }
 
-  it('uses the workspace-write sandbox with network by default', async () => {
-    expect(await argv({})).toContain('--sandbox workspace-write -c sandbox_workspace_write.network_access=true')
+  it('uses the workspace-write sandbox without network by default', async () => {
+    expect(await argv({})).toContain('--sandbox workspace-write -c sandbox_workspace_write.network_access=false')
   })
 
-  it('turns the network off', async () => {
-    expect(await argv({ network: false })).toContain('sandbox_workspace_write.network_access=false')
+  it('turns the network on', async () => {
+    expect(await argv({ network: true })).toContain('sandbox_workspace_write.network_access=true')
   })
 
   it('gives full access', async () => {

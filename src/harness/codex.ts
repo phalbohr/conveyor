@@ -29,7 +29,7 @@ export class CodexHarness implements Harness {
       '-c', `model_reasoning_effort="${run.effort}"`,
       ...(run.sandbox === 'full-access'
         ? ['--sandbox', 'danger-full-access']
-        : ['--sandbox', 'workspace-write', '-c', `sandbox_workspace_write.network_access=${run.network ?? true}`]),
+        : ['--sandbox', 'workspace-write', '-c', `sandbox_workspace_write.network_access=${run.network ?? false}`]),
       '--skip-git-repo-check',
       '--ephemeral',
       '--json',

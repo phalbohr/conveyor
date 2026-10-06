@@ -16,6 +16,7 @@ type GraphIssue = {
   iid: string
   title: string
   description: string | null
+  author: { username: string }
   state: 'opened' | 'closed'
   createdAt: string
   blockedByCount: number | null
@@ -35,9 +36,10 @@ type MergeRequest = {
 
 type Call = { code: number; stdout: string; stderr: string; status: number }
 
-const ISSUE_FIELDS = 'iid title description state createdAt blockedByCount labels { nodes { title } } assignees { nodes { username } }'
+const ISSUE_FIELDS = 'iid title description author { username } state createdAt blockedByCount labels { nodes { title } } assignees { nodes { username } }'
 const BLOCKED_BY = /^Blocked by: (.+)$/m
 const LOCK_PREFIX = 'conveyor-lock/'
+const DEVELOPER = 30
 const NETWORK = /dial tcp|i\/o timeout|connection reset|EOF|TLS handshake timeout|connection refused/i
 const CONNECT = /dial tcp/i
 
@@ -57,6 +59,12 @@ export class GitLabBoard implements Board {
   async user() {
     this.login ??= (await this.json<{ username: string }>(['user'])).username
     return this.login
+  }
+
+  async canWrite(user: string) {
+    if (!user) return false
+    const members = await this.json<{ username: string; access_level: number }[]>([`${this.api}/members/all?query=${encodeURIComponent(user)}&per_page=100`])
+    return members.some((member) => member.username === user && member.access_level >= DEVELOPER)
   }
 
   async createTask(title: string, body: string, state?: TaskState) {
@@ -181,7 +189,9 @@ export class GitLabBoard implements Board {
       state: request.state === 'opened' || request.state === 'locked' ? 'open' : request.state,
       checks: checks(request.head_pipeline?.status),
       mergeable: mergeable(request.detailed_merge_status),
-      feedback: notes.filter((note) => note.position).map((note) => `${note.position?.new_path ?? ''}${note.position?.new_line ? `:${note.position.new_line}` : ''}: ${note.body}`),
+      feedback: notes
+        .filter((note) => note.position)
+        .map((note) => ({ author: note.author.username, body: `${note.position?.new_path ?? ''}${note.position?.new_line ? `:${note.position.new_line}` : ''}: ${note.body}` })),
       reviews: [
         ...approvals.approved_by.map(({ user }) => ({ author: user.username, state: 'approved' as const, body: '', submittedAt: now })),
         ...reviewers
@@ -217,6 +227,7 @@ export class GitLabBoard implements Board {
       id: issue.iid,
       title: issue.title,
       body: (issue.description ?? '').replace(BLOCKED_BY, '').trim(),
+      author: issue.author.username,
       assignees: issue.assignees.nodes.map((node) => node.username),
       openBlockers: (issue.blockedByCount ?? 0) + fallbackBlockers(issue.description).filter((iid) => open.has(iid)).length,
       closed: issue.state === 'closed',

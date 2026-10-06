@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
@@ -68,7 +68,10 @@ describe('Engine triage', () => {
     expect(await board.getTask('1')).toMatchObject({ priority: 3 })
     expect(await board.getTask('3')).toMatchObject({ priority: 2, openBlockers: 1 })
     expect(runs()).toEqual(['-:triage', '2:implement', '2:merge'])
-    expect(harness.runs[0]).toMatchObject({ model: 'opus', effort: 'high', cwd: repo })
+    expect(harness.runs[0]).toMatchObject({ model: 'opus', effort: 'high' })
+    expect(harness.runs[0]?.cwd).not.toBe(repo)
+    expect(harness.runs[0]?.cwd).toContain('conveyor-triage-')
+    expect(existsSync(harness.runs[0]?.cwd ?? '')).toBe(false)
     expect(harness.runs[0]?.prompt).toContain('Order the tasks by value.')
     expect(harness.runs[0]?.prompt).toContain('Feature on top')
   })

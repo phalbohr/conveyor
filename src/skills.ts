@@ -7,6 +7,7 @@ export type ResolvedSkill =
 
 type InstalledPlugins = { plugins?: Record<string, { installPath: string }[]> }
 
+const SKILL_NAME = /^[\w-]+(?::[\w-]+)?$/
 const hasSkill = (dir: string) => existsSync(join(dir, 'SKILL.md'))
 
 export function resolveSkills(names: string[], context: { repo: string; home: string }): { skills: ResolvedSkill[]; missing: string[] } {
@@ -21,6 +22,7 @@ export function resolveSkills(names: string[], context: { repo: string; home: st
 }
 
 function resolve(name: string, context: { repo: string; home: string }): ResolvedSkill | undefined {
+  if (!SKILL_NAME.test(name)) return undefined
   const [plugin, skill] = name.includes(':') ? name.split(':', 2) : [undefined, name]
   if (!plugin || !skill) {
     const project = join(context.repo, '.claude', 'skills', name)

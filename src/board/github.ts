@@ -18,6 +18,7 @@ type Issue = {
   id: number
   title: string
   body: string | null
+  user: { login: string }
   state: 'open' | 'closed'
   labels: { name: string }[]
   assignees: { login: string }[]
@@ -49,6 +50,7 @@ const PROJECT_FIELD = 'Conveyor'
 const PULL_FIELDS = 'number,url,state,mergeable,statusCheckRollup,reviews,comments'
 
 const LOCK_PREFIX = 'conveyor-lock/'
+const WRITE_PERMISSIONS = ['admin', 'write']
 
 export class GitHubBoard implements Board {
   private readonly repo: string
@@ -67,6 +69,13 @@ export class GitHubBoard implements Board {
   async user() {
     this.login ??= (await this.api<{ login: string }>(['user'])).login
     return this.login
+  }
+
+  async canWrite(user: string) {
+    if (!user) return false
+    const result = await this.call([`${this.repo}/collaborators/${encodeURIComponent(user)}/permission`])
+    if (result.status === 404) return false
+    return WRITE_PERMISSIONS.includes(this.parse<{ permission: string }>(result).permission)
   }
 
   async createTask(title: string, body: string, state?: TaskState) {
@@ -157,12 +166,15 @@ export class GitHubBoard implements Board {
     const output = await this.gh(['pr', 'list', '-R', this.project, '--head', `conveyor/${id}`, '--state', 'all', '--limit', '1', '--json', PULL_FIELDS])
     const pull = (JSON.parse(output) as GitHubPull[])[0]
     if (!pull) return undefined
-    const inline = await this.api<{ path: string; line: number | null; body: string }[][]>([
+    const inline = await this.api<{ path: string; line: number | null; body: string; user: { login: string } | null }[][]>([
       '--paginate',
       '--slurp',
       `${this.repo}/pulls/${pull.number}/comments?per_page=100`,
     ])
-    return toPull(pull, inline.flat().map((comment) => `${comment.path}${comment.line ? `:${comment.line}` : ''}: ${comment.body}`))
+    return toPull(
+      pull,
+      inline.flat().map((comment) => ({ author: comment.user?.login ?? '', body: `${comment.path}${comment.line ? `:${comment.line}` : ''}: ${comment.body}` })),
+    )
   }
 
   async mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -260,6 +272,7 @@ function toTask(issue: Issue): Task {
     id: String(issue.number),
     title: issue.title,
     body: issue.body ?? '',
+    author: issue.user.login,
     assignees: issue.assignees.map(({ login }) => login),
     openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
     closed: issue.state === 'closed',
@@ -268,7 +281,7 @@ function toTask(issue: Issue): Task {
   }
 }
 
-function toPull(pull: GitHubPull, inline: string[]): PullRequest {
+function toPull(pull: GitHubPull, inline: PullRequest['feedback']): PullRequest {
   const checks = pull.statusCheckRollup ?? []
   const failed = checks.some((check) =>
     ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(check.conclusion ?? check.state ?? ''),

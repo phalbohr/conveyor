@@ -167,8 +167,8 @@ export class Runner {
     this.events.push(event)
     if (this.events.length > KEEP) this.events.splice(0, this.events.length - KEEP)
     const file = logFile(this.context.home, this.setup.config.board.project)
-    mkdirSync(dirname(file), { recursive: true })
-    appendFileSync(file, `${event.time} ${level} ${text}\n`)
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+    appendFileSync(file, `${event.time} ${level} ${text}\n`, { mode: 0o600 })
     this.echo?.(event)
     this.notify()
   }

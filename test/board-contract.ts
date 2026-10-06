@@ -88,6 +88,16 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
       expect(comments[0]?.author).toBe(user)
     })
 
+    it('tells who has write access', async () => {
+      expect(await board.canWrite(await board.user())).toBe(true)
+      expect(await board.canWrite('')).toBe(false)
+    })
+
+    it('reports the author of a task', async () => {
+      const t = await task('plan')
+      expect((await board.getTask(t.id))?.author).toBe(await board.user())
+    })
+
     it('counts open blockers', async () => {
       const blocked = await task('plan', 'blocked task')
       const blocker = await task('plan', 'blocker task')

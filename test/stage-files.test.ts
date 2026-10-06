@@ -124,9 +124,11 @@ describe('manualRelease', () => {
     expect(await manualRelease(board, id, false)).toEqual({ ok: true })
   })
 
-  it('reports an unclaimed task', async () => {
+  it('removes an orphaned lock of a task without an owner', async () => {
     const board = new FakeBoard('me')
     const task = await board.createTask('Task', 'p', 'plan')
-    expect(await manualRelease(board, task.id, false)).toMatchObject({ ok: false, error: expect.stringContaining('not claimed') })
+    await board.claim(task.id)
+    expect(await manualRelease(board, task.id, false)).toEqual({ ok: true })
+    expect(await board.claim(task.id)).toBe(true)
   })
 })

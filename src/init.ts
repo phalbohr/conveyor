@@ -68,7 +68,7 @@ async function checkTools(config: Config, context: Context): Promise<string[]> {
   const harnesses = new Set([config.triage.harness, ...config.stages.map((stage) => stage.harness)])
   const checks = [
     BOARD_TOOLS[config.board.provider],
-    ...[...harnesses].map((harness): Check => HARNESS_TOOLS[harness] ?? ['sh', ['-c', `command -v ${config.harnesses[harness]?.command ?? harness}`]]),
+    ...[...harnesses].map((harness): Check => HARNESS_TOOLS[harness] ?? ['sh', ['-c', 'command -v -- "$1"', 'sh', config.harnesses[harness]?.command ?? harness]]),
   ]
   const warnings: string[] = []
   for (const [command, args] of checks) {

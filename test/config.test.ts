@@ -80,8 +80,8 @@ stages:
   implement: {}
 `)
     expect(c.triage).toEqual({ harness: 'claude', model: 'opus', effort: 'medium' })
-    expect(c.stages).toContainEqual({ name: 'plan', harness: 'codex', model: 'gpt-5-codex', effort: 'medium', sandbox: 'workspace-write', network: true })
-    expect(c.stages).toContainEqual({ name: 'implement', harness: 'claude', model: 'sonnet', effort: 'medium' })
+    expect(c.stages).toContainEqual({ name: 'plan', harness: 'codex', model: 'gpt-5-codex', effort: 'medium', sandbox: 'workspace-write', network: false })
+    expect(c.stages).toContainEqual({ name: 'implement', harness: 'claude', model: 'sonnet', effort: 'medium', permissionMode: 'bypassPermissions' })
   })
 
   it('keeps stage order and adds missing reserved stages', () => {
@@ -151,6 +151,25 @@ stages:
 stages:
   implement: {harness: claude, network: true}
 `)).toContainEqual(expect.stringContaining('implement'))
+  })
+
+  it('accepts a permission mode for claude stages', () => {
+    const c = config(`${BOARD}
+stages:
+  implement: {permission_mode: acceptEdits}
+`)
+    expect(c.stages.find((s) => s.name === 'implement')).toMatchObject({ permissionMode: 'acceptEdits' })
+  })
+
+  it('rejects a permission mode on non-claude stages and unknown modes', () => {
+    expect(errors(`${BOARD}
+stages:
+  implement: {harness: codex, permission_mode: acceptEdits}
+`)).toContainEqual(expect.stringContaining('permission_mode applies only to claude stages'))
+    expect(errors(`${BOARD}
+stages:
+  implement: {permission_mode: manual}
+`)).toContainEqual(expect.stringContaining('implement.permission_mode'))
   })
 
   it('accepts harnesses defined in the configuration and merges personal overrides', () => {

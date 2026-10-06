@@ -16,6 +16,7 @@ function gitlabFree() {
     blockedByCount: 0,
     labels: { nodes: [{ title: 'conveyor::plan' }] },
     assignees: { nodes: [] },
+    author: { username: 'alice' },
   })
   const ok = (value: unknown) => ({ code: 0, stdout: JSON.stringify(value), stderr: '' })
   const run: Run = async (_command, args) => {

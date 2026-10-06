@@ -14,6 +14,7 @@ import {
 type Issue = {
   title: string
   body: string
+  author: string
   labels: string[]
   assignees: string[]
   closed: boolean
@@ -27,6 +28,7 @@ export class FakeBoard implements Board {
   private readonly locks = new Set<string>()
   private readonly pulls = new Map<string, PullRequest>()
   readonly merges: { id: string; method: MergeMethod }[] = []
+  readonly outsiders = new Set<string>()
   mergeError: string | undefined
   private nextId = 1
 
@@ -39,11 +41,20 @@ export class FakeBoard implements Board {
     return this.login
   }
 
+  async canWrite(user: string) {
+    return Boolean(user) && !this.outsiders.has(user)
+  }
+
   async createTask(title: string, body: string, state?: TaskState) {
+    return this.createTaskAs(this.login, title, body, state)
+  }
+
+  async createTaskAs(author: string, title: string, body: string, state?: TaskState) {
     const id = String(this.nextId++)
     this.issues.set(id, {
       title,
       body,
+      author,
       labels: state ? [STATE_LABEL + state] : [],
       assignees: [],
       closed: false,
@@ -82,9 +93,13 @@ export class FakeBoard implements Board {
   }
 
   async addComment(id: string, body: string) {
+    return this.addCommentAs(this.login, id, body)
+  }
+
+  async addCommentAs(author: string, id: string, body: string) {
     this.issue(id)
     const time = this.now().toISOString()
-    const comment = { id: `c${this.comments.size + 1}`, author: this.login, body, createdAt: time, updatedAt: time }
+    const comment = { id: `c${this.comments.size + 1}`, author, body, createdAt: time, updatedAt: time }
     this.comments.set(comment.id, { ...comment, taskId: id })
     return comment
   }
@@ -181,6 +196,7 @@ export class FakeBoard implements Board {
       id,
       title: issue.title,
       body: issue.body,
+      author: issue.author,
       assignees: [...issue.assignees],
       openBlockers: [...issue.blockers].filter((blocker) => !this.issue(blocker).closed).length,
       closed: issue.closed,
