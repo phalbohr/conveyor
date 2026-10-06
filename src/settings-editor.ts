@@ -1,14 +1,15 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Document, isMap, parseDocument, YAMLMap, type Pair, type Scalar } from 'yaml'
 import { loadConfig, type Config } from './config.js'
+import { stageCatalog, stageStub } from './stage-catalog.js'
 
 export type FieldKind = 'select' | 'text' | 'number' | 'boolean'
 
 export type Field = {
   key: string
-  group: 'Team' | 'Stages' | 'Personal'
+  group: 'Team' | 'Stages' | 'Stage files' | 'Personal'
   label: string
   kind: FieldKind
   value: string
@@ -66,6 +67,7 @@ export class SettingsDocument {
   private readonly saved: Record<keyof typeof FILES, string>
   private config: Config | undefined
   private changed = false
+  private readonly added = new Set<string>()
 
   constructor(private readonly dir: string) {
     const read = (file: string) => {
@@ -107,11 +109,23 @@ export class SettingsDocument {
         )
       }
     })
+    for (const entry of config ? stageCatalog(this.dir, config) : []) {
+      const file = `stages/${entry.name}.md`
+      const help = entry.reserved ? `reserved, always on · ${file}` : entry.described ? file : `no description yet: write it in ${file}`
+      fields.push({ key: `stage-files.${entry.name}`, group: 'Stage files', label: entry.name, kind: 'select', options: ['on', 'off'], value: entry.enabled ? 'on' : 'off', help: entry.described || entry.reserved ? help : `⚠ ${help}` })
+    }
     fields.push(...PERSONAL.map((spec) => this.field('Personal', 'local', spec)))
     return fields
   }
 
   set(key: string, value: string) {
+    if (key.startsWith('stage-files.')) {
+      const name = key.slice('stage-files.'.length)
+      const enabled = this.stageNames().includes(name) || (this.config?.stages ?? []).some((stage) => stage.name === name)
+      if (value === 'on' && !enabled) this.addStage(name, 'before-merge')
+      if (value === 'off' && enabled) this.removeStage(name)
+      return
+    }
     const field = this.fields().find((candidate) => candidate.key === key)
     if (!field) throw new Error(`unknown field ${key}`)
     const doc = this.docs[field.group === 'Personal' ? 'local' : 'config']
@@ -132,6 +146,7 @@ export class SettingsDocument {
     if (!STAGE_NAME.test(name)) throw new Error('stage names use lowercase letters, digits, and hyphens')
     if (this.stageNames().includes(name) || (this.config?.stages ?? []).some((stage) => stage.name === name)) throw new Error(`stage ${name} already exists`)
     const map = this.stagesMap()
+    this.added.add(name)
     const entry = this.flowPair(name, position === 'after-merge' && when ? { when } : {})
     const mergeIndex = map.items.findIndex((pair) => (pair.key as Scalar).value === 'merge')
     if (position === 'before-merge') {
@@ -166,7 +181,7 @@ export class SettingsDocument {
     return loaded.ok ? { ok: true } : { ok: false, errors: loaded.errors }
   }
 
-  save(): { ok: true } | { ok: false; errors: string[] } {
+  save(): { ok: true; created?: string[] } | { ok: false; errors: string[] } {
     const result = this.validate()
     if (!result.ok) return result
     for (const name of ['config', 'local'] as const) {
@@ -174,8 +189,17 @@ export class SettingsDocument {
       if (text !== this.saved[name]) writeFileSync(join(this.dir, FILES[name]), text)
       this.saved[name] = text
     }
+    const created: string[] = []
+    for (const name of this.added) {
+      const path = join(this.dir, 'stages', `${name}.md`)
+      if (!this.stageNames().includes(name) || existsSync(path)) continue
+      mkdirSync(join(this.dir, 'stages'), { recursive: true })
+      writeFileSync(path, stageStub(name))
+      created.push(`stages/${name}.md`)
+    }
+    this.added.clear()
     this.changed = false
-    return result
+    return created.length > 0 ? { ok: true, created } : { ok: true }
   }
 
   dirty() {

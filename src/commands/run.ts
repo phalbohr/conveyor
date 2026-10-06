@@ -15,6 +15,7 @@ import { acquireRunLock } from '../lock.js'
 import { expandPath } from '../paths.js'
 import { findSettings } from '../settings.js'
 import { resolveSkills } from '../skills.js'
+import { undescribedNotice, undescribedStages } from '../stage-catalog.js'
 import { checkSettingsSync, syncNotice } from '../settings-sync.js'
 import { QuotaStore, UsageLedger } from '../usage.js'
 import { GitWorkspaces, type Workspaces } from '../workspaces.js'
@@ -59,6 +60,7 @@ export async function runCommand(context: Context, options: { once?: boolean }):
     context.stderr(`${problems.join('\n')}\n`)
     return 1
   }
+  for (const notice of undescribedNotice(undescribedStages(settings, config))) context.stderr(`warning: ${notice}\n`)
 
   const lock = acquireRunLock(context.home, config.board.project)
   if (!lock.ok) {

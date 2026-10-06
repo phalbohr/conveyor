@@ -145,7 +145,7 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 - Custom stages (`optimize`, `polish`, `fix-ci`, ...) have any name and their own harness, model, and effort. Missing values come from `defaults`.
 - Allowed positions of custom stages: between `plan` and `merge`, and after `merge`.
 - Post-merge stages have `when: success | failure | always` (default `success`, as `on_success` in GitLab CI). Example: `fix-ci` runs only if merge or the pipeline failed.
-- Init creates `stages/<stage>.md` for each stage.
+- Init creates `stages/<stage>.md` for each stage; adding a stage later creates a stub file. A configured stage without a description (missing file, empty body, or the unchanged stub) gives a warning in `run`, on the status screen, and in the settings editor. Stage files that are not in `config.yaml` are listed as switched off and never warned about.
 - Stage files are strict templates. Variables: `issue` (id, title, body, labels, comments, blockers), `stage`, `attempt` (null on the first run), `artifacts` (idea, story, plan), `review` (feedback on rework). An unknown variable fails rendering; the stage does not start.
 
 ## Stage skills and isolation

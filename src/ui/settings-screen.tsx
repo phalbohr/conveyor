@@ -47,7 +47,12 @@ export function SettingsScreen({ doc }: { doc: SettingsDocument }) {
       if (input === ']' && stage) attempt(() => doc.moveStage(stage, 1))
       if (input === 's') {
         const saved = doc.save()
-        setMessage(saved.ok ? { text: 'Saved.' } : { text: saved.errors.join('\n'), error: true })
+        setMessage(
+          saved.ok
+            ? { text: ['Saved.', ...(saved.created ?? []).map((file) => `Created ${file}: describe the stage there.`)].join('\n') }
+            : { text: saved.errors.join('\n'), error: true },
+        )
+        reload()
       }
       if (input === 'q' || key.escape) {
         if (doc.dirty() && !confirmQuit) {

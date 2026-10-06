@@ -45,6 +45,7 @@ export function configEdit(context: Context, edit: Edit): number {
   const saved = doc.save()
   if (!saved.ok) return fail(context, `Not saved, the configuration would be invalid:\n${saved.errors.join('\n')}`)
   context.stdout(`${done}\n`)
+  for (const file of saved.created ?? []) context.stdout(`Created ${file}: describe the stage there; until then it has no instructions.\n`)
   return 0
 }
 
