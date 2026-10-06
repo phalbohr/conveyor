@@ -133,13 +133,13 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
       )}
       {ask && (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="cyan">{ask === 'attach' ? 'Answer the questions of task number:' : 'Release the claim of task number:'}</Text>
+          <Text color="cyan">{ask === 'attach' ? 'Answer the questions of the task with issue number:' : 'Release the claim of the task with issue number:'}</Text>
           <TextInput
-            placeholder="51"
+            placeholder="#<issue number>"
             onSubmit={(value) => {
               const id = value.trim().replace(/^#/, '')
               if (/^\d+$/.test(id)) act({ kind: ask, id })
-              else setMessage({ text: 'Enter the issue number, for example 51.', error: true })
+              else setMessage({ text: 'Enter the issue number from the board, for example #51.', error: true })
             }}
           />
         </Box>
