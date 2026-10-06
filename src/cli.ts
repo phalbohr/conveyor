@@ -172,7 +172,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
   program
     .command('attach')
     .description('answer the questions of a waiting task in a live session with an agent')
-    .argument('<issue>', 'task id on the board')
+    .argument('<issue>', 'issue number on the board, for example 51')
     .action(async (issue: string) => {
       exitCode = await attachCommand(context, issue)
     })
@@ -180,7 +180,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
   program
     .command('release')
     .description('release the claim of a task')
-    .argument('<issue>', 'task id on the board')
+    .argument('<issue>', 'issue number on the board, for example 51')
     .option('--force', 'release a task with private artifacts of another member')
     .action(async (issue: string, options: { force?: boolean }) => {
       exitCode = await releaseCommand(context, issue, options.force ?? false)
