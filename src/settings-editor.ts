@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Document, isMap, parseDocument, YAMLMap, type Pair, type Scalar } from 'yaml'
-import { loadConfig, type Config } from './config.js'
+import { PERMISSION_MODES, loadConfig, type Config } from './config.js'
 import { effortsFor, type Catalog } from './models.js'
 import { stageCatalog, stageStub } from './stage-catalog.js'
 
@@ -62,6 +62,7 @@ const STAGE_HELP: Record<string, string> = {
   model: 'model name for that harness',
   effort: 'reasoning effort',
   when: 'after merge: run on success, failure, or always',
+  permission_mode: 'claude tool permissions; allow rules come from .claude/settings.json in the repo (empty = bypassPermissions)',
 }
 
 export class SettingsDocument {
@@ -117,6 +118,11 @@ export class SettingsDocument {
           this.field('Stages', 'config', spec),
         ),
       )
+      if (stage.harness === 'claude') {
+        fields.push(
+          this.field('Stages', 'config', { key: `stages.${stage.name}.permission_mode`, label: `${stage.name}: permissions`, kind: 'select', options: [...PERMISSION_MODES], help: STAGE_HELP.permission_mode ?? '' }),
+        )
+      }
       if (index > merge) {
         fields.push(
           this.field('Stages', 'config', { key: `stages.${stage.name}.when`, label: `${stage.name}: run when`, kind: 'select', options: ['success', 'failure', 'always'], help: STAGE_HELP.when ?? '' }),

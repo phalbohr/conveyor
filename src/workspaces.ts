@@ -31,7 +31,7 @@ export class GitWorkspaces implements Workspaces {
     await this.git(this.options.repo, 'fetch', '--quiet', 'origin')
     const remote = `refs/remotes/origin/${taskBranch(taskId)}`
     const start = (await this.tryGit(this.options.repo, 'rev-parse', '--verify', '--quiet', remote)) ? remote : await this.baseRef()
-    mkdirSync(this.options.root, { recursive: true })
+    mkdirSync(this.options.root, { recursive: true, mode: 0o700 })
     await this.git(this.options.repo, 'worktree', 'add', '--quiet', '-B', taskBranch(taskId), path, start)
 
     try {

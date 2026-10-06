@@ -45,7 +45,7 @@ export class ClaudeHarness implements Harness {
       '--output-format', 'stream-json',
       '--verbose',
       '--json-schema', JSON.stringify(RESULT_SCHEMA),
-      '--permission-mode', 'bypassPermissions',
+      '--permission-mode', run.permissionMode ?? 'bypassPermissions',
       '--setting-sources', 'project,local',
       '--strict-mcp-config',
       '--no-session-persistence',

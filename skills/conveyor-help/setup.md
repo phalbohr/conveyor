@@ -49,6 +49,7 @@ Offer: keep the list; add a stage (common: `polish` for cleanup, `review-2` as a
 - **Harness**: `claude`, `codex`, or a configured harness (`opencode`, `pi`, `openhands`, `agent-zero` presets, or any `harnesses` entry). Self-hosted models run through `opencode`, `pi`, or `openhands`.
 - **Model**: run `conveyor models <harness>` and offer its models by version and name (for example `claude-opus-5-5 — Opus 5.5`). Claude aliases (`opus`, `sonnet`, `haiku`) always mean the newest version; a full name such as `claude-opus-5-5` pins a version, which suits a team configuration.
 - **Effort**: the efforts that `conveyor models` lists for that model or harness.
+- **Permissions** (claude stages, `stages.<name>.permission_mode`): `bypassPermissions` (default, every tool without asking), `auto`, `acceptEdits`, or `dontAsk`; with a limiting mode, allow rules come from the repository's `.claude/settings.json`. Codex stages: `sandbox` (`workspace-write` default, or `full-access`) and `network` (`false` default).
 
 Common split: strong models for `story`, `plan`, and `review`; a fast model for `implement`; the cheapest model for `merge`. An empty value inherits from `defaults` (`conveyor config set stages.<name>.model ""`).
 

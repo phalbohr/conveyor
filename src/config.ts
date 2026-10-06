@@ -22,6 +22,7 @@ const count = z.int().positive()
 const store = z.enum(['board', 'repo', 'path'])
 const write = z.enum(['replace', 'append'])
 const gateMode = z.enum(['interactive', 'autonomous', 'smart'])
+export const PERMISSION_MODES = ['bypassPermissions', 'auto', 'acceptEdits', 'dontAsk'] as const
 
 const stageSettings = z.strictObject({
   harness: harness.optional(),
@@ -34,6 +35,7 @@ const stageEntry = z.strictObject({
   when: z.enum(['success', 'failure', 'always']).optional(),
   sandbox: z.enum(['workspace-write', 'full-access']).optional(),
   network: z.boolean().optional(),
+  permission_mode: z.enum(PERMISSION_MODES).optional(),
 })
 
 const needsPath = (artifact: { store: string; path?: string | undefined }) => artifact.store === 'board' || artifact.path !== undefined
@@ -141,7 +143,9 @@ export type Stage = StageSettings & {
   when?: 'success' | 'failure' | 'always'
   sandbox?: 'workspace-write' | 'full-access'
   network?: boolean
+  permissionMode?: PermissionMode
 }
+export type PermissionMode = (typeof PERMISSION_MODES)[number]
 export type Artifact = { store: 'board' | 'repo' | 'path'; path?: string; write: 'replace' | 'append' }
 
 export type HarnessDefinition = {
@@ -274,10 +278,12 @@ function resolveStages(team: Team, errors: string[]): Stage[] {
     if (!reserved && index < plan) errors.push(`${CONFIG_FILE}: stages.${stageName}: custom stages must come after plan`)
     if (!postMerge && entry.when) errors.push(`${CONFIG_FILE}: stages.${stageName}: only post-merge stages can have when`)
     const stage: Stage = { name: stageName, ...withDefaults(entry, team.defaults) }
-    if (stage.harness === 'codex') Object.assign(stage, { sandbox: entry.sandbox ?? 'workspace-write', network: entry.network ?? true })
+    if (stage.harness === 'codex') Object.assign(stage, { sandbox: entry.sandbox ?? 'workspace-write', network: entry.network ?? false })
     else if (entry.sandbox !== undefined || entry.network !== undefined) {
       errors.push(`${CONFIG_FILE}: stages.${stageName}: sandbox and network apply only to codex stages`)
     }
+    if (stage.harness === 'claude') stage.permissionMode = entry.permission_mode ?? 'bypassPermissions'
+    else if (entry.permission_mode !== undefined) errors.push(`${CONFIG_FILE}: stages.${stageName}: permission_mode applies only to claude stages`)
     if (postMerge) stage.when = entry.when ?? 'success'
     return stage
   })

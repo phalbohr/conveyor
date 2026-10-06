@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import { join } from 'node:path'
 import type { Board, Comment, PullRequest, Task } from '../board/board.js'
@@ -12,6 +13,7 @@ import type { Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
 import { buildPrompt, buildTriagePrompt, type GateMode } from './prompt.js'
 import { releaseClaim } from './release.js'
+import { publicText } from './redact.js'
 import { parseStageFile, readFormat, renderInstructions } from './stage-file.js'
 import { waitingDeadline } from './time.js'
 import {
@@ -82,6 +84,8 @@ const QUOTA_FRESH = 10 * 60_000
 const LAND = 'land'
 const LAND_WAIT = 60_000
 const MERGE_LOCK = 'merge'
+const LOCK_TTL = 10 * 60_000
+const WRITERS_FRESH = 10 * 60_000
 
 type StageContext = {
   workspace: string
@@ -114,6 +118,9 @@ export class Engine {
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
   private triageRetryAt = 0
+  private readonly writers = new Map<string, { ok: Promise<boolean>; at: number }>()
+  private readonly heldLocks = new Map<string, { first: number; last: number }>()
+  private readonly untrusted = new Set<string>()
 
   private readonly quotas: QuotaStore
 
@@ -143,6 +150,11 @@ export class Engine {
 
     for (const listed of await board.listTasks()) {
       if (this.running.has(listed.id)) continue
+      if (!(await this.trusted(listed.author))) {
+        if (!this.untrusted.has(listed.id)) this.log(`task ${listed.id}: skipped: its author @${listed.author} has no write access to the repository`)
+        this.untrusted.add(listed.id)
+        continue
+      }
       const task = (await this.releaseIfExpired(listed, me, config, now)) ? withoutOwner(listed) : listed
       if (task.owner && task.owner !== me) continue
       const owned = task.owner === me
@@ -199,7 +211,7 @@ export class Engine {
 
     for (const task of this.sorted(fresh, me)) {
       if (slots <= 0) break
-      if (!(await board.claim(task.id))) continue
+      if (!(await this.lock(task.id, LOCK_TTL))) continue
       await board.setOwner(task.id, me)
       this.log(`claimed task ${task.id}: ${task.title}`)
       this.start(task, config)
@@ -278,7 +290,7 @@ export class Engine {
   private async execute(initial: Task, config: Config, signal: AbortSignal) {
     const { board, workspaces } = this.options
     const id = initial.id
-    const comments = await board.listComments(id)
+    const comments = await this.comments(id)
     const pad = findWorkpad(comments)
     const state: WorkpadState = { attempt: 0, ...pad?.state }
     const verdict = initial.state === 'review' ? await this.reviewSignal(id, config) : undefined
@@ -421,7 +433,7 @@ export class Engine {
       }
       await run.save()
       const task = (await board.getTask(id)) ?? (await this.mustGetTask(id))
-      const comments = await board.listComments(id)
+      const comments = await this.comments(id)
       const gate = this.gate(stage, config)
       const heartbeat = setInterval(() => void run.save().catch(() => undefined), config.timeouts.heartbeat / 3)
       let output: StageAttempt
@@ -461,7 +473,7 @@ export class Engine {
       if (result.outcome === 'done' && gate?.mode === 'interactive' && options.approvalStage !== stage.name) result = { ...result, outcome: 'approval' }
       if (result.outcome === 'approval' && gate?.mode === 'autonomous') result = { ...result, outcome: 'done' }
       if (result.artifact && result.outcome !== 'failed') {
-        const kind = GATES[stage.name] ? stage.name : result.artifact.kind
+        const kind = GATES[stage.name] || ['idea', 'story'].includes(result.artifact.kind) ? stage.name : result.artifact.kind
         await run.artifacts.store(task, kind, result.artifact.content, comments)
       }
 
@@ -516,7 +528,7 @@ export class Engine {
     else if (pull.checks === 'failure') error = 'checks failed'
     else if (pull.mergeable === 'no') error = 'the branch has conflicts with the base branch'
     else {
-      if (!(await board.claim(MERGE_LOCK))) return wait('another workstation merges')
+      if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return wait('another workstation merges')
       try {
         const merged = await board.mergePullRequest(id, config.merge_method)
         if (!merged.ok) error = merged.error
@@ -528,6 +540,7 @@ export class Engine {
       delete state.mergeError
       return 'success'
     }
+    error = publicText(error, this.options.home)
 
     state.mergeError = error
     state.landAttempts = (state.landAttempts ?? 0) + 1
@@ -578,7 +591,7 @@ export class Engine {
     if (Date.now() < this.triageRetryAt) return
     if (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) return
     if (this.quotaBlock(config.triage.harness, config)) return
-    const tasks = await board.listTasks()
+    const tasks = await this.onlyTrusted(await board.listTasks())
     const fresh = tasks.filter((task) => !task.owner && NEW_STATES.includes(task.state) && task.priority === undefined).map((task) => task.id)
     if (fresh.length === 0) return
     const harness = this.options.harnesses[config.triage.harness]
@@ -586,14 +599,15 @@ export class Engine {
       this.log(`triage skipped: harness ${config.triage.harness} is not available`)
       return
     }
-    if (!(await board.claim(TRIAGE_LOCK))) return
+    if (!(await this.lock(TRIAGE_LOCK, config.timeouts.stage + LOCK_TTL))) return
+    const cwd = mkdtempSync(join(tmpdir(), 'conveyor-triage-'))
     try {
       const output = await harness.runStage({
         stage: 'triage',
         prompt: buildTriagePrompt({ instructions: this.read('triage.md'), tasks, fresh, language: config.language.docs }),
         model: config.triage.model,
         effort: config.triage.effort,
-        cwd: this.options.repo,
+        cwd,
         signal: AbortSignal.timeout(config.timeouts.stage),
       })
       this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
@@ -620,13 +634,13 @@ export class Engine {
       for (const id of fresh) if (!prioritized.has(id)) await board.setPriority(id, DEFAULT_PRIORITY)
       this.log(`triage: ${output.result.summary}`)
     } finally {
+      rmSync(cwd, { recursive: true, force: true })
       await board.release(TRIAGE_LOCK)
     }
   }
 
   private async reviewSignal(id: string, config: Config): Promise<Verdict> {
-    const { board } = this.options
-    const pull = await board.pullRequest(id)
+    const pull = await this.trustedPull(id)
     if (pull?.state === 'merged') return { kind: 'merged', pull, approvers: [], feedback: [] }
     const { comments, pad } = await this.workpad(id)
     const since = pad?.state.waiting?.kind === 'review' ? pad.state.waiting.since : ''
@@ -638,7 +652,7 @@ export class Engine {
     const reviews = [...latest.values()]
     const feedback = [
       ...reviews.filter((review) => review.state === 'changes_requested' && review.body.trim()).map((review) => review.body),
-      ...(pull?.feedback ?? []),
+      ...(pull?.feedback ?? []).map((comment) => comment.body),
       ...human.map((comment) => stripCommand(comment.body)).filter((text): text is string => Boolean(text)),
     ]
 
@@ -759,6 +773,7 @@ export class Engine {
         skills: skills.filter((skill) => skill.source !== 'project'),
         ...(stage.sandbox ? { sandbox: stage.sandbox } : {}),
         ...(stage.network !== undefined ? { network: stage.network } : {}),
+        ...(stage.permissionMode ? { permissionMode: stage.permissionMode } : {}),
       })
       return reason ? { ...output, result: failed(reason) } : output
     } finally {
@@ -771,9 +786,9 @@ export class Engine {
 
   private async fail(id: string, stage: Stage, state: WorkpadState, result: StageResult, config: Config, fatal: boolean) {
     state.attempt++
-    state.lastError = result.summary
+    state.lastError = publicText(result.summary, this.options.home)
     if (fatal) {
-      const text = `**The \`${stage.name}\` stage cannot start.**\n\n${result.summary}\n\nFix the cause, then reply in a comment to retry.`
+      const text = `**The \`${stage.name}\` stage cannot start.**\n\n${state.lastError}\n\nFix the cause, then reply in a comment to retry.`
       const comment = await this.options.board.addComment(id, agentComment('error', text))
       state.attempt = 0
       state.waiting = { kind: 'error', stage: stage.name, commentId: comment.id, since: new Date().toISOString() }
@@ -785,7 +800,7 @@ export class Engine {
       state.retryAt = new Date(Date.now() + delay).toISOString()
       return
     }
-    const text = `**The \`${stage.name}\` stage failed ${state.attempt} times.**\n\n${result.summary}\n\nReply in a comment to retry.`
+    const text = `**The \`${stage.name}\` stage failed ${state.attempt} times.**\n\n${state.lastError}\n\nReply in a comment to retry.`
     const comment = await this.options.board.addComment(id, agentComment('error', text))
     state.attempt = 0
     state.waiting = { kind: 'error', stage: stage.name, commentId: comment.id, since: new Date().toISOString() }
@@ -816,8 +831,49 @@ export class Engine {
   }
 
   private async workpad(id: string): Promise<{ comments: Comment[]; pad: Workpad | undefined }> {
-    const comments = await this.options.board.listComments(id)
+    const comments = await this.comments(id)
     return { comments, pad: findWorkpad(comments) }
+  }
+
+  private trusted(user: string) {
+    const known = this.writers.get(user)
+    if (known && Date.now() - known.at < WRITERS_FRESH) return known.ok
+    const ok = this.options.board.canWrite(user)
+    this.writers.set(user, { ok, at: Date.now() })
+    ok.catch(() => this.writers.delete(user))
+    return ok
+  }
+
+  private async onlyTrusted<T extends { author: string }>(items: T[]) {
+    const trusted = await Promise.all(items.map((item) => this.trusted(item.author)))
+    return items.filter((_, index) => trusted[index])
+  }
+
+  private async comments(id: string) {
+    return this.onlyTrusted(await this.options.board.listComments(id))
+  }
+
+  private async trustedPull(id: string): Promise<PullRequest | undefined> {
+    const pull = await this.options.board.pullRequest(id)
+    if (!pull) return undefined
+    return { ...pull, reviews: await this.onlyTrusted(pull.reviews), comments: await this.onlyTrusted(pull.comments), feedback: await this.onlyTrusted(pull.feedback) }
+  }
+
+  private async lock(name: string, ttl: number) {
+    const { board } = this.options
+    if (await board.claim(name)) {
+      this.heldLocks.delete(name)
+      return true
+    }
+    const now = Date.now()
+    const seen = this.heldLocks.get(name)
+    const held = !seen || now - seen.last > ttl ? { first: now, last: now } : { first: seen.first, last: now }
+    this.heldLocks.set(name, held)
+    if (now - held.first < ttl) return false
+    this.heldLocks.delete(name)
+    this.log(`the lock conveyor-lock/${name} is older than ${ttl / 60_000} min: released`)
+    await board.release(name)
+    return board.claim(name)
   }
 
   private async answered(id: string) {

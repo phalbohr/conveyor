@@ -23,8 +23,8 @@ export class Artifacts {
     const storage = this.config.artifacts[kind as Kind] ?? { store: 'board', write: 'replace' }
     if (storage.store === 'path' && storage.path) {
       const file = join(this.expand(storage.path), fileName(task.id, kind))
-      mkdirSync(dirname(file), { recursive: true })
-      writeFileSync(file, content)
+      mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+      writeFileSync(file, content, { mode: 0o600 })
       return
     }
     if (storage.store === 'repo' && storage.path) {

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { PermissionMode } from '../config.js'
 import type { ResolvedSkill } from '../skills.js'
 
 export type StageResult = {
@@ -23,6 +24,7 @@ export type StageRun = {
   skills?: ResolvedSkill[]
   sandbox?: 'workspace-write' | 'full-access'
   network?: boolean
+  permissionMode?: PermissionMode
 }
 
 export type QuotaWindow = { utilization: number; resetsAt: string }

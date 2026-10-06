@@ -10,7 +10,10 @@ export async function releaseClaim(board: Board, id: string, reason: string) {
 export async function manualRelease(board: Board, id: string, force: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
   const task = await board.getTask(id)
   if (!task) return { ok: false, error: `task ${id} not found` }
-  if (!task.owner) return { ok: false, error: `task ${id} is not claimed` }
+  if (!task.owner) {
+    await board.release(id)
+    return { ok: true }
+  }
   const me = await board.user()
   const pad = findWorkpad(await board.listComments(id))
   if (pad?.state.private && task.owner !== me && !force) {
