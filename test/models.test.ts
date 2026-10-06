@@ -5,7 +5,7 @@ import type { Run } from '../src/cli.js'
 import { loadConfig } from '../src/config.js'
 import { CLAUDE_EFFORTS, ModelCache, discoverModels, effortsFor, isModelError, modelKnown } from '../src/models.js'
 import { FakeBoard } from '../src/board/fake.js'
-import { runCli, tempDir } from './helpers.js'
+import { CLAUDE_MODELS, runCli, tempDir } from './helpers.js'
 
 function config(extra = '') {
   const dir = tempDir()
@@ -31,14 +31,30 @@ const CODEX_CATALOG = JSON.stringify({
 })
 
 describe('discoverModels', () => {
-  it('knows the claude aliases, full names, and efforts', async () => {
-    const catalog = await discoverModels('claude', config(), responder({}))
-    expect(catalog.models.map((model) => model.id)).toEqual(expect.arrayContaining(['opus', 'sonnet', 'haiku', 'claude-opus-5-5']))
+  it('lists the claude models with versions, names, aliases, and efforts', async () => {
+    const catalog = await discoverModels('claude', config(), { run: responder({}), claudeModels: async () => CLAUDE_MODELS })
+    expect(catalog.models).toEqual([
+      { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', aliases: ['default', 'haiku'] },
+      { id: 'claude-opus-5-5', label: 'Opus 5.5', aliases: ['opus'], efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', aliases: ['sonnet'], efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      { id: 'claude-opus-5', label: 'Opus 5', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      { id: 'claude-opus-4-6', label: 'Opus 4.6', efforts: ['low', 'medium', 'high', 'max'] },
+    ])
     expect(catalog.efforts).toEqual(CLAUDE_EFFORTS)
+    expect(modelKnown(catalog, 'opus')).toBe(true)
+    expect(effortsFor(catalog, 'claude-opus-4-6')).toEqual(['low', 'medium', 'high', 'max'])
+  })
+
+  it('reports when claude does not answer the model query', async () => {
+    const catalog = await discoverModels('claude', config(), {
+      run: responder({}),
+      claudeModels: async () => Promise.reject(new Error('claude did not answer the model query')),
+    })
+    expect(catalog).toMatchObject({ models: [], error: 'claude did not answer the model query' })
   })
 
   it('reads the codex catalog with efforts per model', async () => {
-    const catalog = await discoverModels('codex', config(), responder({ 'codex debug models': CODEX_CATALOG }))
+    const catalog = await discoverModels('codex', config(), { run: responder({ 'codex debug models': CODEX_CATALOG }), claudeModels: async () => CLAUDE_MODELS })
     expect(catalog.models).toEqual([
       { id: 'gpt-6-luna', efforts: ['low', 'medium', 'high'] },
       { id: 'gpt-6-sol', efforts: ['low', 'ultra'] },
@@ -49,7 +65,7 @@ describe('discoverModels', () => {
     const catalog = await discoverModels(
       'opencode',
       config(),
-      responder({ 'opencode models': 'anthropic/claude-opus-5-5\nlitellm/qwen3-coder\n\nlocal/llama-4  (self-hosted)\n' }),
+      { run: responder({ 'opencode models': 'anthropic/claude-opus-5-5\nlitellm/qwen3-coder\n\nlocal/llama-4  (self-hosted)\n' }) },
     )
     expect(catalog.models.map((model) => model.id)).toEqual(['anthropic/claude-opus-5-5', 'litellm/qwen3-coder', 'local/llama-4'])
   })
@@ -58,18 +74,18 @@ describe('discoverModels', () => {
     const catalog = await discoverModels(
       'mine',
       config('harnesses:\n  mine:\n    command: mine\n    models: {command: sh, args: [-c, list]}\n    efforts: [fast, deep]\n'),
-      responder({ 'sh -c list': 'm1\nm2\n' }),
+      { run: responder({ 'sh -c list': 'm1\nm2\n' }) },
     )
     expect(catalog).toMatchObject({ models: [{ id: 'm1' }, { id: 'm2' }], efforts: ['fast', 'deep'] })
   })
 
   it('reports a failing models command', async () => {
-    const catalog = await discoverModels('pi', config(), responder({}))
+    const catalog = await discoverModels('pi', config(), { run: responder({}), claudeModels: async () => CLAUDE_MODELS })
     expect(catalog).toMatchObject({ models: [], error: expect.stringContaining('not found') })
   })
 
   it('has no catalog for a harness without a models command', async () => {
-    expect(await discoverModels('openhands', config(), responder({}))).toMatchObject({ models: [] })
+    expect(await discoverModels('openhands', config(), { run: responder({}), claudeModels: async () => CLAUDE_MODELS })).toMatchObject({ models: [] })
   })
 })
 
@@ -112,7 +128,7 @@ describe('conveyor models', () => {
     })
     const output = JSON.parse(result.stdout) as Record<string, { models: { id: string }[] }>
     expect(Object.keys(output)).toEqual(['claude'])
-    expect(output.claude?.models.map((model) => model.id)).toContain('opus')
+    expect(output.claude?.models.map((model) => model.id)).toContain('claude-opus-5-5')
 
     const codex = await runCli(['models', 'codex'], {
       cwd: init.context.cwd,

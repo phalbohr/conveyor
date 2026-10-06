@@ -47,7 +47,7 @@ Offer: keep the list; add a stage (common: `polish` for cleanup, `review-2` as a
 `defaults.harness`, `defaults.model`, `defaults.effort` apply to every stage without its own value. Ask about the defaults first, then offer: keep the defaults for all stages, or go through the stages one by one.
 
 - **Harness**: `claude`, `codex`, or a configured harness (`opencode`, `pi`, `openhands`, `agent-zero` presets, or any `harnesses` entry). Self-hosted models run through `opencode`, `pi`, or `openhands`.
-- **Model**: run `conveyor models <harness>` and offer its models. Claude aliases (`opus`, `sonnet`, `haiku`) always mean the newest version; a full name such as `claude-opus-5-5` pins a version, which suits a team configuration.
+- **Model**: run `conveyor models <harness>` and offer its models by version and name (for example `claude-opus-5-5 — Opus 5.5`). Claude aliases (`opus`, `sonnet`, `haiku`) always mean the newest version; a full name such as `claude-opus-5-5` pins a version, which suits a team configuration.
 - **Effort**: the efforts that `conveyor models` lists for that model or harness.
 
 Common split: strong models for `story`, `plan`, and `review`; a fast model for `implement`; the cheapest model for `merge`. An empty value inherits from `defaults` (`conveyor config set stages.<name>.model ""`).
