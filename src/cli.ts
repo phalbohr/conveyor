@@ -2,9 +2,10 @@ import { createRequire } from 'node:module'
 import { Argument, Command, CommanderError, Option } from 'commander'
 import type { Board as BoardPort } from './board/board.js'
 import { configEdit, configGet, configList } from './commands/config.js'
+import { hub, openSettings } from './commands/hub.js'
 import { attachCommand, newCommand } from './commands/live.js'
-import { modelsCommand, modelsFile } from './commands/models.js'
-import { ModelCache, catalogsFor, type ClaudeModel, type Probes } from './models.js'
+import { modelsCommand } from './commands/models.js'
+import { type ClaudeModel, type Probes } from './models.js'
 import { skillInstall } from './commands/skill.js'
 import { prepare, releaseCommand, runCommand } from './commands/run.js'
 import { loadConfig, type Config } from './config.js'
@@ -12,9 +13,6 @@ import { detectBoard, initProject, type Board, type InitResult, type Target } fr
 import { findSettings } from './settings.js'
 import { collectStatus, type StatusSnapshot } from './status.js'
 import { statusLines } from './ui/status-lines.js'
-import { SettingsDocument } from './settings-editor.js'
-import { showSettings } from './ui/settings-screen.js'
-import { showStatus } from './ui/status-screen.js'
 import { promptInit } from './ui/init-prompt.js'
 
 export type Run = (command: string, args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>
@@ -232,10 +230,7 @@ async function status(context: Context, json: boolean): Promise<number> {
     if (!current.ok) throw new Error(current.errors.join('; '))
     return collectStatus({ board: prepared.board, config: current.config, settings, home: context.home })
   }
-  if (context.interactive && !json) {
-    while ((await showStatus(load)) === 'settings') await openSettings(context, settings)
-    return 0
-  }
+  if (context.interactive && !json) return hub(context, prepared)
 
   let status: StatusSnapshot | undefined
   let boardError: string | undefined
@@ -275,20 +270,6 @@ function report(context: Context, result: InitResult, json: boolean): number {
   context.stdout(`Settings: ${result.settings}\n`)
   for (const warning of result.warnings) context.stderr(`warning: ${warning}\n`)
   return 0
-}
-
-async function openSettings(context: Context, settings: string) {
-  const loaded = loadConfig(settings)
-  if (!loaded.ok) {
-    await showSettings(new SettingsDocument(settings))
-    return
-  }
-  const config = loaded.config
-  const cache = new ModelCache(modelsFile(context.home, config.board.project))
-  const harnesses = ['claude', 'codex', ...Object.keys(config.harnesses)]
-  const probes = probesOf(context)
-  const catalogs = await catalogsFor(harnesses, config, probes, cache, false)
-  await showSettings(new SettingsDocument(settings, { catalogs }), () => catalogsFor(harnesses, config, probes, cache, true))
 }
 
 export function probesOf(context: Context): Probes {

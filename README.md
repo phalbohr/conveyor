@@ -39,10 +39,10 @@ conveyor new
 
 | Command | What it does |
 |---|---|
-| `conveyor` | Status screen: whether `run` works, my tasks with stage, retries, errors, and pending answers, my limits, token use, subscription windows, the team queue. Keys: `r` refresh, `s` settings, `q` quit. Without a terminal it prints a text summary; `--json` prints the snapshot. Without settings it starts the init menu |
+| `conveyor` | Control screen: `g` starts or stops the conveyor in this window with a live log below the status, `n` new task, `a` attach, `l` release, `s` settings. Status: whether `run` works, my tasks with stage, retries, errors, and pending answers, my limits, token use, subscription windows, the team queue. Keys: `g` start/stop, `n` new, `a` attach, `l` release, `s` settings, `r` refresh, `h` help, `q` quit. Without a terminal it prints a text summary; `--json` prints the snapshot. Without settings it starts the init menu |
 | `conveyor init` | Creates settings or links existing ones |
 | `conveyor settings` | Settings editor (also `s` on the status screen): team, stage, and personal fields; `←` `→` switch between the options of a field, `a` add a stage, `x` remove, `[` `]` move, `s` save after validation, `q` quit. Formatting and comments of the YAML files stay as they are |
-| `conveyor run` | Works the board: claims tasks within your limits and runs their stages. `--once` runs one cycle |
+| `conveyor run` | Works the board: claims tasks within your limits and runs their stages. In a terminal it opens the control screen with the conveyor already running; without a terminal (server, cron) it prints the log. `--once` runs one cycle. The log also goes to `~/.conveyor/logs/<project>.log` |
 | `conveyor new` | Live session with an agent; creates a task from the result |
 | `conveyor attach <number>` | Live session to answer the questions of a waiting task; `<number>` is the issue number on the board, e.g. `51` |
 | `conveyor release <number>` | Releases the claim of a task (`--force` for private tasks of others) |

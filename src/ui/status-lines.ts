@@ -8,9 +8,9 @@ const time = (iso: string) => new Date(iso).toLocaleString(undefined, { hour: '2
 const number = (value: number) => value.toLocaleString('en-US')
 const percent = (value: number) => `${Math.round(value * 100)}%`
 
-export function statusLines(status: StatusSnapshot): Line[] {
+export function statusLines(status: StatusSnapshot, here?: string): Line[] {
   const { limits } = status
-  const runner = status.runner.running ? `running (pid ${status.runner.pid})` : 'stopped'
+  const runner = here ?? (status.runner.running ? `running (pid ${status.runner.pid})` : 'stopped')
   const lines: Line[] = [
     { text: `conveyor · ${status.project} (${status.provider}) · @${status.me} · ${runner}`, tone: 'title' },
     ...(status.settingsSync.state === 'behind' ? syncNotice(status.settingsSync).split('\n').map((text): Line => ({ text, tone: 'warning' })) : []),
@@ -73,7 +73,7 @@ export function helpLines(): Line[] {
     { text: '  <number>                  the issue number on the board: issues/51 → `conveyor attach 51`' },
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },
-    { text: '  this screen               r refresh · s settings · h help · q quit' },
+    { text: '  this screen               g start/stop the conveyor · n new · a attach · l release · s settings · r refresh · h help · q quit' },
     { text: '  settings                  `conveyor settings`: every row shows what it does; ←→ switch options; s saves after validation' },
     { text: '  scripting                 `conveyor config list|get|set`, `conveyor config stage add|remove|move`' },
     { text: '  agent help                `conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)' },

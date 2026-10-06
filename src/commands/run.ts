@@ -1,26 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Board } from '../board/board.js'
+import { Runner } from '../runner.js'
+import { hub } from './hub.js'
 import { GitHubBoard } from '../board/github.js'
 import { GitLabBoard } from '../board/gitlab.js'
-import { probesOf, type Context } from '../cli.js'
-import { loadConfig, type Config, type LoadResult } from '../config.js'
-import { Engine } from '../engine/engine.js'
+import { type Context } from '../cli.js'
+import { loadConfig, type Config } from '../config.js'
 import { manualRelease } from '../engine/release.js'
 import { parseStageFile } from '../engine/stage-file.js'
-import { ClaudeHarness } from '../harness/claude.js'
-import { CodexHarness } from '../harness/codex.js'
-import { CommandHarness } from '../harness/command.js'
-import { acquireRunLock } from '../lock.js'
-import { expandPath } from '../paths.js'
 import { findSettings } from '../settings.js'
 import { resolveSkills } from '../skills.js'
-import { undescribedNotice, undescribedStages } from '../stage-catalog.js'
-import { ModelCache, catalogsFor, modelKnown } from '../models.js'
-import { harnessesInUse, modelsFile } from './models.js'
-import { checkSettingsSync, syncNotice } from '../settings-sync.js'
-import { QuotaStore, UsageLedger } from '../usage.js'
-import { GitWorkspaces, type Workspaces } from '../workspaces.js'
+import { type Workspaces } from '../workspaces.js'
 
 type Prepared = { settings: string; config: Config; board: Board }
 
@@ -56,101 +47,21 @@ export async function cleanupWorkspaces(board: Board, workspaces: Workspaces, lo
 export async function runCommand(context: Context, options: { once?: boolean }): Promise<number> {
   const prepared = prepare(context)
   if (!prepared) return 1
-  const { settings, config } = prepared
-  const problems = checkStages(config, settings, { repo: context.cwd, home: context.home })
-  if (problems.length > 0) {
-    context.stderr(`${problems.join('\n')}\n`)
-    return 1
-  }
-  for (const notice of undescribedNotice(undescribedStages(settings, config))) context.stderr(`warning: ${notice}\n`)
-  const catalogs = await catalogsFor(harnessesInUse(config), config, probesOf(context), new ModelCache(modelsFile(context.home, config.board.project)), false)
-  for (const stage of [...config.stages, { name: 'triage', ...config.triage }]) {
-    if (!modelKnown(catalogs[stage.harness], stage.model)) {
-      context.stderr(`warning: Stage ${stage.name} uses model ${stage.model}, which ${stage.harness} does not list. Check \`conveyor models ${stage.harness}\`.\n`)
-    }
-  }
+  if (context.interactive && !options.once) return hub(context, prepared, { start: true })
 
-  const lock = acquireRunLock(context.home, config.board.project)
-  if (!lock.ok) {
-    context.stderr(`conveyor already runs for ${config.board.project} (pid ${lock.pid})\n`)
-    return 1
-  }
-
-  const log = (message: string) => context.stdout(`${new Date().toISOString()} ${message}\n`)
-  try {
-    const project = config.board.project
-    let hooks = config.hooks
-    const workspaces = new GitWorkspaces({
-      repo: context.cwd,
-      root: expandPath(config.workspace.root, { home: context.home, project }),
-      hooks: () => {
-        const current = loadConfig(settings)
-        if (current.ok) hooks = current.config.hooks
-        return hooks
-      },
-    })
-    await cleanupWorkspaces(prepared.board, workspaces, log)
-    const engine = new Engine({
-      board: prepared.board,
-      harnesses: {
-        claude: new ClaudeHarness(),
-        codex: new CodexHarness(),
-        ...Object.fromEntries(Object.entries(config.harnesses).map(([harnessName, definition]) => [harnessName, new CommandHarness(definition)])),
-      },
-      workspaces,
-      settingsDir: settings,
-      repo: context.cwd,
-      home: context.home,
-      usage: new UsageLedger(usageFile(context.home, project)),
-      quotas: new QuotaStore(quotaFile(context.home, project)),
-      loadConfig: () => loadConfig(settings),
-      log,
-    })
-
-    let noticed = ''
-    const checkSync = async () => {
-      const sync = await checkSettingsSync(settings, { fetch: true })
-      if (sync.state !== 'behind' || sync.commits.join() === noticed) return
-      noticed = sync.commits.join()
-      context.stderr(`warning: ${syncNotice(sync)}\n`)
-    }
-
-    if (options.once) {
-      await checkSync()
-      await engine.tick()
-      await engine.idle()
-      return 0
-    }
-
-    let stopping = false
-    let wake = () => undefined as void
-    const stop = () => {
-      stopping = true
-      wake()
-    }
-    process.once('SIGINT', stop)
-    process.once('SIGTERM', stop)
-    log(`conveyor runs for ${project}`)
-    let interval = config.poll_interval
-    while (!stopping) {
-      await checkSync()
-      await engine.tick()
-      const reloaded: LoadResult = loadConfig(settings)
-      if (reloaded.ok) interval = reloaded.config.poll_interval
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, interval)
-        wake = () => {
-          clearTimeout(timer)
-          resolve()
-        }
-      })
-    }
-    log('stopping: running stages are aborted, tasks resume on the next start')
-    await engine.stop()
-    return 0
-  } finally {
-    lock.release()
-  }
+  const runner = new Runner(context, prepared, (event) => {
+    if (event.level === 'info') context.stdout(`${event.time} ${event.text}\n`)
+    else context.stderr(event.level === 'warning' ? `warning: ${event.text}\n` : `${event.text}\n`)
+  })
+  const started = await runner.start({ ...(options.once ? { once: true } : {}) })
+  if (!started.ok) return 1
+  if (options.once) return 0
+  await new Promise<void>((resolve) => {
+    process.once('SIGINT', resolve)
+    process.once('SIGTERM', resolve)
+  })
+  await runner.stop()
+  return 0
 }
 
 export async function releaseCommand(context: Context, id: string, force: boolean): Promise<number> {
