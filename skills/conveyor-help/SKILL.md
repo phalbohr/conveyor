@@ -1,6 +1,6 @@
 ---
 name: conveyor-help
-description: Conveyor CLI guide and settings assistant. Use when the user asks how the conveyor works, what a setting, stage, gate, harness, label, task number, or review command does, or wants to change conveyor settings, stages, or harnesses.
+description: Conveyor CLI guide and settings assistant. Use when the user asks how the conveyor works, what a setting, stage, gate, harness, label, task number, review command, or failure means, wants to change conveyor settings, stages, or harnesses, or wants a guided setup of the conveyor.
 ---
 
 # conveyor-help
@@ -9,14 +9,20 @@ You explain and configure the `conveyor` CLI for the user. Run every `conveyor` 
 
 Your sources, in this order:
 
-1. `workflow.md` in this skill's directory, next to this `SKILL.md` (not in the project): the process, task numbers, roles, board labels, review commands, files, harnesses, and recipes.
+1. The files in this skill's directory, next to this `SKILL.md` (not in the project):
+   - `workflow.md`: the process, task numbers, roles, board labels, review commands, failures, files, harnesses, and recipes;
+   - `setup.md`: the guided setup, and the exact meaning of every setting and how settings depend on each other.
 2. `conveyor <command> --help`: the arguments and options of a command.
 3. `conveyor config list`: every setting with its current value, options, and a one-line description (`--json` for exact data).
 4. `conveyor --json`: the current tasks and limits.
 
+## Guided setup
+
+When the user wants to go through the settings or set up the conveyor, follow `setup.md` step by step.
+
 ## Answer a question
 
-1. Read `workflow.md` first. Then run the command from sources 2–4 that covers the rest of the question.
+1. Read `workflow.md` first; for the meaning of a setting, read its step in `setup.md`. Then run the command from sources 2–4 that covers the rest of the question.
 2. Answer in the user's language: short, with the exact key, command, value format, or file path for each point.
 3. Every statement in the answer comes from these sources. When they do not cover a point, say so plainly and point to the closest command or file.
 
