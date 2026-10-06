@@ -113,17 +113,17 @@ function fakeRunner() {
 describe('StatusScreen as the hub', () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
 
-  it('starts and stops the conveyor with g and shows its log', async () => {
+  it('starts and stops the conveyor with c and shows its log', async () => {
     const runner = fakeRunner()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} runner={runner} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('[g] start conveyor'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('[c] start conveyor'), { timeout: 5_000 })
     await settle()
-    stdin.write('g')
+    stdin.write('c')
     await vi.waitFor(() => expect(lastFrame()).toContain('claimed task 7: Login'), { timeout: 5_000 })
     expect(lastFrame()).toContain('running here')
-    expect(lastFrame()).toContain('[g] stop conveyor')
+    expect(lastFrame()).toContain('[c] stop conveyor')
     await settle()
-    stdin.write('g')
+    stdin.write('c')
     await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })
   })
 
