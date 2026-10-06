@@ -70,7 +70,7 @@ describe('SettingsDocument', () => {
     const doc = new SettingsDocument(dir)
     doc.addStage('polish', 'before-merge')
     doc.addStage('fix-ci', 'after-merge', 'failure')
-    expect(doc.save()).toEqual({ ok: true })
+    expect(doc.save()).toEqual({ ok: true, created: ['stages/polish.md', 'stages/fix-ci.md'] })
     expect(doc.stageNames()).toEqual(['plan', 'implement', 'review', 'polish', 'merge', 'fix-ci'])
     expect(readFileSync(join(dir, 'config.yaml'), 'utf8')).toContain('fix-ci: {when: failure}')
   })

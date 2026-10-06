@@ -13,6 +13,7 @@ const snapshot: StatusSnapshot = {
   me: 'me',
   runner: { running: false },
   settingsSync: { state: 'current' },
+  undescribed: [],
   mine: [
     { id: '3', title: 'Store users', state: 'needs-input', stage: 'plan', attempt: 0, waitingSince: '2026-10-05T09:00:00.000Z', answered: false },
     { id: '4', title: 'Login', state: 'in-progress', stage: 'implement', attempt: 1, lastError: 'tests are red' },

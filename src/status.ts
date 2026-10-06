@@ -5,6 +5,7 @@ import { findWorkpad, repliesSince } from './engine/workpad.js'
 import type { QuotaWindow } from './harness/harness.js'
 import { runningPid } from './lock.js'
 import { checkSettingsSync, type SettingsSync } from './settings-sync.js'
+import { undescribedStages } from './stage-catalog.js'
 import { QuotaStore, UsageLedger } from './usage.js'
 
 export type MyTask = {
@@ -30,6 +31,7 @@ export type StatusSnapshot = {
   me: string
   runner: { running: boolean; pid?: number }
   settingsSync: SettingsSync
+  undescribed: string[]
   mine: MyTask[]
   team: { unclaimed: number; claimedByOthers: number }
   limits: {
@@ -85,6 +87,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     me,
     runner: pid ? { running: true, pid } : { running: false },
     settingsSync,
+    undescribed: undescribedStages(options.settings, config),
     mine,
     team: {
       unclaimed: tasks.filter((task) => !task.owner && NEW_STATES.includes(task.state)).length,
