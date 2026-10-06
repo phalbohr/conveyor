@@ -39,6 +39,13 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 3. Each member: `conveyor settings` → Personal (limits, chat language), then `conveyor skill install` for agent help.
 4. GitHub board columns: set `board.github_project: <number>` and choose the field `Conveyor` as the column field of a board view. GitLab: create an issue board with lists for the `conveyor::*` labels.
 
+## Team settings
+
+- Team settings are the committed files in `.conveyor/`; change them on a branch and merge them through a pull request like code. `local.yaml` stays personal.
+- `conveyor run` reads the settings from your working copy and reloads them every cycle; changes to `harnesses` need a restart of `run`.
+- Newer team settings: `conveyor run` fetches `origin` every cycle and warns once when the main branch has commits in `.conveyor/` that your branch lacks; the status screen shows the same notice. Run `git pull` to take them. Your own uncommitted or unpushed changes never trigger it.
+- Settings outside the repository (`init --path`) belong in a shared git repository; members link it with `conveyor init --use <dir>`.
+
 ## Daily use
 
 | I want to … | Do |

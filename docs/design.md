@@ -45,6 +45,12 @@ Commands:
 - `formats/story.md` holds the story structure (actors, story, current problem, main and alternative scenarios, acceptance criteria in Given/When/Then, dependencies, and writing rules). The `story` stage and `conveyor new` use it through the template variable `formats.story`.
 - Stage templates get the variables `language.docs` and `formats.story`.
 
+## Team settings sync
+
+- Team settings travel through git like code. Each workstation runs with the settings of its working copy.
+- Every `run` cycle fetches `origin` and lists commits on the main branch (`origin/HEAD`, else `origin/main`) that touch the settings directory and are missing from `HEAD`. A non-empty list gives one warning per new list in the log and a warning line on the status screen (which fetches at most every 5 minutes). The conveyor never pulls on its own.
+- Settings outside git, or without `origin`, skip the check.
+
 ## Live sessions
 
 - `conveyor new` and `conveyor attach <issue>` start a normal interactive session of the harness in the terminal. `new` uses the harness, model, and effort of the `story` stage; `attach` uses those of the waiting stage.

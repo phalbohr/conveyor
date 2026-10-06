@@ -15,6 +15,7 @@ import { acquireRunLock } from '../lock.js'
 import { expandPath } from '../paths.js'
 import { findSettings } from '../settings.js'
 import { resolveSkills } from '../skills.js'
+import { checkSettingsSync, syncNotice } from '../settings-sync.js'
 import { QuotaStore, UsageLedger } from '../usage.js'
 import { GitWorkspaces, type Workspaces } from '../workspaces.js'
 
@@ -96,7 +97,16 @@ export async function runCommand(context: Context, options: { once?: boolean }):
       log,
     })
 
+    let noticed = ''
+    const checkSync = async () => {
+      const sync = await checkSettingsSync(settings, { fetch: true })
+      if (sync.state !== 'behind' || sync.commits.join() === noticed) return
+      noticed = sync.commits.join()
+      context.stderr(`warning: ${syncNotice(sync)}\n`)
+    }
+
     if (options.once) {
+      await checkSync()
       await engine.tick()
       await engine.idle()
       return 0
@@ -113,6 +123,7 @@ export async function runCommand(context: Context, options: { once?: boolean }):
     log(`conveyor runs for ${project}`)
     let interval = config.poll_interval
     while (!stopping) {
+      await checkSync()
       await engine.tick()
       const reloaded: LoadResult = loadConfig(settings)
       if (reloaded.ok) interval = reloaded.config.poll_interval
