@@ -50,3 +50,27 @@ export function statusLines(status: StatusSnapshot): Line[] {
   lines.push({ text: '' }, { text: `Team: ${status.team.unclaimed} unclaimed · ${status.team.claimedByOthers} claimed by others`, tone: 'muted' })
   return lines
 }
+
+export function helpLines(): Line[] {
+  return [
+    { text: 'conveyor help', tone: 'title' },
+    { text: 'The board holds every task. `conveyor run` takes tasks within your limits and runs their stages; you decide at the gates.' },
+    { text: '' },
+    { text: 'Flow', tone: 'title' },
+    { text: '  idea → story → plan → implement → review → merge → done   (stages and gates come from .conveyor/config.yaml)' },
+    { text: '' },
+    { text: 'Your actions', tone: 'title' },
+    { text: '  answer a question         reply in the issue, or `conveyor attach <id>` for a live session' },
+    { text: '  new task                  `conveyor new` (live session), or an issue with a conveyor::idea|story|plan label' },
+    { text: '  merge a reviewed task     `/merge` or Approve   (on GitLab: Approve the MR, or `/merge` on the issue)' },
+    { text: '  small fixes               `/fix <notes>`, or `/fix_from: <stage> <notes>` to start later' },
+    { text: '  start over                `/rework <notes>`' },
+    { text: '  hand a task over          `conveyor release <id>`' },
+    { text: '' },
+    { text: 'Screens and commands', tone: 'title' },
+    { text: '  this screen               r refresh · s settings · h help · q quit' },
+    { text: '  settings                  `conveyor settings`: every row shows what it does; s saves after validation' },
+    { text: '  scripting                 `conveyor config list|get|set`, `conveyor config stage add|remove|move`' },
+    { text: '  agent help                `conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)' },
+  ]
+}

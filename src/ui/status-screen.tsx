@@ -1,7 +1,7 @@
 import { Box, Text, render, useApp, useInput } from 'ink'
 import { useCallback, useEffect, useState } from 'react'
 import type { StatusSnapshot } from '../status.js'
-import { statusLines, type Line } from './status-lines.js'
+import { helpLines, statusLines, type Line } from './status-lines.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 
@@ -12,6 +12,7 @@ export function StatusScreen({ load, refreshMs, onSettings }: Props) {
   const [status, setStatus] = useState<StatusSnapshot>()
   const [error, setError] = useState<string>()
   const [updated, setUpdated] = useState<Date>()
+  const [help, setHelp] = useState(false)
 
   const refresh = useCallback(() => {
     load()
@@ -32,6 +33,7 @@ export function StatusScreen({ load, refreshMs, onSettings }: Props) {
   useInput((input) => {
     if (input === 'q') exit()
     if (input === 'r') refresh()
+    if (input === 'h' || input === '?') setHelp((value) => !value)
     if (input === 's' && onSettings) {
       onSettings()
       exit()
@@ -40,16 +42,15 @@ export function StatusScreen({ load, refreshMs, onSettings }: Props) {
 
   return (
     <Box flexDirection="column">
-      {!status && !error && <Text color="gray">Loading the board…</Text>}
-      {status &&
-        statusLines(status).map((line, index) => (
+      {!help && !status && !error && <Text color="gray">Loading the board…</Text>}
+      {(help ? helpLines() : status ? statusLines(status) : []).map((line, index) => (
           <Text key={index} {...(line.tone ? { color: COLORS[line.tone] } : {})} bold={line.tone === 'title'}>
-            {line.text || ' '}
-          </Text>
-        ))}
+          {line.text || ' '}
+        </Text>
+      ))}
       {error && <Text color="red">Board error: {error}</Text>}
       <Text color="gray">
-        [r] refresh · [s] settings · [q] quit{updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}
+        [r] refresh · [s] settings · [h] help · [q] quit{updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}
       </Text>
     </Box>
   )
