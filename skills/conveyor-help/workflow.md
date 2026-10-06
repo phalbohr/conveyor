@@ -32,6 +32,14 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 - Branches carry the number: `conveyor/51` (work), `conveyor-lock/51` (claim).
 - Own identifiers, such as `US-E4-01`, can stay in the issue title; the conveyor ignores them.
 
+## When a stage fails
+
+- A failed stage (the agent returns `failed`, the process crashes, the stage or stall timeout hits, or the `before_run` hook fails) stops the chain: the next stage does not start. The task stays yours in `conveyor::in-progress`; the workpad shows "Last error" and the failed attempts; the status screen shows the task in red.
+- The conveyor retries the same stage after 10 s, 20 s, 40 s, …, at most `retry.max_backoff` (5 min). After `retry.max_attempts` (5) it posts "The `<stage>` stage failed N times: <error>. Reply in a comment to retry." and sets `conveyor::needs-input`; the board notifies you.
+- A configuration error (unknown model, missing skill, template error, unavailable harness) skips the retries and goes to `needs-input` at once with the fix to make.
+- What to do: read the error, fix the cause, then reply in the issue with any comment; the next cycle runs the same stage again with fresh attempts. Alternatives: `conveyor attach <number>` to work it out with an agent, `conveyor release <number>` to hand the task over, or close the issue to cancel it.
+- If `conveyor run` itself stops, the task stays in `in-progress` and continues on the next start; after 30 minutes without a heartbeat another workstation may release and take it (not tasks with private artifacts).
+
 ## Setup
 
 1. Install: `npm install -g @phalbohr/conveyor`; sign in `gh` or `glab`; install the harness CLIs your stages use.
