@@ -8,6 +8,8 @@ import { runCli, tempDir } from './helpers.js'
 
 const ENTER = '\r'
 const DOWN = '\u001B[B'
+const RIGHT = '\u001B[C'
+const LEFT = '\u001B[D'
 const until = (assertion: () => void) => vi.waitFor(assertion, { timeout: 5_000 })
 const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -39,6 +41,31 @@ describe('SettingsScreen', () => {
 
     await until(() => expect(readFileSync(join(dir, 'config.yaml'), 'utf8')).toContain('merge: ai'))
     expect(rendered.lastFrame()).toContain('Saved.')
+  })
+
+  it('cycles the options of a field with the arrow keys', async () => {
+    const { dir, rendered, press } = setup()
+    await until(() => expect(rendered.lastFrame()).toContain('Merge mode'))
+
+    await press(DOWN, DOWN, DOWN, RIGHT)
+    await until(() => expect(rendered.lastFrame()).toMatch(/Merge mode\s+ai/))
+    await press(RIGHT, RIGHT)
+    await until(() => expect(rendered.lastFrame()).toMatch(/Merge mode\s+human/))
+    await press(LEFT)
+    await until(() => expect(rendered.lastFrame()).toMatch(/Merge mode\s+smart/))
+    await press('s')
+
+    await until(() => expect(readFileSync(join(dir, 'config.yaml'), 'utf8')).toContain('merge: smart'))
+  })
+
+  it('cycles through inherit for stage values', async () => {
+    const { dir, rendered, press } = setup()
+    const row = new SettingsDocument(dir).fields().findIndex((field) => field.key === 'stages.implement.effort')
+    await until(() => expect(rendered.lastFrame()).toContain('Merge mode'))
+    await press(...Array.from({ length: row }, () => DOWN), LEFT)
+    await until(() => expect(rendered.lastFrame()).toMatch(/implement: effort\s+max/))
+    await press(RIGHT)
+    await until(() => expect(rendered.lastFrame()).toMatch(/implement: effort\s+\(inherit\)/))
   })
 
   it('adds a stage before merge', async () => {

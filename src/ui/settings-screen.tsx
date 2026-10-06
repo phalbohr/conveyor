@@ -40,6 +40,13 @@ export function SettingsScreen({ doc }: { doc: SettingsDocument }) {
       if (key.upArrow) setCursor((value) => Math.max(0, value - 1))
       if (key.downArrow) setCursor((value) => Math.min(fields.length - 1, value + 1))
       if (key.return && fields[cursor]) setMode({ kind: 'edit', field: fields[cursor] })
+      const current = fields[cursor]
+      if ((key.leftArrow || key.rightArrow) && current?.options) {
+        const options = [...current.options, ...(inheritable(current) ? [INHERIT] : [])]
+        const index = options.indexOf(current.value || INHERIT)
+        const next = options[(index + (key.rightArrow ? 1 : -1) + options.length) % options.length] ?? INHERIT
+        attempt(() => doc.set(current.key, next === INHERIT ? '' : next))
+      }
       if (input === 'a') setMode({ kind: 'add-name' })
       const stage = stageOf(fields[cursor])
       if (input === 'x' && stage) attempt(() => doc.removeStage(stage))
@@ -172,7 +179,7 @@ export function SettingsScreen({ doc }: { doc: SettingsDocument }) {
         )
       })}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
-      <Text color="gray">↑↓ move · Enter edit · a add stage · x remove stage · [ ] move stage · s save · q quit</Text>
+      <Text color="gray">↑↓ move · ←→ change option · Enter edit · a add stage · x remove stage · [ ] move stage · s save · q quit</Text>
     </Box>
   )
 }
