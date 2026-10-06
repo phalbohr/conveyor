@@ -61,6 +61,17 @@ describe('StatusScreen', () => {
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2), { timeout: 5_000 })
   })
 
+  it('toggles the help with h', async () => {
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    stdin.write('h')
+    await vi.waitFor(() => expect(lastFrame()).toContain('/fix_from: <stage>'), { timeout: 5_000 })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    stdin.write('h')
+    await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
+  })
+
   it('shows a board error', async () => {
     const { lastFrame } = render(<StatusScreen load={async () => Promise.reject(new Error('gh: not logged in'))} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('Board error: gh: not logged in'), { timeout: 5_000 })

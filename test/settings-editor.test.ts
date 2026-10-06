@@ -35,6 +35,7 @@ describe('SettingsDocument', () => {
     expect(fields.find((f) => f.key === 'stages.review.model')).toMatchObject({ group: 'Stages', value: 'opus' })
     expect(fields.find((f) => f.key === 'stages.implement.model')).toMatchObject({ value: '' })
     expect(fields.find((f) => f.key === 'limits.running')).toMatchObject({ group: 'Personal', kind: 'number', value: '3' })
+    expect(fields.every((f) => f.help.length > 0)).toBe(true)
     expect(fields.find((f) => f.key === 'stages.implement.harness')?.options).toEqual(['claude', 'codex', 'opencode', 'pi', 'openhands', 'agent-zero'])
   })
 

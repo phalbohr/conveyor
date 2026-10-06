@@ -160,7 +160,8 @@ export function SettingsScreen({ doc }: { doc: SettingsDocument }) {
           <Box key={field.key} flexDirection="column">
             {header && <Text color="gray">{field.group}</Text>}
             <Text {...(index === cursor ? { color: 'cyan' } : {})}>
-              {index === cursor ? '›' : ' '} {field.label.padEnd(34)} {field.value || <Text color="gray">{inheritable(field) ? INHERIT : '—'}</Text>}
+              {index === cursor ? '›' : ' '} {field.label.padEnd(30)} {(field.value || (inheritable(field) ? INHERIT : '—')).padEnd(16)}{' '}
+              <Text color="gray">{field.help}</Text>
             </Text>
           </Box>
         )

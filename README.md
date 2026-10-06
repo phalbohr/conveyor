@@ -2,7 +2,9 @@
 
 A configurable development conveyor. Tasks live on a GitHub or GitLab board. Agents from different harnesses move each task through stages — story, plan, implement, review, merge — and a human decides at the gates you choose. Several workstations can work on one board at the same time.
 
-The design is in [docs/design.md](docs/design.md).
+The full workflow, from an idea to a merged change, is in [skills/conveyor-help/workflow.md](skills/conveyor-help/workflow.md). The design is in [docs/design.md](docs/design.md).
+
+After `conveyor skill install`, ask your agent anything about the conveyor: it explains the workflow and settings and changes them for you.
 
 ## Requirements
 
@@ -44,6 +46,10 @@ conveyor new
 | `conveyor new` | Live session with an agent; creates a task from the result |
 | `conveyor attach <issue>` | Live session to answer the questions of a waiting task |
 | `conveyor release <issue>` | Releases the claim of a task (`--force` for private tasks of others) |
+| `conveyor config list` | Every setting with value, options, and description (`--json` for scripts) |
+| `conveyor config get/set <key> [value]` | Reads or changes one setting; validates before saving |
+| `conveyor config stage add/remove/move` | Adds (`--after-merge --when …`), removes, or moves a stage |
+| `conveyor skill install` | Installs the `conveyor-help` skill for Claude Code (`~/.claude/skills`) and agents that read `~/.agents/skills`; `--project` installs into the repository |
 
 Every command accepts `--json`.
 
