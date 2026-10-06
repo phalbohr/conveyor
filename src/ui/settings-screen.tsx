@@ -1,14 +1,17 @@
 import { Select, TextInput } from '@inkjs/ui'
 import { Box, Text, render, useApp, useInput } from 'ink'
 import { useState } from 'react'
+import type { Catalog } from '../models.js'
 import type { Field, SettingsDocument } from '../settings-editor.js'
 
 const WINDOW = 18
 const INHERIT = '(inherit)'
+const OTHER = 'other…'
 
 type Mode =
   | { kind: 'list' }
   | { kind: 'edit'; field: Field }
+  | { kind: 'edit-text'; field: Field }
   | { kind: 'add-name' }
   | { kind: 'add-position'; name: string }
   | { kind: 'add-when'; name: string }
@@ -16,7 +19,9 @@ type Mode =
 const stageOf = (field: Field | undefined) => (field?.group === 'Stages' ? field.key.split('.')[1] : undefined)
 const inheritable = (field: Field) => field.group === 'Stages' || field.key.startsWith('defaults.') || field.key.startsWith('triage.')
 
-export function SettingsScreen({ doc }: { doc: SettingsDocument }) {
+type Props = { doc: SettingsDocument; refreshModels?: () => Promise<Record<string, Catalog>> }
+
+export function SettingsScreen({ doc, refreshModels }: Props) {
   const { exit } = useApp()
   const [fields, setFields] = useState(() => doc.fields())
   const [cursor, setCursor] = useState(0)
@@ -48,6 +53,16 @@ export function SettingsScreen({ doc }: { doc: SettingsDocument }) {
         attempt(() => doc.set(current.key, next === INHERIT ? '' : next))
       }
       if (input === 'a') setMode({ kind: 'add-name' })
+      if (input === 'm' && refreshModels) {
+        setMessage({ text: 'Refreshing model lists…' })
+        refreshModels()
+          .then((catalogs) => {
+            doc.setCatalogs(catalogs)
+            reload()
+            setMessage({ text: 'Model lists updated.' })
+          })
+          .catch((error: unknown) => setMessage({ text: (error as Error).message, error: true }))
+      }
       const stage = stageOf(fields[cursor])
       if (input === 'x' && stage) attempt(() => doc.removeStage(stage))
       if (input === '[' && stage) attempt(() => doc.moveStage(stage, -1))
@@ -86,17 +101,35 @@ export function SettingsScreen({ doc }: { doc: SettingsDocument }) {
     setMode({ kind: 'list' })
   }
 
+  if (mode.kind === 'edit-text') {
+    const { field } = mode
+    return (
+      <Box flexDirection="column">
+        <Text color="cyan">{field.key.endsWith('.model') ? 'Model name' : field.label}</Text>
+        <TextInput
+          defaultValue={field.value}
+          onSubmit={(value) => {
+            attempt(() => doc.set(field.key, value.trim()))
+            done()
+          }}
+        />
+        <Text color="gray">Enter: apply · Esc: cancel</Text>
+      </Box>
+    )
+  }
+
   if (mode.kind === 'edit') {
     const { field } = mode
-    const options = [...(field.options ?? []), ...(inheritable(field) ? [INHERIT] : [])]
+    const options = [...(field.options ?? []), ...(inheritable(field) ? [INHERIT] : []), ...(field.other ? [OTHER] : [])]
     return (
       <Box flexDirection="column">
         <Text color="cyan">{field.label}</Text>
         {field.kind === 'select' || field.kind === 'boolean' ? (
           <Select
             options={options.map((option) => ({ label: option, value: option }))}
-            {...(field.value ? { defaultValue: field.value } : {})}
+              {...(field.value && !field.other ? { defaultValue: field.value } : {})}
             onChange={(value) => {
+              if (value === OTHER) return setMode({ kind: 'edit-text', field })
               attempt(() => doc.set(field.key, value === INHERIT ? '' : value))
               done()
             }}
@@ -179,12 +212,12 @@ export function SettingsScreen({ doc }: { doc: SettingsDocument }) {
         )
       })}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
-      <Text color="gray">↑↓ move · ←→ change option · Enter edit · a add stage · x remove stage · [ ] move stage · s save · q quit</Text>
+      <Text color="gray">↑↓ move · ←→ change option · Enter edit · m refresh models · a add stage · x remove stage · [ ] move stage · s save · q quit</Text>
     </Box>
   )
 }
 
-export async function showSettings(doc: SettingsDocument) {
-  const app = render(<SettingsScreen doc={doc} />)
+export async function showSettings(doc: SettingsDocument, refreshModels?: () => Promise<Record<string, Catalog>>) {
+  const app = render(<SettingsScreen doc={doc} {...(refreshModels ? { refreshModels } : {})} />)
   await app.waitUntilExit()
 }

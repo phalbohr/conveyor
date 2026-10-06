@@ -49,6 +49,7 @@ conveyor new
 | `conveyor config list` | Every setting with value, options, and description (`--json` for scripts) |
 | `conveyor config get/set <key> [value]` | Reads or changes one setting; validates before saving |
 | `conveyor config stage add/remove/move` | Adds (`--after-merge --when …`), removes, or moves a stage |
+| `conveyor models [harness]` | Models and efforts each harness offers (cached; `--refresh` asks again) |
 | `conveyor skill install` | Installs the `conveyor-help` skill for Claude Code (`~/.claude/skills`) and agents that read `~/.agents/skills`; `--project` installs into the repository |
 
 Every command accepts `--json`.

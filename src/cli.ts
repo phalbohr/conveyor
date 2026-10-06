@@ -3,6 +3,8 @@ import { Argument, Command, CommanderError, Option } from 'commander'
 import type { Board as BoardPort } from './board/board.js'
 import { configEdit, configGet, configList } from './commands/config.js'
 import { attachCommand, newCommand } from './commands/live.js'
+import { modelsCommand, modelsFile } from './commands/models.js'
+import { ModelCache, catalogsFor } from './models.js'
 import { skillInstall } from './commands/skill.js'
 import { prepare, releaseCommand, runCommand } from './commands/run.js'
 import { loadConfig, type Config } from './config.js'
@@ -94,7 +96,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
         exitCode = 1
         return
       }
-      await showSettings(new SettingsDocument(settings))
+      await openSettings(context, settings)
     })
 
   const config = program.command('config').description('read and change settings from scripts and agents')
@@ -150,6 +152,15 @@ export async function main(argv: string[], context: Context): Promise<number> {
         doc.moveStage(name, direction === 'up' ? -1 : 1)
         return `Stages: ${doc.stageNames().join(' → ')}`
       })
+    })
+
+  program
+    .command('models')
+    .description('models and efforts that each harness offers')
+    .argument('[harness]', 'one harness; default: the harnesses your stages use')
+    .option('--refresh', 'ask the harnesses again instead of using the cached list')
+    .action(async (harness: string | undefined, options: { refresh?: boolean }) => {
+      exitCode = await modelsCommand(context, harness, options, json())
     })
 
   program
@@ -221,7 +232,7 @@ async function status(context: Context, json: boolean): Promise<number> {
     return collectStatus({ board: prepared.board, config: current.config, settings, home: context.home })
   }
   if (context.interactive && !json) {
-    while ((await showStatus(load)) === 'settings') await showSettings(new SettingsDocument(settings))
+    while ((await showStatus(load)) === 'settings') await openSettings(context, settings)
     return 0
   }
 
@@ -263,4 +274,17 @@ function report(context: Context, result: InitResult, json: boolean): number {
   context.stdout(`Settings: ${result.settings}\n`)
   for (const warning of result.warnings) context.stderr(`warning: ${warning}\n`)
   return 0
+}
+
+async function openSettings(context: Context, settings: string) {
+  const loaded = loadConfig(settings)
+  if (!loaded.ok) {
+    await showSettings(new SettingsDocument(settings))
+    return
+  }
+  const config = loaded.config
+  const cache = new ModelCache(modelsFile(context.home, config.board.project))
+  const harnesses = ['claude', 'codex', ...Object.keys(config.harnesses)]
+  const catalogs = await catalogsFor(harnesses, config, context.run, cache, false)
+  await showSettings(new SettingsDocument(settings, { catalogs }), () => catalogsFor(harnesses, config, context.run, cache, true))
 }

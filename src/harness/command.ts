@@ -4,7 +4,13 @@ import { join } from 'node:path'
 import { NO_USAGE, RESULT_SCHEMA, childEnv, failed, parseResult, type Harness, type StageOutput, type StageRun } from './harness.js'
 import { spawnLines } from './process.js'
 
-export type CommandDefinition = { command: string; args: string[]; env: Record<string, string> }
+export type CommandDefinition = {
+  command: string
+  args: string[]
+  env: Record<string, string>
+  models?: { command?: string; args: string[] }
+  efforts?: string[]
+}
 
 export class CommandHarness implements Harness {
   constructor(

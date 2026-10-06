@@ -408,6 +408,23 @@ describe('Engine language and formats', () => {
   })
 })
 
+describe('Engine unknown models', () => {
+  it('asks a human at once when the harness does not know the model', async () => {
+    const { board, cycle, runs } = setup({
+      config: 'stages:\n  implement: {model: opus-5.5}\n  review: {}\n',
+      script: byStage({ implement: { outcome: 'failed', summary: '[claude-code:unrecognized_model] {"model":"opus-5.5"}' } }),
+    })
+    await board.createTask('Login', 'p', 'plan')
+    await cycle()
+    expect(runs()).toEqual(['1:implement'])
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+    const last = (await board.listComments('1')).at(-1)?.body ?? ''
+    expect(last).toContain('opus-5.5')
+    expect(last).toContain('stages.implement.model')
+    expect(last).toContain('conveyor models claude')
+  })
+})
+
 describe('Engine token budget', () => {
   it('stops claiming new tasks when the daily token limit is reached', async () => {
     const { board, cycle, runs, usage } = setup({ local: 'limits: {daily_tokens: 300, awaiting_review: 10}\n' })

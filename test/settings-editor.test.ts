@@ -109,6 +109,22 @@ describe('SettingsDocument', () => {
     expect(changed).toEqual(['  implement: {model: sonnet}'])
   })
 
+  it('offers the models and efforts of the stage harness', () => {
+    const catalogs = {
+      codex: { models: [{ id: 'gpt-6-luna', efforts: ['low', 'high'] }, { id: 'gpt-6-sol', efforts: ['low', 'ultra'] }], fetchedAt: '' },
+      claude: { models: [{ id: 'opus' }, { id: 'sonnet' }], efforts: ['low', 'medium', 'high', 'xhigh', 'max'], fetchedAt: '' },
+    }
+    const dir = settings(`board: {provider: github, project: acme/app}\nstages:\n  implement: {harness: codex, model: gpt-6-sol}\n  review: {model: claude-opus-5}\n  polish: {harness: openhands}\n`)
+    const fields = new SettingsDocument(dir, { catalogs }).fields()
+    const field = (key: string) => fields.find((candidate) => candidate.key === key)
+
+    expect(field('stages.implement.model')).toMatchObject({ kind: 'select', options: ['gpt-6-luna', 'gpt-6-sol'], other: true, value: 'gpt-6-sol' })
+    expect(field('stages.implement.effort')?.options).toEqual(['low', 'ultra'])
+    expect(field('stages.review.model')).toMatchObject({ options: ['claude-opus-5', 'opus', 'sonnet'], value: 'claude-opus-5' })
+    expect(field('stages.polish.model')).toMatchObject({ kind: 'text', help: expect.stringContaining('any name openhands accepts') })
+    expect(field('stages.polish.effort')?.kind).toBe('text')
+  })
+
   it('reports unsaved changes', () => {
     const doc = new SettingsDocument(settings(CONFIG))
     expect(doc.dirty()).toBe(false)

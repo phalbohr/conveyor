@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Document, isMap, parseDocument, YAMLMap, type Pair, type Scalar } from 'yaml'
 import { loadConfig, type Config } from './config.js'
+import { effortsFor, type Catalog } from './models.js'
 import { stageCatalog, stageStub } from './stage-catalog.js'
 
 export type FieldKind = 'select' | 'text' | 'number' | 'boolean'
@@ -15,9 +16,10 @@ export type Field = {
   value: string
   help: string
   options?: string[]
+  other?: boolean
 }
 
-type Spec = { key: string; label: string; kind: FieldKind; help: string; options?: string[] }
+type Spec = { key: string; label: string; kind: FieldKind; help: string; options?: string[]; other?: boolean }
 
 const FILES = { config: 'config.yaml', local: 'local.yaml' } as const
 const RESERVED = ['story', 'plan', 'merge']
@@ -69,7 +71,13 @@ export class SettingsDocument {
   private changed = false
   private readonly added = new Set<string>()
 
-  constructor(private readonly dir: string) {
+  private catalogs: Record<string, Catalog>
+
+  constructor(
+    private readonly dir: string,
+    options: { catalogs?: Record<string, Catalog> } = {},
+  ) {
+    this.catalogs = options.catalogs ?? {}
     const read = (file: string) => {
       try {
         return readFileSync(join(dir, file), 'utf8')
@@ -83,16 +91,21 @@ export class SettingsDocument {
     if (loaded.ok) this.config = loaded.config
   }
 
+  setCatalogs(catalogs: Record<string, Catalog>) {
+    this.catalogs = catalogs
+  }
+
   fields(): Field[] {
     const config = this.config
     const harnesses = ['claude', 'codex', ...Object.keys(config?.harnesses ?? {})]
     const fields: Field[] = TEAM.map((spec) => this.field('Team', 'config', spec))
     for (const prefix of ['defaults', 'triage']) {
       const help = PREFIX_HELP[prefix] ?? ''
+      const harness = prefix === 'triage' ? (config?.triage.harness ?? 'claude') : String(this.docs.config.getIn(['defaults', 'harness']) ?? 'claude')
+      const model = prefix === 'triage' ? (config?.triage.model ?? '') : String(this.docs.config.getIn(['defaults', 'model']) ?? 'sonnet')
       fields.push(
         this.field('Team', 'config', { key: `${prefix}.harness`, label: `${prefix} harness`, kind: 'select', options: harnesses, help }),
-        this.field('Team', 'config', { key: `${prefix}.model`, label: `${prefix} model`, kind: 'text', help }),
-        this.field('Team', 'config', { key: `${prefix}.effort`, label: `${prefix} effort`, kind: 'select', options: EFFORTS, help }),
+        ...this.modelFields(prefix, `${prefix} `, harness, model, { model: help, effort: help }).map((spec) => this.field('Team', 'config', spec)),
       )
     }
     const stages = config?.stages ?? []
@@ -100,8 +113,9 @@ export class SettingsDocument {
     stages.forEach((stage, index) => {
       fields.push(
         this.field('Stages', 'config', { key: `stages.${stage.name}.harness`, label: `${stage.name}: harness`, kind: 'select', options: harnesses, help: STAGE_HELP.harness ?? '' }),
-        this.field('Stages', 'config', { key: `stages.${stage.name}.model`, label: `${stage.name}: model`, kind: 'text', help: STAGE_HELP.model ?? '' }),
-        this.field('Stages', 'config', { key: `stages.${stage.name}.effort`, label: `${stage.name}: effort`, kind: 'select', options: EFFORTS, help: STAGE_HELP.effort ?? '' }),
+        ...this.modelFields(`stages.${stage.name}`, `${stage.name}: `, stage.harness, stage.model, { model: STAGE_HELP.model ?? '', effort: STAGE_HELP.effort ?? '' }).map((spec) =>
+          this.field('Stages', 'config', spec),
+        ),
       )
       if (index > merge) {
         fields.push(
@@ -210,11 +224,28 @@ export class SettingsDocument {
     return this.docs[name].toString({ flowCollectionPadding: false, lineWidth: 0 })
   }
 
+  private modelFields(prefix: string, label: string, harness: string, model: string, help: { model: string; effort: string }): Spec[] {
+    const catalog = this.catalogs[harness]
+    const ids = catalog?.models.map((entry) => entry.id) ?? []
+    const efforts = effortsFor(catalog, model) ?? (harness === 'claude' || harness === 'codex' ? EFFORTS : undefined)
+    const source = ids.length ? `${help.model} · ${harness} models` : `${help.model} · any name ${harness} accepts`
+    return [
+      ids.length
+        ? { key: `${prefix}.model`, label: `${label}model`, kind: 'select', options: ids, other: true, help: source }
+        : { key: `${prefix}.model`, label: `${label}model`, kind: 'text', help: source },
+      efforts
+        ? { key: `${prefix}.effort`, label: `${label}effort`, kind: 'select', options: efforts, help: help.effort }
+        : { key: `${prefix}.effort`, label: `${label}effort`, kind: 'text', help: help.effort },
+    ]
+  }
+
   private field(group: Field['group'], file: keyof typeof FILES, spec: Spec): Field {
     const raw = this.docs[file].getIn(spec.key.split('.'))
     const effective = group === 'Stages' ? undefined : pick(this.config, spec.key)
     const value = raw ?? effective
-    return { ...spec, group, value: value === undefined || value === null ? '' : String(value) }
+    const text = value === undefined || value === null ? '' : String(value)
+    const options = spec.options && text && !spec.options.includes(text) ? [text, ...spec.options] : spec.options
+    return { ...spec, ...(options ? { options } : {}), group, value: text }
   }
 
   private stagesMap(): YAMLMap {

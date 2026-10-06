@@ -170,6 +170,7 @@ stages:
       command: 'opencode',
       args: ['run', '--model', '{model}', '{prompt}'],
       env: { OPENAI_BASE_URL: 'http://localhost:4000', LOG: '1' },
+      models: { args: ['models'] },
     })
     expect(c.stages.find((stage) => stage.name === 'implement')).toMatchObject({ harness: 'opencode', model: 'litellm/qwen3-coder' })
   })

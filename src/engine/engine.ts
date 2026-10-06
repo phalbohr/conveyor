@@ -5,6 +5,7 @@ import type { Board, Comment, PullRequest, Task } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, Quota, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { NO_USAGE, failed } from '../harness/harness.js'
+import { isModelError } from '../models.js'
 import { resolveSkills } from '../skills.js'
 import { QuotaStore, type UsageLedger } from '../usage.js'
 import type { Workspaces } from '../workspaces.js'
@@ -471,7 +472,14 @@ export class Engine {
         continue
       }
       if (result.outcome === 'failed') {
-        await this.fail(id, stage, state, result, config, output.fatal ?? false)
+        const modelError = isModelError(result.summary)
+        if (modelError) {
+          result = {
+            ...result,
+            summary: `The ${stage.harness} harness does not know the model \`${stage.model}\`. Change \`stages.${stage.name}.model\`; \`conveyor models ${stage.harness}\` lists the models.\n\n${result.summary}`,
+          }
+        }
+        await this.fail(id, stage, state, result, config, (output.fatal ?? false) || modelError)
         await run.save()
         return { status: 'stopped', summary }
       }
