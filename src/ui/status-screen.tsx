@@ -83,7 +83,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
       if (input === 'n') act({ kind: 'new' })
       if (input === 'a') setAsk('attach')
       if (input === 'l') setAsk('release')
-      if (input === 'g' && runner) {
+      if (input === 'c' && runner) {
         if (runner.running) {
           setMessage({ text: 'Stopping the conveyor…' })
           void runner.stop().then(() => {
@@ -146,7 +146,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
       )}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
       <Text color="gray">
-        {runner ? `[g] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[n] new · [a] attach · [l] release · [s] settings · [r] refresh · [h] help · [q] quit
+        {runner ? `[c] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[n] new · [a] attach · [l] release · [s] settings · [r] refresh · [h] help · [q] quit
         {updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}
       </Text>
     </Box>
