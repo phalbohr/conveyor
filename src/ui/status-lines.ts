@@ -74,7 +74,7 @@ export function helpLines(): Line[] {
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },
     { text: '  this screen               r refresh · s settings · h help · q quit' },
-    { text: '  settings                  `conveyor settings`: every row shows what it does; s saves after validation' },
+    { text: '  settings                  `conveyor settings`: every row shows what it does; ←→ switch options; s saves after validation' },
     { text: '  scripting                 `conveyor config list|get|set`, `conveyor config stage add|remove|move`' },
     { text: '  agent help                `conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)' },
   ]
