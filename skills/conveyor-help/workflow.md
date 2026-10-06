@@ -58,8 +58,9 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 
 | I want to … | Do |
 |---|---|
-| see my tasks, limits, subscription windows | `conveyor` (status screen; `h` help) |
-| start working the board | `conveyor run` (Ctrl+C stops; tasks resume on the next start) |
+| see my tasks, limits, subscription windows | `conveyor` (control screen; `h` help) |
+| start working the board | `g` on the control screen, or `conveyor run` (opens the control screen already running; without a terminal it prints the log). Stopping (`g` again, `q`, or Ctrl+C) aborts running stages; tasks resume on the next start. Log file: `~/.conveyor/logs/<project>.log` |
+| use everything from one place | `conveyor`: `g` start/stop, `n` new, `a` attach, `l` release, `s` settings |
 | add a task | `conveyor new`, or an issue with a `conveyor::idea`, `story`, or `plan` label |
 | answer a question | reply in the issue, or `conveyor attach <number>` |
 | merge a reviewed task | `/merge` on the issue or pull request, or Approve. GitLab: Approve the MR or `/merge` on the issue (`/merge` in an MR is a GitLab quick action) |

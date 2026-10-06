@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import type { StatusSnapshot } from '../src/status.js'
 import { statusLines } from '../src/ui/status-lines.js'
-import { StatusScreen } from '../src/ui/status-screen.js'
+import { StatusScreen, type HubAction, type RunnerControl } from '../src/ui/status-screen.js'
+import type { RunnerEvent } from '../src/runner.js'
 import { runCli } from './helpers.js'
 
 const snapshot: StatusSnapshot = {
@@ -83,6 +84,85 @@ describe('StatusScreen', () => {
   it('shows a board error', async () => {
     const { lastFrame } = render(<StatusScreen load={async () => Promise.reject(new Error('gh: not logged in'))} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('Board error: gh: not logged in'), { timeout: 5_000 })
+  })
+})
+
+function fakeRunner() {
+  const listeners = new Set<() => void>()
+  const runner = {
+    running: false,
+    events: [] as RunnerEvent[],
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    start: async () => {
+      runner.running = true
+      runner.events.push({ time: new Date().toISOString(), level: 'info', text: 'claimed task 7: Login' })
+      for (const listener of listeners) listener()
+      return { ok: true as const }
+    },
+    stop: async () => {
+      runner.running = false
+      for (const listener of listeners) listener()
+    },
+  }
+  return runner satisfies RunnerControl
+}
+
+describe('StatusScreen as the hub', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
+
+  it('starts and stops the conveyor with g and shows its log', async () => {
+    const runner = fakeRunner()
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} runner={runner} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('[g] start conveyor'), { timeout: 5_000 })
+    await settle()
+    stdin.write('g')
+    await vi.waitFor(() => expect(lastFrame()).toContain('claimed task 7: Login'), { timeout: 5_000 })
+    expect(lastFrame()).toContain('running here')
+    expect(lastFrame()).toContain('[g] stop conveyor')
+    await settle()
+    stdin.write('g')
+    await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })
+  })
+
+  it('asks before quitting while the conveyor runs', async () => {
+    const runner = fakeRunner()
+    await runner.start()
+    const actions: HubAction[] = []
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} runner={runner} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('running here'), { timeout: 5_000 })
+    await settle()
+    stdin.write('q')
+    await vi.waitFor(() => expect(lastFrame()).toContain('Press q again'), { timeout: 5_000 })
+    expect(actions).toEqual([])
+    await settle()
+    stdin.write('q')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'quit' }]), { timeout: 5_000 })
+  })
+
+  it('asks for the task number of attach and release', async () => {
+    const actions: HubAction[] = []
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
+    await settle()
+    stdin.write('a')
+    await vi.waitFor(() => expect(lastFrame()).toContain('Answer the questions of task number'), { timeout: 5_000 })
+    await settle()
+    stdin.write('#51')
+    await settle()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'attach', id: '51' }]), { timeout: 5_000 })
+  })
+
+  it('opens the live session for a new task with n', async () => {
+    const actions: HubAction[] = []
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('[n] new'), { timeout: 5_000 })
+    await settle()
+    stdin.write('n')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'new' }]), { timeout: 5_000 })
   })
 })
 
