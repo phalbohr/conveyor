@@ -2,7 +2,7 @@
 
 ## The idea
 
-The board (GitHub or GitLab issues) holds every task and its state. Each team member runs `conveyor run` on their own machine. It takes tasks within personal limits and moves each task through the configured stages. Agents do the work inside a stage; humans decide at the gates. Every agent writes only to its task's workspace and branch; the conveyor writes to the board.
+The board (GitHub or GitLab issues) holds every task and its state. Each team member runs `conveyor run` on their own machine. It takes tasks within personal limits and moves each task through the configured stages. Agents do the work inside a stage; humans decide at the gates. Each agent works in its task's workspace and branch, and the conveyor writes to the board. The agent runs as your user: with the default `permission_mode: bypassPermissions` it can read and change anything your user can, including git and `gh` credentials. Limit it with `permission_mode` or run the conveyor in a container or under a separate user.
 
 ## The full chain
 

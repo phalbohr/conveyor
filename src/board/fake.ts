@@ -135,6 +135,7 @@ export class FakeBoard implements Board {
     const pull: PullRequest = {
       number: String(1000 + this.pulls.size),
       url: `https://example.test/pull/${id}`,
+      headSha: id.padStart(40, '0'),
       state: 'open',
       checks: 'none',
       mergeable: 'yes',
@@ -151,9 +152,10 @@ export class FakeBoard implements Board {
     return pull ? { ...pull, feedback: [...pull.feedback], reviews: [...pull.reviews], comments: [...pull.comments] } : undefined
   }
 
-  async mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }> {
+  async mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }> {
     const pull = this.pulls.get(id)
     if (!pull || pull.state !== 'open') return { ok: false, error: 'no open pull request' }
+    if (pull.headSha !== sha) return { ok: false, error: 'the head of the branch changed' }
     if (this.mergeError) return { ok: false, error: this.mergeError }
     pull.state = 'merged'
     this.merges.push({ id, method })

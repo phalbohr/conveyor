@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { GitWorkspaces } from '../src/workspaces.js'
@@ -107,6 +107,17 @@ describe('GitWorkspaces', () => {
     await manager.push('4')
     expect(git(origin, 'show', 'conveyor/4:docs/plans/4-plan.md')).toBe('# Plan')
     expect(existsSync(join(path, 'docs/plans/4-plan.md'))).toBe(true)
+  })
+
+  it('refuses to write an artifact through a symbolic link or outside the workspace', async () => {
+    const { project } = repository()
+    const manager = workspaces(project)
+    const { path } = await manager.prepare('5')
+    const outside = tempDir('conveyor-outside-')
+    symlinkSync(outside, join(path, 'docs'))
+    await expect(manager.commitFile('5', 'docs/5-plan.md', 'x', 'Add plan')).rejects.toThrow('symbolic link')
+    await expect(manager.commitFile('5', '../5-plan.md', 'x', 'Add plan')).rejects.toThrow('outside the workspace')
+    expect(readdirSync(outside)).toEqual([])
   })
 
   it('commits all stage changes and skips a clean workspace', async () => {

@@ -8,6 +8,7 @@ import type { Context } from '../cli.js'
 import type { Config, Stage } from '../config.js'
 import { Artifacts } from '../engine/artifacts.js'
 import { readFormat, renderInstructions } from '../engine/stage-file.js'
+import { Trust } from '../engine/trust.js'
 import { commentText, findWorkpad } from '../engine/workpad.js'
 import { childEnv } from '../harness/harness.js'
 import { prepare } from './run.js'
@@ -39,7 +40,9 @@ export async function attachCommand(context: Context, id: string): Promise<numbe
   if (!task) return fail(context, `task ${id} not found`)
   if (task.state !== 'needs-input' && task.state !== 'queued') return fail(context, `task ${id} does not wait for input`)
 
-  const comments = await board.listComments(id)
+  const trust = new Trust(board)
+  if (!(await trust.trusted(task.author))) return fail(context, `task ${id} was created by @${task.author}, who has no write access to the repository`)
+  const comments = await trust.only(await board.listComments(id))
   const waiting = findWorkpad(comments)?.state.waiting
   const request = comments.find((comment) => comment.id === waiting?.commentId)
   const stage = stageNamed(config, waiting?.stage ?? 'story')

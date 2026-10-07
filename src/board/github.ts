@@ -34,6 +34,7 @@ type Check = { status?: string; conclusion?: string; state?: string }
 type GitHubPull = {
   number: number
   url: string
+  headRefOid: string
   state: 'OPEN' | 'MERGED' | 'CLOSED'
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
   statusCheckRollup: Check[] | null
@@ -47,7 +48,7 @@ type ProjectMirror = { projectId: string; fieldId: string; options: Map<string, 
 export type GitHubBoardOptions = { projectNumber?: number; warn?: (message: string) => void }
 
 const PROJECT_FIELD = 'Conveyor'
-const PULL_FIELDS = 'number,url,state,mergeable,statusCheckRollup,reviews,comments'
+const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,statusCheckRollup,reviews,comments'
 
 const LOCK_PREFIX = 'conveyor-lock/'
 const WRITE_PERMISSIONS = ['admin', 'write']
@@ -177,10 +178,10 @@ export class GitHubBoard implements Board {
     )
   }
 
-  async mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }> {
+  async mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }> {
     const pull = await this.pullRequest(id)
     if (!pull || pull.state !== 'open') return { ok: false, error: 'no open pull request' }
-    const result = await this.run('gh', ['pr', 'merge', pull.number, '-R', this.project, `--${method}`])
+    const result = await this.run('gh', ['pr', 'merge', pull.number, '-R', this.project, `--${method}`, '--match-head-commit', sha])
     return result.code === 0 ? { ok: true } : { ok: false, error: result.stderr.trim() || `gh pr merge exited with code ${result.code}` }
   }
 
@@ -290,6 +291,7 @@ function toPull(pull: GitHubPull, inline: PullRequest['feedback']): PullRequest 
   return {
     number: String(pull.number),
     url: pull.url,
+    headSha: pull.headRefOid,
     state: pull.state === 'OPEN' ? 'open' : pull.state === 'MERGED' ? 'merged' : 'closed',
     checks: checks.length === 0 ? 'none' : failed ? 'failure' : pending ? 'pending' : 'success',
     mergeable: pull.mergeable === 'MERGEABLE' ? 'yes' : pull.mergeable === 'CONFLICTING' ? 'no' : 'unknown',

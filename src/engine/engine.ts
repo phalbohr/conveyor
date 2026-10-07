@@ -14,6 +14,7 @@ import { Artifacts } from './artifacts.js'
 import { buildPrompt, buildTriagePrompt, type GateMode } from './prompt.js'
 import { releaseClaim } from './release.js'
 import { publicText } from './redact.js'
+import { Trust } from './trust.js'
 import { parseStageFile, readFormat, renderInstructions } from './stage-file.js'
 import { waitingDeadline } from './time.js'
 import {
@@ -85,7 +86,6 @@ const LAND = 'land'
 const LAND_WAIT = 60_000
 const MERGE_LOCK = 'merge'
 const LOCK_TTL = 10 * 60_000
-const WRITERS_FRESH = 10 * 60_000
 
 type StageContext = {
   workspace: string
@@ -118,14 +118,15 @@ export class Engine {
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
   private triageRetryAt = 0
-  private readonly writers = new Map<string, { ok: Promise<boolean>; at: number }>()
   private readonly heldLocks = new Map<string, { first: number; last: number }>()
   private readonly untrusted = new Set<string>()
 
   private readonly quotas: QuotaStore
+  private readonly trust: Trust
 
   constructor(private readonly options: EngineOptions) {
     this.quotas = options.quotas ?? new QuotaStore()
+    this.trust = new Trust(options.board)
   }
 
   async tick() {
@@ -150,7 +151,7 @@ export class Engine {
 
     for (const listed of await board.listTasks()) {
       if (this.running.has(listed.id)) continue
-      if (!(await this.trusted(listed.author))) {
+      if (!(await this.trust.trusted(listed.author))) {
         if (!this.untrusted.has(listed.id)) this.log(`task ${listed.id}: skipped: its author @${listed.author} has no write access to the repository`)
         this.untrusted.add(listed.id)
         continue
@@ -530,7 +531,7 @@ export class Engine {
     else {
       if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return wait('another workstation merges')
       try {
-        const merged = await board.mergePullRequest(id, config.merge_method)
+        const merged = await board.mergePullRequest(id, config.merge_method, pull.headSha)
         if (!merged.ok) error = merged.error
       } finally {
         await board.release(MERGE_LOCK)
@@ -591,7 +592,7 @@ export class Engine {
     if (Date.now() < this.triageRetryAt) return
     if (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) return
     if (this.quotaBlock(config.triage.harness, config)) return
-    const tasks = await this.onlyTrusted(await board.listTasks())
+    const tasks = await this.trust.only(await board.listTasks())
     const fresh = tasks.filter((task) => !task.owner && NEW_STATES.includes(task.state) && task.priority === undefined).map((task) => task.id)
     if (fresh.length === 0) return
     const harness = this.options.harnesses[config.triage.harness]
@@ -835,28 +836,14 @@ export class Engine {
     return { comments, pad: findWorkpad(comments) }
   }
 
-  private trusted(user: string) {
-    const known = this.writers.get(user)
-    if (known && Date.now() - known.at < WRITERS_FRESH) return known.ok
-    const ok = this.options.board.canWrite(user)
-    this.writers.set(user, { ok, at: Date.now() })
-    ok.catch(() => this.writers.delete(user))
-    return ok
-  }
-
-  private async onlyTrusted<T extends { author: string }>(items: T[]) {
-    const trusted = await Promise.all(items.map((item) => this.trusted(item.author)))
-    return items.filter((_, index) => trusted[index])
-  }
-
   private async comments(id: string) {
-    return this.onlyTrusted(await this.options.board.listComments(id))
+    return this.trust.only(await this.options.board.listComments(id))
   }
 
   private async trustedPull(id: string): Promise<PullRequest | undefined> {
     const pull = await this.options.board.pullRequest(id)
     if (!pull) return undefined
-    return { ...pull, reviews: await this.onlyTrusted(pull.reviews), comments: await this.onlyTrusted(pull.comments), feedback: await this.onlyTrusted(pull.feedback) }
+    return { ...pull, reviews: await this.trust.only(pull.reviews), comments: await this.trust.only(pull.comments), feedback: await this.trust.only(pull.feedback) }
   }
 
   private async lock(name: string, ttl: number) {

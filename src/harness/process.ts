@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 
+const STDERR_LIMIT = 64 * 1024
+
 export type LinesResult = { code: number | null; stderr: string; aborted: boolean; error?: string }
 
 export function spawnLines(
@@ -21,7 +23,7 @@ export function spawnLines(
 
     let stderr = ''
     let error: string | undefined
-    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+    child.stderr.on('data', (chunk: Buffer) => (stderr = (stderr + chunk.toString()).slice(-STDERR_LIMIT)))
     createInterface({ input: child.stdout }).on('line', (line) => {
       if (line.trim()) options.onLine(line)
     })

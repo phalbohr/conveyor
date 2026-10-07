@@ -27,6 +27,7 @@ export type Comment = {
 export type PullRequest = {
   number: string
   url: string
+  headSha: string
   state: 'open' | 'merged' | 'closed'
   checks: 'pending' | 'success' | 'failure' | 'none'
   mergeable: 'yes' | 'no' | 'unknown'
@@ -56,7 +57,7 @@ export interface Board {
   setPriority(id: string, priority: number): Promise<void>
   openPullRequest(id: string, title: string, body: string): Promise<PullRequest>
   pullRequest(id: string): Promise<PullRequest | undefined>
-  mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }>
+  mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }>
   closePullRequest(id: string): Promise<void>
 }
 

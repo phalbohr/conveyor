@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, lstatSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative, sep } from 'node:path'
 import type { Config } from './config.js'
 import { spawnLines } from './harness/process.js'
 import { createRun } from './run.js'
@@ -50,6 +50,12 @@ export class GitWorkspaces implements Workspaces {
 
   async commitFile(taskId: string, file: string, content: string, message: string) {
     const path = this.path(taskId)
+    if (relative(path, join(path, file)).startsWith('..')) throw new Error(`${file} is outside the workspace`)
+    let current = path
+    for (const part of relative(path, join(path, file)).split(sep)) {
+      current = join(current, part)
+      if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`${file} goes through a symbolic link`)
+    }
     mkdirSync(dirname(join(path, file)), { recursive: true })
     writeFileSync(join(path, file), content)
     await this.git(path, 'add', '--', file)
