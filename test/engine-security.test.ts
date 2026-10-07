@@ -105,6 +105,7 @@ describe('approval bound to the head commit', () => {
 
     await cycle()
     expect(board.merges).toEqual([])
+    await new Promise((resolve) => setTimeout(resolve, 5))
     await board.addComment('1', '/merge')
     await cycle()
     expect(board.merges).toHaveLength(1)
