@@ -26,8 +26,9 @@ const listed = []
 const walk = (dir) => { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const path = dir + '/' + entry.name; if (entry.isDirectory() || fs.statSync(path).isDirectory()) walk(path); else listed.push(path) } }
 process.argv.forEach((arg, index) => { if (arg === '--add-dir' || arg === '--plugin-dir') walk(process.argv[index + 1]) })
 fs.writeFileSync(${JSON.stringify(join(dir, 'skills.json'))}, JSON.stringify(listed))
-process.stdout.write(fs.readFileSync(${JSON.stringify(join(FIXTURES, fixture))}, 'utf8'))
-${options.hang ? 'setInterval(() => {}, 1000)' : `process.exit(${options.exitCode ?? 0})`}
+process.stdout.write(fs.readFileSync(${JSON.stringify(join(FIXTURES, fixture))}, 'utf8'), () => {
+  ${options.hang ? 'setInterval(() => {}, 1000)' : `process.exit(${options.exitCode ?? 0})`}
+})
 `,
   )
   chmodSync(command, 0o755)
