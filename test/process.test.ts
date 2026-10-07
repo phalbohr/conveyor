@@ -33,6 +33,12 @@ describe('spawnLines', () => {
     await vi.waitFor(() => expect(alive(grandchild)).toBe(false))
   })
 
+  it('keeps only the last 64 KB of stderr', async () => {
+    const result = await spawnLines('sh', ['-c', 'head -c 200000 /dev/zero | tr "\\0" a >&2; printf END >&2'], { cwd: tempDir(), env: process.env, onLine: () => undefined })
+    expect(result.stderr.length).toBe(64 * 1024)
+    expect(result.stderr.endsWith('END')).toBe(true)
+  })
+
   it('streams lines and returns the exit code', async () => {
     const lines: string[] = []
     const result = await spawnLines('sh', ['-c', 'echo one; echo two; exit 4'], { cwd: tempDir(), env: process.env, onLine: (line) => lines.push(line) })

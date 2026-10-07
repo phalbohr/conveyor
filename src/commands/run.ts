@@ -5,8 +5,10 @@ import { Runner } from '../runner.js'
 import { hub } from './hub.js'
 import { GitHubBoard } from '../board/github.js'
 import { GitLabBoard } from '../board/gitlab.js'
+import { RedactingBoard } from '../board/redacting.js'
 import { type Context } from '../cli.js'
 import { loadConfig, type Config } from '../config.js'
+import { secretValues } from '../engine/redact.js'
 import { manualRelease } from '../engine/release.js'
 import { parseStageFile } from '../engine/stage-file.js'
 import { findSettings } from '../settings.js'
@@ -89,11 +91,13 @@ export function prepare(context: Context): Prepared | undefined {
   }
   const { provider, project, github_project } = loaded.config.board
   const warn = (message: string) => context.stderr(`warning: ${message}\n`)
-  const board =
+  const board = new RedactingBoard(
     context.boardFor?.(loaded.config) ??
-    (provider === 'gitlab'
-      ? new GitLabBoard(project, context.run)
-      : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), warn }))
+      (provider === 'gitlab'
+        ? new GitLabBoard(project, context.run)
+        : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), warn })),
+    secretValues(process.env),
+  )
   return { settings, config: loaded.config, board }
 }
 

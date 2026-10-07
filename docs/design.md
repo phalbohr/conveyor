@@ -169,7 +169,6 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 - `conveyor run` checks the frontmatter of all configured stages once at start, so a missing skill shows up at once and not hours later.
 - For teams, skills belong in the repository (committed copies) or in a plugin. Symlinks to personal paths break on other workstations.
 - The claude adapter attaches personal skills through `--add-dir` (names stay unchanged) and plugin skills through a temporary plugin with the same name (`plugin:skill` stays unchanged). Skills are supported only for claude stages for now.
-- Fallback: `settings: full` per stage in `local.yaml` only. It loads all personal settings for that stage on this workstation. It is a personal choice and never part of the team configuration.
 
 ## Stage result contract
 
@@ -418,11 +417,13 @@ Codex stages accept two options:
 | Option | Values | Default |
 |---|---|---|
 | `sandbox` | `workspace-write`, `full-access` | `workspace-write` |
-| `network` | `true`, `false` (only with `workspace-write`) | `true` |
+| `network` | `true`, `false` (only with `workspace-write`) | `false` |
 
 - In `workspace-write` codex cannot write to `.git` (verified on macOS), so the agent cannot commit. `full-access` removes the sandbox, like `bypassPermissions` for claude.
 - In every mode the CLI commits the remaining workspace changes after each stage (`<stage>: <summary>`) and pushes the task branch.
 - These options are an error on non-codex stages.
+
+Claude stages accept `permission_mode`: `bypassPermissions` (default), `auto`, `acceptEdits`, `dontAsk`. Allow rules for the limiting modes come from the repository's `.claude/settings.json`. The option is an error on non-claude stages.
 
 Stage instructions for `claude` can use Dynamic Workflows for parallel work (for example a reviewer panel). This is a stage capability, not the orchestration layer.
 

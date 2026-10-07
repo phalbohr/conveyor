@@ -143,7 +143,10 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
       await eventually(async () => {
         expect((await board.pullRequest(t.id))?.mergeable).toBe('yes')
       })
-      expect(await board.mergePullRequest(t.id, 'squash')).toEqual({ ok: true })
+      expect(opened.headSha).toMatch(/\w{6,}/)
+      expect(await board.mergePullRequest(t.id, 'squash', 'f'.repeat(40))).toMatchObject({ ok: false })
+      expect((await board.pullRequest(t.id))?.state).toBe('open')
+      expect(await board.mergePullRequest(t.id, 'squash', opened.headSha)).toEqual({ ok: true })
       expect((await board.pullRequest(t.id))?.state).toBe('merged')
       expect((await board.getTask(t.id))?.closed).toBe(false)
     })

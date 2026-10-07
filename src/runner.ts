@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Board } from './board/board.js'
 import { probesOf, type Context } from './cli.js'
@@ -21,6 +21,7 @@ export type RunnerEvent = { time: string; level: 'info' | 'warning' | 'error'; t
 export type RunnerSetup = { settings: string; config: Config; board: Board }
 
 const KEEP = 200
+const LOG_LIMIT = 10 * 1024 * 1024
 
 export function logFile(home: string, project: string) {
   return join(home, '.conveyor', 'logs', `${project.replaceAll('/', '-')}.log`)
@@ -168,6 +169,7 @@ export class Runner {
     if (this.events.length > KEEP) this.events.splice(0, this.events.length - KEEP)
     const file = logFile(this.context.home, this.setup.config.board.project)
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+    if ((statSync(file, { throwIfNoEntry: false })?.size ?? 0) > LOG_LIMIT) renameSync(file, `${file}.1`)
     appendFileSync(file, `${event.time} ${level} ${text}\n`, { mode: 0o600 })
     this.echo?.(event)
     this.notify()

@@ -52,7 +52,7 @@ conveyor new
 | `conveyor models [harness]` | Models and efforts each harness offers (cached; `--refresh` asks again) |
 | `conveyor skill install` | Installs the `conveyor-help` skill for Claude Code (`~/.claude/skills`) and agents that read `~/.agents/skills`; `--project` installs into the repository |
 
-Every command accepts `--json`.
+`--json` prints machine-readable output for `conveyor`, `init`, `new`, `config list`, `config get`, `models`, `skill install`, and `--version`.
 
 ## Where things are configured
 
@@ -86,7 +86,7 @@ Every command accepts `--json`.
 
 ## Harnesses
 
-`claude` and `codex` are built in. `config.yaml` lists the presets for `opencode`, `pi`, `openhands`, and `agent-zero`; edit them there or add any other CLI:
+`claude` and `codex` are built in and tested with real runs. `config.yaml` lists the presets for `opencode`, `pi`, `openhands`, and `agent-zero`; they follow the tools' documentation and are not yet verified with real runs. Edit them there or add any other CLI:
 
 ```yaml
 harnesses:

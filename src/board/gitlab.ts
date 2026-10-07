@@ -29,6 +29,7 @@ type Note = { id: number; body: string; system: boolean; author: { username: str
 type MergeRequest = {
   iid: number
   web_url: string
+  sha: string
   state: 'opened' | 'merged' | 'closed' | 'locked'
   detailed_merge_status: string
   head_pipeline: { status: string } | null
@@ -186,6 +187,7 @@ export class GitLabBoard implements Board {
     return {
       number: String(request.iid),
       url: request.web_url,
+      headSha: request.sha,
       state: request.state === 'opened' || request.state === 'locked' ? 'open' : request.state,
       checks: checks(request.head_pipeline?.status),
       mergeable: mergeable(request.detailed_merge_status),
@@ -202,10 +204,10 @@ export class GitLabBoard implements Board {
     }
   }
 
-  async mergePullRequest(id: string, method: MergeMethod): Promise<{ ok: true } | { ok: false; error: string }> {
+  async mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }> {
     const pull = await this.pullRequest(id)
     if (!pull || pull.state !== 'open') return { ok: false, error: 'no open merge request' }
-    const result = await this.call(['-X', 'PUT', `${this.api}/merge_requests/${pull.number}/merge`, ...(method === 'squash' ? ['-F', 'squash=true'] : [])])
+    const result = await this.call(['-X', 'PUT', `${this.api}/merge_requests/${pull.number}/merge`, '-f', `sha=${sha}`, ...(method === 'squash' ? ['-F', 'squash=true'] : [])])
     return result.code === 0 ? { ok: true } : { ok: false, error: (result.stderr || result.stdout).trim() || `merge failed with HTTP ${result.status}` }
   }
 
