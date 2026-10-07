@@ -41,6 +41,7 @@ const ISSUE_FIELDS = 'iid title description author { username } state createdAt 
 const BLOCKED_BY = /^Blocked by: (.+)$/m
 const LOCK_PREFIX = 'conveyor-lock/'
 const DEVELOPER = 30
+const APPROVED = /^approved this merge request/
 const NETWORK = /dial tcp|i\/o timeout|connection reset|EOF|TLS handshake timeout|connection refused/i
 const CONNECT = /dial tcp/i
 
@@ -182,7 +183,9 @@ export class GitLabBoard implements Board {
     const reviewers = await this.json<{ user: { username: string }; state: string; updated_at?: string; created_at?: string }[]>([
       `${this.api}/merge_requests/${first.iid}/reviewers`,
     ])
-    const notes = (await this.pages<Note>(`${this.api}/merge_requests/${first.iid}/notes?sort=asc&order_by=created_at`)).filter((note) => !note.system)
+    const all = await this.pages<Note>(`${this.api}/merge_requests/${first.iid}/notes?sort=asc&order_by=created_at`)
+    const notes = all.filter((note) => !note.system)
+    const approvedAt = new Map(all.filter((note) => note.system && APPROVED.test(note.body)).map((note) => [note.author.username, note.created_at]))
     const now = new Date().toISOString()
     return {
       number: String(request.iid),
@@ -195,7 +198,10 @@ export class GitLabBoard implements Board {
         .filter((note) => note.position)
         .map((note) => ({ author: note.author.username, body: `${note.position?.new_path ?? ''}${note.position?.new_line ? `:${note.position.new_line}` : ''}: ${note.body}` })),
       reviews: [
-        ...approvals.approved_by.map(({ user }) => ({ author: user.username, state: 'approved' as const, body: '', submittedAt: now })),
+        ...approvals.approved_by.flatMap(({ user }) => {
+          const submittedAt = approvedAt.get(user.username)
+          return submittedAt ? [{ author: user.username, state: 'approved' as const, body: '', submittedAt }] : []
+        }),
         ...reviewers
           .filter((reviewer) => reviewer.state === 'requested_changes')
           .map((reviewer) => ({ author: reviewer.user.username, state: 'changes_requested' as const, body: '', submittedAt: reviewer.updated_at ?? reviewer.created_at ?? now })),

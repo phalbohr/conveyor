@@ -158,7 +158,7 @@ The conveyor runs agents with your permissions and merges with your token. Befor
 - Limit the agents with `permission_mode` (claude stages) and `sandbox`/`network` (codex stages), or run the conveyor in a container or under a separate user with a token for that board only.
 - Review changes to `.conveyor/` like code: `hooks` and harness commands run on every workstation.
 
-The full trust model and how to report a vulnerability are in [SECURITY.md](https://github.com/phalbohr/conveyor/blob/main/SECURITY.md).
+For a repository you care about, run the conveyor as a separate bot account with access to that repository only; the steps are in "Recommended setup" in SECURITY.md. The full trust model and how to report a vulnerability are in [SECURITY.md](https://github.com/phalbohr/conveyor/blob/main/SECURITY.md).
 
 ## Development
 
