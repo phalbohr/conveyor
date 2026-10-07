@@ -194,7 +194,7 @@ stages:
     expect(c.stages.find((stage) => stage.name === 'implement')).toMatchObject({ harness: 'opencode', model: 'litellm/qwen3-coder' })
   })
 
-  it('provides presets for opencode, pi, openhands, and agent-zero', () => {
+  it('provides presets for opencode, kilocode, pi, openhands, and agent-zero', () => {
     const c = config(`${BOARD}
 harnesses:
   openhands:
@@ -203,7 +203,7 @@ stages:
   implement: {harness: pi, model: litellm/qwen3-coder}
   review: {harness: openhands, model: litellm_proxy/qwen3-coder}
 `)
-    expect(Object.keys(c.harnesses).sort()).toEqual(['agent-zero', 'opencode', 'openhands', 'pi'])
+    expect(Object.keys(c.harnesses).sort()).toEqual(['agent-zero', 'kilocode', 'opencode', 'openhands', 'pi'])
     expect(c.harnesses.pi?.command).toBe('pi')
     expect(c.harnesses.openhands?.env).toEqual({ LLM_MODEL: '{model}', OPENHANDS_WORK_DIR: '{workspace}', LLM_BASE_URL: 'http://litellm:4000' })
   })
