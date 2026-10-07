@@ -155,6 +155,20 @@ describe('conveyor attach', () => {
     expect(last).not.toContain('ghp_')
   })
 
+  it('hides a harness key from local.yaml in the posted answer', async () => {
+    const board = new FakeBoard('me')
+    const task = await waitingTask(board)
+    const paths = await project()
+    writeFileSync(`${paths.cwd}/.conveyor/local.yaml`, 'harnesses:\n  opencode:\n    env: {LLM_API_KEY: "local-key-7f3a9c"}\n')
+    const { interact } = agent('The endpoint needs local-key-7f3a9c in the header.\n')
+
+    await runCli(['attach', task.id], { ...paths, board, interact })
+
+    const last = (await board.listComments(task.id)).at(-1)?.body ?? ''
+    expect(last).toContain('[redacted]')
+    expect(last).not.toContain('local-key-7f3a9c')
+  })
+
   it('refuses a task that does not wait for input', async () => {
     const board = new FakeBoard('me')
     await board.createTask('Running', 'p', 'in-progress')

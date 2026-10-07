@@ -50,6 +50,7 @@ export class FakeWorkspaces implements Workspaces {
 
   async push(taskId: string) {
     this.pushes.push(taskId)
+    return taskId.padStart(40, '0')
   }
 
   async remove(taskId: string) {

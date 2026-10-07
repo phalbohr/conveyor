@@ -9,4 +9,4 @@ First public release.
 - Harnesses: `claude` and `codex` built in; presets for `opencode`, `pi`, `openhands`, and `agent-zero` (not yet verified with real runs); any CLI through `harnesses`.
 - Several workstations on one board: atomic claims, heartbeats, merge and triage locks, personal limits, and subscription reserves.
 - Control screen with a live log, settings editor, `new`, `attach`, `release`, `config`, `models`, and the `conveyor-help` skill.
-- Trust checks: tasks, comments, reviews, and commands only from users with write access; secret redaction on the board; merges bound to the checked head commit.
+- Trust checks: tasks, comments, reviews, and commands only from users with write access; secret redaction on the board, in committed artifacts, and in the log; approvals and merges bound to the reviewed head commit.

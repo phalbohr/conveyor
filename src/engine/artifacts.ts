@@ -17,6 +17,7 @@ export class Artifacts {
     private readonly workspaces: Workspaces,
     private readonly config: Config,
     private readonly home: string,
+    private readonly redact: (text: string) => string = (text) => text,
   ) {}
 
   async store(task: Task, kind: string, content: string, comments: Comment[]) {
@@ -28,7 +29,7 @@ export class Artifacts {
       return
     }
     if (storage.store === 'repo' && storage.path) {
-      await this.workspaces.commitFile(task.id, join(storage.path, fileName(task.id, kind)), content, `Add ${kind} for task ${task.id}`)
+      await this.workspaces.commitFile(task.id, join(storage.path, fileName(task.id, kind)), this.redact(content), `Add ${kind} for task ${task.id}`)
       return
     }
     if (kind === 'idea' || kind === 'story') {

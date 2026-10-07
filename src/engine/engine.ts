@@ -13,7 +13,7 @@ import type { Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
 import { buildPrompt, buildTriagePrompt, type GateMode } from './prompt.js'
 import { releaseClaim } from './release.js'
-import { publicText } from './redact.js'
+import { publicText, redactSecrets } from './redact.js'
 import { Trust } from './trust.js'
 import { parseStageFile, readFormat, renderInstructions } from './stage-file.js'
 import { waitingDeadline } from './time.js'
@@ -39,6 +39,7 @@ export type EngineOptions = {
   quotas?: QuotaStore
   loadConfig: () => LoadResult
   log?: (message: string) => void
+  redact?: (text: string) => string
 }
 
 type Running = { controller: AbortController; promise: Promise<void> }
@@ -46,7 +47,7 @@ type Running = { controller: AbortController; promise: Promise<void> }
 type StageAttempt = StageOutput & { fatal?: boolean }
 
 type Verdict = {
-  kind: 'merged' | 'rework' | 'fix' | 'merge' | 'invalid' | 'wait'
+  kind: 'merged' | 'rework' | 'fix' | 'merge' | 'invalid' | 'stale' | 'wait'
   pull: PullRequest | undefined
   approvers: string[]
   feedback: string[]
@@ -163,7 +164,8 @@ export class Engine {
         case 'review': {
           const verdict = await this.reviewSignal(task.id, config)
           if (verdict.kind === 'invalid') await this.rejectCommand(task.id, verdict.error ?? 'Invalid command.')
-          if (verdict.kind !== 'wait' && verdict.kind !== 'invalid') (owned ? resumable : fresh).push(task)
+          if (verdict.kind === 'stale' && verdict.pull) await this.reviewAgain(task.id, verdict.pull.headSha)
+          if (verdict.kind !== 'wait' && verdict.kind !== 'invalid' && verdict.kind !== 'stale') (owned ? resumable : fresh).push(task)
           else if (owned) awaitingReview++
           break
         }
@@ -295,6 +297,7 @@ export class Engine {
     const pad = findWorkpad(comments)
     const state: WorkpadState = { attempt: 0, ...pad?.state }
     const verdict = initial.state === 'review' ? await this.reviewSignal(id, config) : undefined
+    if (verdict?.kind === 'stale' || verdict?.kind === 'wait' || verdict?.kind === 'invalid') return
     const pull = verdict?.pull
     const rework = initial.state === 'rework' || verdict?.kind === 'rework'
     const waiting = state.waiting
@@ -313,7 +316,7 @@ export class Engine {
       text: pad?.text ?? '',
       padId: pad?.id,
       workspace: '',
-      artifacts: new Artifacts(board, workspaces, config, this.options.home),
+      artifacts: new Artifacts(board, workspaces, config, this.options.home, this.options.redact ?? ((text) => redactSecrets(text))),
       save: async () => {
         state.heartbeat = new Date().toISOString()
         const body = renderWorkpad(state, run.text)
@@ -462,7 +465,10 @@ export class Engine {
       await workspaces
         .commitAll(id, `${stage.name}: ${(output.result.summary.split('\n')[0] ?? '').slice(0, 72)}`)
         .catch((error: unknown) => this.log(`task ${id}: commit failed: ${(error as Error).message}`))
-      await workspaces.push(id).catch((error: unknown) => this.log(`task ${id}: push failed: ${(error as Error).message}`))
+      await workspaces
+        .push(id)
+        .then((sha) => (state.headSha = sha))
+        .catch((error: unknown) => this.log(`task ${id}: push failed: ${(error as Error).message}`))
 
       let result = output.result
       if (result.workpad) run.text = result.workpad
@@ -523,6 +529,16 @@ export class Engine {
     if (task.openBlockers > 0) return wait('open blockers')
     const pull = await board.pullRequest(id)
     if (pull?.state === 'merged') return 'success'
+    if (pull?.state === 'open' && pull.headSha !== state.headSha) {
+      delete state.stage
+      state.headSha = pull.headSha
+      state.waiting = { kind: 'review', since: new Date().toISOString() }
+      await board.addComment(id, agentComment('review', changedText(pull.headSha)))
+      await board.setState(id, 'review')
+      await run.save()
+      this.log(`task ${id}: the branch changed after approval, back to review`)
+      return 'stop'
+    }
     let error: string | undefined
     if (!pull || pull.state === 'closed') error = 'the pull request is closed'
     else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait('checks are pending')
@@ -670,6 +686,7 @@ export class Engine {
     if (human.some((comment) => isCommand(comment.body, 'fix')) || reviews.some((review) => review.state === 'changes_requested')) {
       return { kind: 'fix', pull, approvers: [], feedback, from: 'plan' }
     }
+    if (pull?.state === 'open' && pull.headSha !== pad?.state.headSha) return { kind: 'stale', pull, approvers: [], feedback }
     const approvers = [
       ...new Set([
         ...reviews.filter((review) => review.state === 'approved').map((review) => review.author),
@@ -677,6 +694,17 @@ export class Engine {
       ]),
     ]
     return { kind: pull?.state === 'open' && approvers.length >= config.review.approvals ? 'merge' : 'wait', pull, approvers, feedback }
+  }
+
+  private async reviewAgain(id: string, sha: string) {
+    const { board } = this.options
+    const { pad } = await this.workpad(id)
+    if (!pad) return
+    pad.state.headSha = sha
+    pad.state.waiting = { kind: 'review', since: new Date(Date.now() + 1).toISOString() }
+    await board.addComment(id, agentComment('review', changedText(sha)))
+    await board.updateComment(pad.id, renderWorkpad(pad.state, pad.text))
+    this.log(`task ${id}: the branch changed during review, approval needed for ${sha.slice(0, 7)}`)
   }
 
   private async rejectCommand(id: string, error: string) {
@@ -898,6 +926,10 @@ export class Engine {
   private log(message: string) {
     this.options.log?.(message)
   }
+}
+
+function changedText(sha: string) {
+  return `**The branch changed to \`${sha.slice(0, 7)}\` after the review request.** Earlier approvals and \`/merge\` no longer count. Review the new commits, then approve or write \`/merge\` again.`
 }
 
 function withoutOwner(task: Task): Task {

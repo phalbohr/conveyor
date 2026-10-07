@@ -14,11 +14,12 @@ import { ModelCache, catalogsFor, modelKnown } from './models.js'
 import { expandPath } from './paths.js'
 import { checkSettingsSync, syncNotice } from './settings-sync.js'
 import { undescribedNotice, undescribedStages } from './stage-catalog.js'
+import { redactSecrets } from './engine/redact.js'
 import { QuotaStore, UsageLedger } from './usage.js'
 import { GitWorkspaces } from './workspaces.js'
 
 export type RunnerEvent = { time: string; level: 'info' | 'warning' | 'error'; text: string }
-export type RunnerSetup = { settings: string; config: Config; board: Board }
+export type RunnerSetup = { settings: string; config: Config; board: Board; secrets: () => string[] }
 
 const KEEP = 200
 const LOG_LIMIT = 10 * 1024 * 1024
@@ -102,6 +103,7 @@ export class Runner {
       quotas: new QuotaStore(quotaFile(context.home, project)),
       loadConfig: () => loadConfig(settings),
       log,
+      redact: (text) => redactSecrets(text, this.setup.secrets()),
     })
 
     let noticed = ''
@@ -164,13 +166,13 @@ export class Runner {
   }
 
   private emit(level: RunnerEvent['level'], text: string) {
-    const event = { time: new Date().toISOString(), level, text }
+    const event = { time: new Date().toISOString(), level, text: redactSecrets(text, this.setup.secrets()) }
     this.events.push(event)
     if (this.events.length > KEEP) this.events.splice(0, this.events.length - KEEP)
     const file = logFile(this.context.home, this.setup.config.board.project)
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
     if ((statSync(file, { throwIfNoEntry: false })?.size ?? 0) > LOG_LIMIT) renameSync(file, `${file}.1`)
-    appendFileSync(file, `${event.time} ${level} ${text}\n`, { mode: 0o600 })
+    appendFileSync(file, `${event.time} ${level} ${event.text}\n`, { mode: 0o600 })
     this.echo?.(event)
     this.notify()
   }
