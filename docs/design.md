@@ -401,6 +401,7 @@ Other harnesses run through a generic command adapter. Built-in presets:
 | Harness | Command | Model endpoint |
 |---|---|---|
 | `opencode` | `opencode run --auto -m {model} --dir {workspace} {prompt}` | custom provider in `opencode.json` (`@ai-sdk/openai-compatible`, `baseURL`) |
+| `kilocode` | `kilo run --auto -m {model} --dir {workspace} {prompt}` | custom provider in `~/.config/kilo/kilo.jsonc`, same format as OpenCode |
 | `pi` | `pi --mode json --model {model} --thinking {effort} -- {prompt}` | provider in `~/.pi/agent/models.json` (`api: openai-completions`, `baseUrl`) |
 | `openhands` | `openhands --headless --override-with-envs --json -t {prompt}` with `LLM_MODEL={model}`, `OPENHANDS_WORK_DIR={workspace}` | `LLM_BASE_URL`, `LLM_API_KEY` in `env` |
 | `agent-zero` | `a0 headless -p {prompt} --output jsonl --workspace {workspace}` | model set in the Agent Zero instance; host in `AGENT_ZERO_HOST` |

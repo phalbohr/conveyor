@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { Harness } from '../src/harness/harness.js'
 import { tempDir } from './helpers.js'
 
-export function harnessContract(name: string, makeHarness: () => Harness, model: string) {
+export function harnessContract(name: string, makeHarness: () => Harness, model: string, options: { usage: boolean } = { usage: true }) {
   describe(`${name} harness contract`, { timeout: 300_000 }, () => {
     const harness = makeHarness()
 
@@ -24,8 +24,10 @@ export function harnessContract(name: string, makeHarness: () => Harness, model:
         onEvent: () => events++,
       })
       expect(output.result).toMatchObject({ outcome: 'done', summary: 'hello-from-file' })
-      expect(output.usage.inputTokens).toBeGreaterThan(0)
-      expect(output.usage.outputTokens).toBeGreaterThan(0)
+      if (options.usage) {
+        expect(output.usage.inputTokens).toBeGreaterThan(0)
+        expect(output.usage.outputTokens).toBeGreaterThan(0)
+      }
       expect(events).toBeGreaterThan(0)
     })
 
