@@ -17,7 +17,7 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 | 7 | `implement`, `review`, and custom stages before `merge`, each in the task worktree on branch `conveyor/<number>`; the conveyor commits and pushes after every stage | agents | in-progress |
 | 8 | `merge` stage prepares the branch; the conveyor opens a pull/merge request | agent, conveyor | — |
 | 9 | Merge gate by `transitions.merge`: `human` → review; `ai` → merge; `smart` → the merge stage decides by `smart/merge.md` | human or agent | `conveyor::review` while waiting |
-| 10 | Review: `/merge` or Approve → merge; `/fix`, `/fix_from:`, `/rework` → back to work | human | review / in-progress |
+| 10 | Review: `/merge` or Approve → merge; `/fix`, `/fix_from:`, `/rework` → back to work. An approval counts only for the head commit under review; a push by someone else asks for a new approval | human | review / in-progress |
 | 11 | Landing: waits for blockers and CI, merges under the lock `conveyor-lock/merge` | conveyor | — |
 | 12 | Post-merge stages with `when: success`, `failure`, or `always` (for example `fix-ci`) | agents | in-progress |
 | 13 | Done: issue closed, lock, workspace, and task branch removed | conveyor | `conveyor::done` |

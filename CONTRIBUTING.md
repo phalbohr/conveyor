@@ -25,4 +25,4 @@ Tests against real boards and harnesses run only on demand. See "Development" in
 
 ## Security
 
-Report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
+Report vulnerabilities privately; see [SECURITY.md](SECURITY.md). Releases follow [RELEASING.md](RELEASING.md).

@@ -8,14 +8,14 @@ import { GitLabBoard } from '../board/gitlab.js'
 import { RedactingBoard } from '../board/redacting.js'
 import { type Context } from '../cli.js'
 import { loadConfig, type Config } from '../config.js'
-import { secretValues } from '../engine/redact.js'
+import { configSecrets, secretValues } from '../engine/redact.js'
 import { manualRelease } from '../engine/release.js'
 import { parseStageFile } from '../engine/stage-file.js'
 import { findSettings } from '../settings.js'
 import { resolveSkills } from '../skills.js'
 import { type Workspaces } from '../workspaces.js'
 
-type Prepared = { settings: string; config: Config; board: Board }
+type Prepared = { settings: string; config: Config; board: Board; secrets: () => string[] }
 
 export function checkStages(config: Config, settings: string, context: { repo: string; home: string }): string[] {
   const problems: string[] = []
@@ -91,14 +91,18 @@ export function prepare(context: Context): Prepared | undefined {
   }
   const { provider, project, github_project } = loaded.config.board
   const warn = (message: string) => context.stderr(`warning: ${message}\n`)
+  const secrets = () => {
+    const current = loadConfig(settings)
+    return [...secretValues(process.env), ...configSecrets(current.ok ? current.config : loaded.config)]
+  }
   const board = new RedactingBoard(
     context.boardFor?.(loaded.config) ??
       (provider === 'gitlab'
         ? new GitLabBoard(project, context.run)
         : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), warn })),
-    secretValues(process.env),
+    secrets,
   )
-  return { settings, config: loaded.config, board }
+  return { settings, config: loaded.config, board, secrets }
 }
 
 export function usageFile(home: string, project: string) {

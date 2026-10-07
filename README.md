@@ -142,6 +142,8 @@ The conveyor writes on the board; you answer in comments.
 | | `/rework <notes>` | new branch, new attempt after `plan` |
 | any task | label `conveyor::rework` | same as `/rework` |
 
+An approval or `/merge` counts only for the head commit under review. When someone else pushes to the task branch, the conveyor comments that the branch changed and waits for a new approval.
+
 The conveyor reads commands, reviews, replies, and its own hidden markers only from users with write access to the repository (GitHub: write, maintain, or admin; GitLab: Developer or higher). It takes only tasks whose author has write access; to run a task from an outside contributor, create a new issue with its content.
 
 On GitLab, `/merge` in a merge request comment is a GitLab quick action and never reaches the conveyor. Approve the merge request (button or `/approve`) or write `/merge` on the issue. `/fix`, `/fix_from:`, and `/rework` work on both.

@@ -9,7 +9,7 @@ import { UsageLedger } from '../src/usage.js'
 import { FakeWorkspaces, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
-function setup(options: { config?: string; script?: Script } = {}) {
+function setup(options: { config?: string; script?: Script; workspaces?: FakeWorkspaces; redact?: (text: string) => string } = {}) {
   const settings = tempDir('conveyor-settings-')
   writeFileSync(
     join(settings, 'config.yaml'),
@@ -25,13 +25,14 @@ function setup(options: { config?: string; script?: Script } = {}) {
   const engine = new Engine({
     board,
     harnesses: { claude: harness },
-    workspaces: new FakeWorkspaces(),
+    workspaces: options.workspaces ?? new FakeWorkspaces(),
     settingsDir: settings,
     repo: tempDir(),
     home,
     usage: new UsageLedger(),
     loadConfig: () => loadConfig(settings),
     log: (message) => log.push(message),
+    ...(options.redact ? { redact: options.redact } : {}),
   })
   const cycle = async () => {
     await engine.tick()
@@ -88,6 +89,47 @@ describe('commands from users without write access', () => {
   })
 })
 
+describe('approval bound to the head commit', () => {
+  const changed = 'b'.repeat(40)
+
+  it('drops a /merge given before the branch changed and asks again', async () => {
+    const { board, cycle } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/merge')
+    board.updatePullRequest('1', { headSha: changed })
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect((await board.getTask('1'))?.state).toBe('review')
+    expect((await board.listComments('1')).map((c) => c.body).join('\n')).toContain('The branch changed to `bbbbbbb`')
+
+    await cycle()
+    expect(board.merges).toEqual([])
+    await board.addComment('1', '/merge')
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+  })
+
+  it('does not merge a head that changed while the merge waited for checks', async () => {
+    const { board, cycle } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    board.updatePullRequest('1', { checks: 'pending' })
+    await board.addComment('1', '/merge')
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('in-progress')
+
+    board.updatePullRequest('1', { checks: 'success', headSha: changed })
+    const comments = await board.listComments('1')
+    const pad = comments.find((c) => c.body.includes('conveyor:workpad'))
+    if (pad) await board.updateComment(pad.id, pad.body.replace(/"retryAt":"[^"]+"/, '"retryAt":"2000-01-01T00:00:00.000Z"'))
+    await cycle()
+
+    expect(board.merges).toEqual([])
+    expect((await board.getTask('1'))?.state).toBe('review')
+  })
+})
+
 describe('tasks and markers from users without write access', () => {
   it('does not take a task an outsider created', async () => {
     const { board, cycle, runs, log } = setup()
@@ -134,6 +176,22 @@ describe('stage output', () => {
     expect(text).toContain('~/.config/gh/hosts.yml')
     expect(text).not.toContain('ghp_')
     expect(text).not.toContain(home)
+  })
+
+  it('hides secrets in artifacts the conveyor commits to the repository', async () => {
+    const workspaces = new FakeWorkspaces()
+    const { board, cycle } = setup({
+      config: 'pickup_from: story\nartifacts: {plan: {store: repo, path: docs/plans}}\ntransitions: {story_to_plan: autonomous}',
+      workspaces,
+      redact: (text) => text.replaceAll('local-key-7f3a9c', '[redacted]').replace(/ghp_\w+/g, '[redacted]'),
+      script: (run) => (run.stage === 'plan' ? { outcome: 'done', summary: 'ok', artifact: { kind: 'plan', content: `Use ghp_${'d'.repeat(36)} and local-key-7f3a9c.` } } : { outcome: 'done', summary: 'ok' }),
+    })
+    await board.createTask('Add login', 'p', 'story')
+    await cycle()
+    const committed = workspaces.commits.map((commit) => commit.content).join('\n')
+    expect(committed).toContain('[redacted]')
+    expect(committed).not.toContain('ghp_')
+    expect(committed).not.toContain('local-key-7f3a9c')
   })
 
   it('does not let a later stage replace the issue body', async () => {

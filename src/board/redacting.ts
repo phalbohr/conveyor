@@ -4,11 +4,11 @@ import type { Board, MergeMethod, TaskState } from './board.js'
 export class RedactingBoard implements Board {
   constructor(
     private readonly board: Board,
-    private readonly secrets: string[],
+    private readonly secrets: () => string[],
   ) {}
 
   private clean(text: string) {
-    return redactSecrets(text, this.secrets)
+    return redactSecrets(text, this.secrets())
   }
 
   user() {

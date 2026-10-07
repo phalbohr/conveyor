@@ -14,7 +14,7 @@ export interface Workspaces {
   commitAll(taskId: string, message: string): Promise<boolean>
   reset(taskId: string): Promise<void>
   deleteBranch(taskId: string): Promise<void>
-  push(taskId: string): Promise<void>
+  push(taskId: string): Promise<string>
   remove(taskId: string): Promise<void>
   list(): Promise<string[]>
 }
@@ -84,6 +84,7 @@ export class GitWorkspaces implements Workspaces {
 
   async push(taskId: string) {
     await this.git(this.path(taskId), 'push', '--quiet', '--force', 'origin', `HEAD:refs/heads/${taskBranch(taskId)}`)
+    return this.git(this.path(taskId), 'rev-parse', 'HEAD')
   }
 
   async remove(taskId: string) {

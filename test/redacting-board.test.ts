@@ -8,7 +8,7 @@ describe('RedactingBoard', () => {
   const key = 'local-model-key-123456'
   const setup = () => {
     const fake = new FakeBoard('me')
-    return { fake, board: new RedactingBoard(fake, secretValues({ LLM_API_KEY: key, HOME: '/Users/me', SHORT_TOKEN: 'abc' })) }
+    return { fake, board: new RedactingBoard(fake, () => secretValues({ LLM_API_KEY: key, HOME: '/Users/me', SHORT_TOKEN: 'abc' })) }
   }
 
   it('hides token patterns and secret environment values in everything it writes', async () => {
@@ -27,7 +27,7 @@ describe('RedactingBoard', () => {
     expect(pull.state).toBe('open')
   })
 
-  it('treats only long values of secret-named variables as secrets', () => {
-    expect(secretValues({ LLM_API_KEY: key, HOME: '/Users/me/a/long/path', SHORT_TOKEN: 'abc' })).toEqual([key])
+  it('treats values of eight or more characters of secret-named variables as secrets', () => {
+    expect(secretValues({ LLM_API_KEY: key, DB_PASSWORD: 'hunter22', HOME: '/Users/me/a/long/path', SHORT_TOKEN: 'abc', SERVICE_KEY: 'k3y-value' })).toEqual([key, 'hunter22', 'k3y-value'])
   })
 })
