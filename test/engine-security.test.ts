@@ -111,6 +111,19 @@ describe('approval bound to the head commit', () => {
     expect(board.merges).toHaveLength(1)
   })
 
+  it('does not count an approval kept from before the branch changed', async () => {
+    const { board, cycle } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    const before = new Date().toISOString()
+    board.updatePullRequest('1', { headSha: changed, checks: 'pending' })
+    await cycle()
+    board.updatePullRequest('1', { checks: 'success', reviews: [{ author: 'alice', state: 'approved', body: '', submittedAt: before }] })
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect((await board.getTask('1'))?.state).toBe('review')
+  })
+
   it('does not merge a head that changed while the merge waited for checks', async () => {
     const { board, cycle } = setup()
     await board.createTask('Add login', 'p', 'plan')
