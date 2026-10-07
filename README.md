@@ -8,7 +8,7 @@ After `conveyor skill install`, ask your agent anything about the conveyor: it e
 
 ## Status
 
-Alpha (0.x). The configuration format and the board labels can change between minor versions; [CHANGELOG.md](https://github.com/phalbohr/conveyor/blob/main/CHANGELOG.md) lists every change. The `claude` and `codex` harnesses and the GitHub and GitLab boards are tested with real runs; the other harness presets are not yet.
+Alpha (0.x). The configuration format and the board labels can change between minor versions; [CHANGELOG.md](https://github.com/phalbohr/conveyor/blob/main/CHANGELOG.md) lists every change. The `claude`, `codex`, `opencode`, and `kilocode` harnesses and the GitHub and GitLab boards are tested with real runs; the `pi`, `openhands`, and `agent-zero` presets are not yet.
 
 Agents run as your user and, by default, without permission prompts. Read [Security](#security) before the first run.
 
@@ -18,7 +18,7 @@ Agents run as your user and, by default, without permission prompts. Read [Secur
 - Node.js 22.12 or later, and git.
 - GitHub: `gh`, signed in (`gh auth login`), with the `project` scope if you mirror states to GitHub Projects.
 - GitLab: `glab`, signed in (`glab auth login`).
-- The CLI of every harness your settings use, signed in. The default settings use `claude` (Claude Code) for every stage and for triage; `codex`, `opencode`, `pi`, `openhands`, and `a0` are needed only when a stage uses them.
+- The CLI of every harness your settings use, signed in. The default settings use `claude` (Claude Code) for every stage and for triage; `codex`, `opencode`, `kilo` (Kilo Code), `pi`, `openhands`, and `a0` are needed only when a stage uses them.
 
 ## Install
 
@@ -103,7 +103,7 @@ The task is not taken? Check that the label matches `pickup_from` and the issue 
 
 ## Harnesses
 
-`claude` and `codex` are built in and tested with real runs. `config.yaml` lists the presets for `opencode`, `pi`, `openhands`, and `agent-zero`; they follow the tools' documentation and are not yet verified with real runs. Edit them there or add any other CLI:
+`claude` and `codex` are built in. `config.yaml` lists the presets for `opencode`, `kilocode`, `pi`, `openhands`, and `agent-zero`. `claude`, `codex`, `opencode`, and `kilocode` are tested with real runs, the last two with a self-hosted model behind LiteLLM; `pi`, `openhands`, and `agent-zero` follow the tools' documentation and are not yet verified. Edit them there or add any other CLI:
 
 ```yaml
 harnesses:

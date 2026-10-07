@@ -7,6 +7,12 @@ export const PRESETS: Record<string, CommandDefinition> = {
     env: {},
     models: { args: ['models'] },
   },
+  kilocode: {
+    command: 'kilo',
+    args: ['run', '--auto', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
+    env: {},
+    models: { args: ['models'] },
+  },
   pi: {
     command: 'pi',
     args: ['--mode', 'json', '--model', '{model}', '--thinking', '{effort}', '--', '{prompt}'],

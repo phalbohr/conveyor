@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ClaudeHarness } from '../src/harness/claude.js'
 import { CodexHarness } from '../src/harness/codex.js'
+import { CommandHarness } from '../src/harness/command.js'
+import { PRESETS } from '../src/harness/presets.js'
 import { childEnv, parseResult, type Harness } from '../src/harness/harness.js'
 import { tempDir } from './helpers.js'
 import { harnessContract } from './harness-contract.js'
@@ -207,5 +209,7 @@ if (real) {
     const [name, model = ''] = entry.split(':')
     if (name === 'claude') harnessContract('claude', () => new ClaudeHarness(), model)
     if (name === 'codex') harnessContract('codex', () => new CodexHarness(), model)
+    const preset = PRESETS[name ?? '']
+    if (preset) harnessContract(name ?? '', () => new CommandHarness(preset), model, { usage: false })
   }
 }
