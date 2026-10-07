@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ['22.12', '24', 'current']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: git config --global user.name ci && git config --global user.email ci@example.test && git config --global init.defaultBranch main
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Install the packed CLI
+        run: |
+          npm pack
+          npm install --global --ignore-scripts ./phalbohr-conveyor-*.tgz
+          conveyor --version
+          conveyor --help

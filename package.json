@@ -2,24 +2,54 @@
   "name": "@phalbohr/conveyor",
   "version": "0.1.0",
   "description": "Configurable development conveyor: agents move kanban tasks from idea to merge",
+  "keywords": [
+    "ai-agents",
+    "claude-code",
+    "codex",
+    "kanban",
+    "github",
+    "gitlab",
+    "automation",
+    "cli"
+  ],
+  "homepage": "https://github.com/phalbohr/conveyor#readme",
+  "bugs": {
+    "url": "https://github.com/phalbohr/conveyor/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phalbohr/conveyor.git"
+  },
   "license": "MIT",
+  "author": "Pavel Polukhin",
   "type": "module",
   "bin": {
     "conveyor": "dist/bin.js"
   },
   "files": [
     "dist",
+    "!dist/board/fake.*",
+    "!dist/harness/fake.*",
     "templates",
     "skills"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
     "dev": "tsx src/bin.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test"
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",

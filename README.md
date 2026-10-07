@@ -2,16 +2,23 @@
 
 A configurable development conveyor. Tasks live on a GitHub or GitLab board. Agents from different harnesses move each task through stages — story, plan, implement, review, merge — and a human decides at the gates you choose. Several workstations can work on one board at the same time.
 
-The full workflow, from an idea to a merged change, is in [skills/conveyor-help/workflow.md](skills/conveyor-help/workflow.md). The design is in [docs/design.md](docs/design.md).
+The full workflow, from an idea to a merged change, is in [skills/conveyor-help/workflow.md](https://github.com/phalbohr/conveyor/blob/main/skills/conveyor-help/workflow.md). The design is in [docs/design.md](https://github.com/phalbohr/conveyor/blob/main/docs/design.md).
 
 After `conveyor skill install`, ask your agent anything about the conveyor: it explains the workflow and settings and changes them for you.
 
+## Status
+
+Alpha (0.x). The configuration format and the board labels can change between minor versions; [CHANGELOG.md](https://github.com/phalbohr/conveyor/blob/main/CHANGELOG.md) lists every change. The `claude` and `codex` harnesses and the GitHub and GitLab boards are tested with real runs; the other harness presets are not yet.
+
+Agents run as your user and, by default, without permission prompts. Read [Security](#security) before the first run.
+
 ## Requirements
 
-- Node.js 20 or later.
+- macOS or Linux. Windows is not supported.
+- Node.js 22.12 or later, and git.
 - GitHub: `gh`, signed in (`gh auth login`), with the `project` scope if you mirror states to GitHub Projects.
 - GitLab: `glab`, signed in (`glab auth login`).
-- The CLI of every harness your stages use: `claude`, `codex`, `opencode`, `pi`, `openhands`, or `a0`.
+- The CLI of every harness your settings use, signed in. The default settings use `claude` (Claude Code) for every stage and for triage; `codex`, `opencode`, `pi`, `openhands`, and `a0` are needed only when a stage uses them.
 
 ## Install
 
@@ -34,6 +41,16 @@ Put a task on the board with the label `conveyor::plan` (or `conveyor::story` / 
 ```bash
 conveyor new
 ```
+
+### First run, step by step
+
+1. In a repository whose `origin` is on GitHub or GitLab, run `conveyor init` and commit `.conveyor/`.
+2. Create an issue yourself (the conveyor takes only tasks from users with write access) and add the label `conveyor::plan`. Write the plan in the issue text.
+3. Run `conveyor`: the control screen opens. Press `c` to start the conveyor.
+4. The log shows `claimed task <number>` and each stage. The issue gets `conveyor::in-progress`, then a pull request opens and the issue gets `conveyor::review`.
+5. Review the pull request. Write `/merge` (or approve) to merge, `/fix <notes>` to fix on the same branch, or `/rework <notes>` to start over.
+
+The task is not taken? Check that the label matches `pickup_from` and the issue has no open blockers. The control screen shows your limits and the team queue with the owner of each task; its log shows tasks skipped because their author has no write access. Every stage call costs tokens of the harness account; set `limits.daily_tokens` and the subscription reserves in `conveyor settings`. Stop with `c` or `q`; running stages abort, and the next start resumes the tasks.
 
 ## Commands
 
@@ -131,6 +148,16 @@ On GitLab, `/merge` in a merge request comment is a GitLab quick action and neve
 
 GitLab boards use labels as lists: create an issue board with lists for the `conveyor::*` labels. On GitLab Free, issue links are not available; the conveyor keeps blockers in a `Blocked by: #N` line in the issue description.
 
+## Security
+
+The conveyor runs agents with your permissions and merges with your token. Before you use it on a real repository:
+
+- Protect the default branch: require pull requests and status checks, and dismiss stale approvals.
+- Limit the agents with `permission_mode` (claude stages) and `sandbox`/`network` (codex stages), or run the conveyor in a container or under a separate user with a token for that board only.
+- Review changes to `.conveyor/` like code: `hooks` and harness commands run on every workstation.
+
+The full trust model and how to report a vulnerability are in [SECURITY.md](https://github.com/phalbohr/conveyor/blob/main/SECURITY.md).
+
 ## Development
 
 ```bash
@@ -154,6 +181,8 @@ CONVEYOR_GITLAB_SANDBOX=group/sandbox-project npx vitest run test/board.test.ts
 ```
 
 Do not run the board contract tests while a conveyor works on the same sandbox board: it may claim the test tasks.
+
+Contributions: see [CONTRIBUTING.md](https://github.com/phalbohr/conveyor/blob/main/CONTRIBUTING.md).
 
 ## License
 
