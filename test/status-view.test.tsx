@@ -37,6 +37,25 @@ const snapshot: StatusSnapshot = {
 }
 
 describe('statusLines', () => {
+  it('shows my status columns, the tasks of an open column, and usage on its own line', () => {
+    const closed = statusLines(snapshot)
+    expect(closed.find((line) => line.text.startsWith('my status:'))?.text).toBe('my status: in progress 1/3 · needs input 1/1 · review 0/2')
+    expect(closed.some((line) => line.text.startsWith('my status') && line.text.includes('tokens'))).toBe(false)
+    expect(closed.find((line) => line.text.startsWith('usage:'))?.text).toBe('usage: tokens today 12,345')
+    const open = statusLines(snapshot, undefined, { column: 1, open: true }).map((line) => line.text)
+    const at = open.findIndex((text) => text.startsWith('my status:'))
+    expect(open[at + 1]).toBe('  #3 Store users — plan')
+    const review = statusLines(snapshot, undefined, { column: 2, open: true }).map((line) => line.text)
+    expect(review).toContain('  no tasks review')
+    const selected = statusLines(snapshot, undefined, { column: 2, open: false }).find((line) => line.segments)?.segments?.find((segment) => segment.selected)
+    expect(selected?.text).toBe('review 0/2')
+  })
+
+  it('explains missing subscription windows', () => {
+    const text = statusLines({ ...snapshot, limits: { ...snapshot.limits, subscription: {} } }).map((line) => line.text)
+    expect(text).toContain('subscription windows: not seen yet; they appear after a claude stage runs, or turn on limits.subscription.probe')
+  })
+
   it('warns about newer team settings', () => {
     const lines = statusLines({ ...snapshot, settingsSync: { state: 'behind', base: 'origin/main', commits: ['abc123 alice, 2 hours ago: Squash merges'] } })
     expect(lines[1]).toMatchObject({ text: expect.stringContaining('Team settings are behind origin/main by 1 commit'), tone: 'warning' })
@@ -112,6 +131,18 @@ function fakeRunner() {
 
 describe('StatusScreen as the hub', () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
+
+  it('moves between status columns with the arrows and lists their tasks with Enter', async () => {
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('\u001B[C')
+    await settle()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(lastFrame()).toContain('#3 Store users — plan'), { timeout: 5_000 })
+    stdin.write('\r')
+    await vi.waitFor(() => expect(lastFrame()).not.toContain('#3 Store users — plan'), { timeout: 5_000 })
+  })
 
   it('starts and stops the conveyor with c and shows its log', async () => {
     const runner = fakeRunner()
