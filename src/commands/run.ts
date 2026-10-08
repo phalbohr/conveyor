@@ -89,20 +89,23 @@ export function prepare(context: Context): Prepared | undefined {
     context.stderr(`${loaded.errors.join('\n')}\n`)
     return undefined
   }
-  const { provider, project, github_project } = loaded.config.board
-  const warn = (message: string) => context.stderr(`warning: ${message}\n`)
   const secrets = () => {
     const current = loadConfig(settings)
     return [...secretValues(process.env), ...configSecrets(current.ok ? current.config : loaded.config)]
   }
-  const board = new RedactingBoard(
-    context.boardFor?.(loaded.config) ??
-      (provider === 'gitlab'
-        ? new GitLabBoard(project, context.run)
-        : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), warn })),
-    secrets,
-  )
+  const board = new RedactingBoard(boardAdapter(context, loaded.config), secrets)
   return { settings, config: loaded.config, board, secrets }
+}
+
+export function boardAdapter(context: Context, config: Config): Board {
+  const { provider, project, github_project } = config.board
+  const warn = (message: string) => context.stderr(`warning: ${message}\n`)
+  return (
+    context.boardFor?.(config) ??
+    (provider === 'gitlab'
+      ? new GitLabBoard(project, context.run)
+      : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), warn }))
+  )
 }
 
 export function usageFile(home: string, project: string) {

@@ -2,7 +2,9 @@ import type { Run } from '../cli.js'
 import {
   OWNER_LABEL,
   PRIORITY_LABEL,
+  STATE_COLORS,
   STATE_LABEL,
+  TASK_STATES,
   labelsToTask,
   type Board,
   type Comment,
@@ -61,6 +63,13 @@ export class GitLabBoard implements Board {
   async user() {
     this.login ??= (await this.json<{ username: string }>(['user'])).username
     return this.login
+  }
+
+  async prepare() {
+    for (const state of TASK_STATES) {
+      const result = await this.call(['-X', 'POST', `${this.api}/labels`, '-f', `name=${STATE_LABEL}${state}`, '-f', `color=#${STATE_COLORS[state]}`])
+      if (result.code !== 0 && result.status !== 409) this.fail(result, 'labels')
+    }
   }
 
   async canWrite(user: string) {

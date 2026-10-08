@@ -37,6 +37,7 @@ const TEAM: Spec[] = [
   { key: 'merge_method', label: 'Merge method', kind: 'select', options: ['merge', 'squash', 'rebase'], help: 'how the pull request is merged' },
   { key: 'review.approvals', label: 'Approvals for merge', kind: 'number', help: 'distinct people who approve before the conveyor merges' },
   { key: 'language.docs', label: 'Documentation language', kind: 'text', help: 'language of everything the team sees' },
+  { key: 'board.github_project', label: 'GitHub project number', kind: 'number', help: 'GitHub only: the project whose Conveyor field shows the task state as columns' },
 ]
 
 const PERSONAL: Spec[] = [

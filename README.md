@@ -148,7 +148,14 @@ The conveyor reads commands, reviews, replies, and its own hidden markers only f
 
 On GitLab, `/merge` in a merge request comment is a GitLab quick action and never reaches the conveyor. Approve the merge request (button or `/approve`) or write `/merge` on the issue. `/fix`, `/fix_from:`, and `/rework` work on both.
 
-GitLab boards use labels as lists: create an issue board with lists for the `conveyor::*` labels. On GitLab Free, issue links are not available; the conveyor keeps blockers in a `Blocked by: #N` line in the issue description.
+### Board
+
+The conveyor creates the labels `conveyor::idea`, `story`, `plan`, `in-progress`, `needs-input`, `queued`, `review`, `rework`, and `done` on `conveyor init` and on every start of the conveyor; existing labels stay as they are. The board with columns is yours to set up once:
+
+- **GitHub:** create a project, then `conveyor config set board.github_project <number>`. On the next start the conveyor adds the single-select field `Conveyor` with one option per state and keeps it in sync with the labels. In a Board view of the project, choose `Conveyor` under "Column by": the nine columns appear.
+- **GitLab:** open Issues → Boards and add one list per `conveyor::*` label, in the order above. The conveyor moves an issue between lists by changing its label.
+
+On GitLab Free, issue links are not available; the conveyor keeps blockers in a `Blocked by: #N` line in the issue description.
 
 ## Security
 

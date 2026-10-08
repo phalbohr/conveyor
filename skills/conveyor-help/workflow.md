@@ -45,7 +45,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 1. Install: `npm install -g @phalbohr/conveyor`; sign in `gh` or `glab`; install the harness CLIs your stages use.
 2. In the repository: `conveyor init` (reads the board from `git remote origin`). Commit `.conveyor/` except `local.yaml`.
 3. Each member: `conveyor settings` → Personal (limits, chat language), then `conveyor skill install` for agent help.
-4. GitHub board columns: set `board.github_project: <number>` and choose the field `Conveyor` as the column field of a board view. GitLab: create an issue board with lists for the `conveyor::*` labels.
+4. Board columns (once, by a human): `init` and every start create the `conveyor::*` labels. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor`), then choose `Conveyor` under "Column by" in a Board view. GitLab: Issues → Boards, one list per `conveyor::*` label: idea, story, plan, in-progress, needs-input, queued, review, rework, done.
 
 ## Team settings
 

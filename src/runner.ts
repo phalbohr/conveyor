@@ -69,6 +69,8 @@ export class Runner {
       }
     }
 
+    await board.prepare().catch((error: unknown) => this.emit('warning', `the board labels were not created: ${(error as Error).message}`))
+
     const project = config.board.project
     const lock = acquireRunLock(context.home, project)
     if (!lock.ok) {

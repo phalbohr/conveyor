@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { PRESETS } from '../src/harness/presets.js'
 import { runCli, tempDir } from './helpers.js'
@@ -24,6 +25,33 @@ describe('conveyor init', () => {
     expect(readFileSync(join(settings, 'config.yaml'), 'utf8')).toContain('openhands:')
     expect(loaded.config.harnesses).toEqual(PRESETS)
     expect(readFileSync(join(settings, '.gitignore'), 'utf8')).toContain('local.yaml')
+  })
+
+  it('creates the state labels and explains how to set up the board columns', async () => {
+    const board = new FakeBoard('me')
+    const result = await runCli(['init', ...BOARD_FLAGS], { board })
+
+    expect(result.code).toBe(0)
+    expect([...board.labels].sort()).toEqual(
+      ['done', 'idea', 'in-progress', 'needs-input', 'plan', 'queued', 'review', 'rework', 'story'].map((state) => `conveyor::${state}`),
+    )
+    expect(result.stdout).toContain('Labels: conveyor::idea, conveyor::story, conveyor::plan')
+    expect(result.stdout).toContain('create a GitHub project, set board.github_project')
+  })
+
+  it('explains the GitLab board lists', async () => {
+    const result = await runCli(['init', '--provider', 'gitlab', '--project', 'group/app'], { board: new FakeBoard('me') })
+    expect(result.stdout).toContain('Issues → Boards and add one list per conveyor:: label')
+  })
+
+  it('reports a board that cannot be prepared as a warning', async () => {
+    const board = new FakeBoard('me')
+    board.prepare = async () => {
+      throw new Error('HTTP 403')
+    }
+    const result = await runCli(['init', ...BOARD_FLAGS], { board })
+    expect(result.code).toBe(0)
+    expect(result.stderr).toContain('the board labels were not created: HTTP 403')
   })
 
   it('detects the board from the git remote', async () => {

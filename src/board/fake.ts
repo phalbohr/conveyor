@@ -2,6 +2,7 @@ import {
   OWNER_LABEL,
   PRIORITY_LABEL,
   STATE_LABEL,
+  TASK_STATES,
   labelsToTask,
   type Board,
   type Comment,
@@ -29,6 +30,7 @@ export class FakeBoard implements Board {
   private readonly pulls = new Map<string, PullRequest>()
   readonly merges: { id: string; method: MergeMethod }[] = []
   readonly outsiders = new Set<string>()
+  readonly labels = new Set<string>()
   mergeError: string | undefined
   private nextId = 1
 
@@ -39,6 +41,10 @@ export class FakeBoard implements Board {
 
   async user() {
     return this.login
+  }
+
+  async prepare() {
+    for (const state of TASK_STATES) this.labels.add(STATE_LABEL + state)
   }
 
   async canWrite(user: string) {

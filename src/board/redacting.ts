@@ -15,6 +15,10 @@ export class RedactingBoard implements Board {
     return this.board.user()
   }
 
+  prepare() {
+    return this.board.prepare()
+  }
+
   canWrite(user: string) {
     return this.board.canWrite(user)
   }
