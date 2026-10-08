@@ -88,10 +88,10 @@ Triage gives new tasks a priority (1–4) and "blocked by" links before anyone c
 
 Offer the defaults; change them only when the user has a reason.
 
-- `timeouts.stage` (default `60m`): the longest run of one stage; then the attempt fails and retries.
-- `timeouts.stall` (default `5m`, `0` = off): a stage with no agent output for this long fails and retries.
-- `timeouts.heartbeat` (default `30m`): a running task writes a heartbeat into its workpad every third of this value; another workstation releases a claim whose last heartbeat is older.
-- `timeouts.waiting` (default `4d`; `2wd` means working days): a task that waits this long for its owner (needs-input, queued, review) is released.
+- `timeouts.stage` (default `60m`, at least `1m`): the longest run of one stage; then the attempt fails and retries.
+- `timeouts.stall` (default `5m`; `0` = off, otherwise at least `1m`): a stage with no agent output for this long fails and retries.
+- `timeouts.heartbeat` (default `30m`, at least `1m`): a running task writes a heartbeat into its workpad every third of this value; another workstation releases a claim whose last heartbeat is older. Warn the user before lowering it: a short value lets other workstations take over tasks that still run, so tasks hang or run twice. `0` is rejected.
+- `timeouts.waiting` (default `4d`, at least `1d`; `2wd` means working days): a task that waits this long for its owner (needs-input, queued, review) is released.
 - `retry.max_attempts` (default `5`): failed attempts before the stage asks a human; `retry.max_backoff` (default `5m`): pauses double up to this.
 
 All six are in `conveyor settings` (Team) and `conveyor config set`.

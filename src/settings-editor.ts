@@ -35,6 +35,7 @@ const gateHelp = (gate: string) => ({
   smart: `the agent asks only in the cases listed in smart/${gate === 'story' ? 'idea-story' : 'story-plan'}.md`,
 })
 const STAGE_KEYS: Record<string, string> = { permission_mode: 'permissionMode' }
+const BUILT_IN_DEFAULTS: Record<string, string> = { harness: 'claude', model: 'sonnet', effort: 'medium' }
 
 const TEAM: Spec[] = [
   {
@@ -81,7 +82,7 @@ const TEAM: Spec[] = [
     label: 'Heartbeat timeout',
     kind: 'text',
     fallback: '30m',
-    help: 'a running task writes a heartbeat every third of this; a claim without one for this long is released',
+    help: 'a running task writes a heartbeat every third of this; a claim without one for this long is released. At least 1m: a shorter value lets other workstations take over running tasks',
   },
   { key: 'timeouts.waiting', label: 'Waiting timeout', kind: 'text', fallback: '4d', help: 'a task that waits this long for its owner is released; 4d calendar days, 2wd working days' },
   { key: 'retry.max_attempts', label: 'Attempts before a human', kind: 'number', fallback: '5', help: 'failed attempts of a stage before it asks a human' },
@@ -103,7 +104,7 @@ const PERSONAL: Spec[] = [
 ]
 
 const PREFIX_HELP: Record<string, string> = {
-  defaults: 'used by stages without their own value',
+  defaults: 'used by stages and triage without their own value',
   triage: 'agent that orders new tasks and sets blockers',
 }
 
@@ -161,9 +162,10 @@ export class SettingsDocument {
       const help = PREFIX_HELP[prefix] ?? ''
       const harness = prefix === 'triage' ? (config?.triage.harness ?? 'claude') : String(this.docs.config.getIn(['defaults', 'harness']) ?? 'claude')
       const model = prefix === 'triage' ? (config?.triage.model ?? '') : String(this.docs.config.getIn(['defaults', 'model']) ?? 'sonnet')
+      const fallback = (spec: Spec): Spec => (prefix === 'defaults' ? { ...spec, fallback: BUILT_IN_DEFAULTS[spec.key.split('.')[1] ?? ''] ?? '' } : spec)
       fields.push(
-        this.field('Team', 'config', { key: `${prefix}.harness`, label: `${prefix} harness`, kind: 'select', options: harnesses, help }),
-        ...this.modelFields(prefix, `${prefix} `, harness, model, { model: help, effort: help }).map((spec) => this.field('Team', 'config', spec)),
+        this.field('Team', 'config', fallback({ key: `${prefix}.harness`, label: `${prefix} harness`, kind: 'select', options: harnesses, help })),
+        ...this.modelFields(prefix, `${prefix} `, harness, model, { model: help, effort: help }).map((spec) => this.field('Team', 'config', fallback(spec))),
       )
     }
     const stages = config?.stages ?? []
@@ -215,7 +217,7 @@ export class SettingsDocument {
     const doc = this.docs[field.group === 'Personal' ? 'local' : 'config']
     const path = key.split('.')
     if (path.at(-1) === 'harness' && value) this.retarget(path.slice(0, -1), value)
-    if (value === '' && (field.group === 'Stages' || key.startsWith('defaults.') || key.startsWith('triage.'))) {
+    if (value === '' && (field.group === 'Stages' || key.startsWith('triage.'))) {
       if (doc.hasIn(path)) doc.deleteIn(path)
     } else {
       doc.setIn(path, field.kind === 'number' ? Number(value) : field.kind === 'boolean' ? value === 'true' : value)
@@ -328,7 +330,7 @@ export class SettingsDocument {
     const catalog = this.catalogs[harness]
     const model = own('model') ?? inherited('model')
     if (catalog?.models.length && !(model && modelKnown(catalog, model))) doc.setIn([...prefix, 'model'], catalog.models[0]?.id)
-    else if (!catalog?.models.length) drop('model')
+    else if (!catalog?.models.length && prefix[0] !== 'defaults') drop('model')
     const effort = own('effort') ?? inherited('effort')
     const efforts = effortsFor(catalog, String(doc.getIn([...prefix, 'model']) ?? model ?? '')) ?? (harness === 'claude' || harness === 'codex' ? EFFORTS : undefined)
     if (efforts && !(effort && efforts.includes(effort))) doc.setIn([...prefix, 'effort'], efforts.includes('medium') ? 'medium' : efforts[0])

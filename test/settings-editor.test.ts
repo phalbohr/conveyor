@@ -89,6 +89,16 @@ describe('SettingsDocument', () => {
     expect(doc.fields().find((f) => f.key === 'timeouts.heartbeat')?.value).toBe('20m')
   })
 
+  it('shows the built-in defaults instead of inherit', () => {
+    const doc = new SettingsDocument(settings(CONFIG))
+    const fields = doc.fields()
+    expect(fields.find((f) => f.key === 'defaults.model')).toMatchObject({ value: 'sonnet' })
+    expect(fields.find((f) => f.key === 'defaults.effort')).toMatchObject({ value: 'medium' })
+    expect(fields.find((f) => f.key === 'defaults.harness')).toMatchObject({ value: 'claude' })
+    doc.set('timeouts.heartbeat', '0m')
+    expect(doc.problems().join('\n')).toContain('lets other workstations take over tasks that still run')
+  })
+
   it('reports why the settings are not valid', () => {
     const doc = new SettingsDocument(settings(CONFIG))
     doc.set('review.approvals', '0')
