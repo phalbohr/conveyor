@@ -76,10 +76,33 @@ describe('merge mode human', () => {
     await cycle()
 
     expect(runs()).toEqual(['1:implement', '1:merge', '1:verify'])
-    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: true })
+    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: false })
     expect(await board.claim('1')).toBe(true)
     expect(workspaces.removed).toEqual(['1'])
     expect(workspaces.deletedBranches).toEqual(['1'])
+  })
+
+  it('leaves a done task open by default and does not take it again', async () => {
+    const { board, cycle, runs } = setup()
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/merge')
+    await cycle()
+    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: false })
+    expect(await board.claim('1')).toBe(true)
+    await board.release('1')
+
+    await cycle()
+    expect(runs()).toEqual(['1:implement', '1:merge'])
+  })
+
+  it('closes a done task with close_on_done', async () => {
+    const { board, cycle } = setup({ config: 'close_on_done: true' })
+    await board.createTask('Add login', 'p', 'plan')
+    await cycle()
+    await board.addComment('1', '/merge')
+    await cycle()
+    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: true })
   })
 
   it('keeps waiting for a plain comment', async () => {
@@ -100,7 +123,7 @@ describe('merge mode human', () => {
     await board.addComment('1', '/merge')
     await cycle()
     expect(board.merges).toHaveLength(1)
-    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: true })
+    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: false })
   })
 
   it('merges after a /merge comment on the pull request', async () => {
@@ -148,7 +171,7 @@ describe('merge mode ai', () => {
 
     expect(runs()).toEqual(['1:implement', '1:merge'])
     expect(board.merges).toEqual([{ id: '1', method: 'squash' }])
-    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: true })
+    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: false })
   })
 
   it('waits for open blockers before merging', async () => {

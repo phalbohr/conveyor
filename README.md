@@ -95,7 +95,7 @@ The task is not taken? Check that the label matches `pickup_from` and the issue 
 | how a harness is started, its endpoint | `config.yaml`, `local.yaml` | `harnesses` |
 | where idea, story, and plan are stored | `config.yaml`, `local.yaml` | `artifacts` (`board`, `repo`, `path`) |
 | the documentation language / my chat language | `config.yaml` / `local.yaml` | `language.docs` / `language.chat` |
-| approvals needed for merge, merge method | `config.yaml` | `review.approvals`, `merge_method` |
+| approvals needed for merge, merge method, closing done issues | `config.yaml` | `review.approvals`, `merge_method`, `close_on_done` |
 | timeouts and retries | `config.yaml` | `timeouts`, `retry` |
 | workspace setup scripts | `config.yaml` | `hooks` |
 | how much I run in parallel, my token and subscription limits | `local.yaml` | `limits` |
@@ -154,6 +154,10 @@ The conveyor creates the labels `conveyor::idea`, `story`, `plan`, `in-progress`
 
 - **GitHub:** create a project, then `conveyor config set board.github_project <number>`. On the next start the conveyor adds the single-select field `Conveyor` with one option per state and keeps it in sync with the labels. In a Board view of the project, choose `Conveyor` under "Column by": the nine columns appear.
 - **GitLab:** open Issues → Boards and add one list per `conveyor::*` label, in the order above. The conveyor moves an issue between lists by changing its label.
+
+Columns follow the task state, not the stage: every stage between taking a task and its pull request, custom stages such as `polish` included, runs under `conveyor::in-progress`. The conveyor reads labels, not columns: an issue it should take needs the label of `pickup_from` (`conveyor::plan` by default); an open issue without a `conveyor::*` label stays where it is.
+
+A finished task gets `conveyor::done` and stays open (`close_on_done: false`, the default), so a human closes it, for example after a sprint review. With `close_on_done: true` the conveyor closes the issue itself; on GitLab it then moves to the built-in Closed list.
 
 On GitLab Free, issue links are not available; the conveyor keeps blockers in a `Blocked by: #N` line in the issue description.
 

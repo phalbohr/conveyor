@@ -407,7 +407,7 @@ export class Engine {
     state.attempt = 0
     await board.setState(id, 'done')
     await run.save()
-    await board.closeTask(id)
+    if (config.close_on_done) await board.closeTask(id)
     await board.release(id)
     await workspaces.remove(id)
     await workspaces.deleteBranch(id)

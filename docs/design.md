@@ -354,7 +354,7 @@ Landing is a deterministic CLI step, retried every minute while it waits:
 2. Checks pending or mergeability unknown → wait.
 3. Checks failed, conflicts, or merge error → run post-merge stages with `when: failure` or `always` (for example `fix-ci`), then land again. Without such stages, or after `retry.max_attempts` landing failures, the task goes to `needs-input`.
 4. Otherwise take the lock `conveyor-lock/merge`, merge with `merge_method` (`merge`, `squash`, `rebase`; default `merge`), release the lock.
-5. Success → post-merge stages with `when: success` or `always` → `conveyor::done`: the CLI closes the issue, deletes the claim lock, the workspace, and the merged task branch.
+5. Success → post-merge stages with `when: success` or `always` → `conveyor::done`: the CLI closes the issue only with `close_on_done: true` (default `false`: a human closes it after acceptance), deletes the claim lock, the workspace, and the merged task branch.
 
 In `review` the CLI checks every cycle for signals since the task entered `review`, on the pull request and on the issue:
 
