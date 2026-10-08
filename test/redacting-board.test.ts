@@ -13,7 +13,7 @@ describe('RedactingBoard', () => {
 
   it('hides token patterns and secret environment values in everything it writes', async () => {
     const { fake, board } = setup()
-    const task = await board.createTask(`Task ${token}`, `uses ${key}`, 'plan')
+    const task = await board.createTask(`Task ${token}`, `uses ${key}`, { form: 'plan' })
     await board.updateBody(task.id, `${'long story '.repeat(500)}${token}`)
     const comment = await board.addComment(task.id, `artifact with ${key}`)
     await board.updateComment(comment.id, `question about ${token}`)

@@ -15,7 +15,7 @@ import { prepare } from './run.js'
 
 const TEMPLATES = fileURLToPath(new URL('../../templates/live/', import.meta.url))
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n?/
-const resultSchema = z.object({ title: z.string().min(1), state: z.enum(['idea', 'story']) })
+const resultSchema = z.object({ title: z.string().min(1), form: z.enum(['idea', 'story']) })
 
 export async function newCommand(context: Context, json: boolean): Promise<number> {
   const prepared = prepare(context)
@@ -27,8 +27,8 @@ export async function newCommand(context: Context, json: boolean): Promise<numbe
 
   const parsed = parseNewTask(text.value)
   if (!parsed.ok) return fail(context, parsed.error)
-  const task = await board.createTask(parsed.title, parsed.body, parsed.state)
-  context.stdout(json ? `${JSON.stringify({ id: task.id, title: task.title, state: parsed.state })}\n` : `Created task ${task.id}: ${task.title}\n`)
+  const task = await board.createTask(parsed.title, parsed.body, { state: 'backlog', form: parsed.form })
+  context.stdout(json ? `${JSON.stringify({ id: task.id, title: task.title, form: parsed.form })}\n` : `Created task ${task.id}: ${task.title}\n`)
   return 0
 }
 
@@ -96,9 +96,9 @@ async function session(
   }
 }
 
-function parseNewTask(text: string): { ok: true; title: string; state: 'idea' | 'story'; body: string } | { ok: false; error: string } {
+function parseNewTask(text: string): { ok: true; title: string; form: 'idea' | 'story'; body: string } | { ok: false; error: string } {
   const match = text.match(FRONTMATTER)
-  if (!match) return { ok: false, error: 'the result has no frontmatter with title and state' }
+  if (!match) return { ok: false, error: 'the result has no frontmatter with title and form' }
   const parsed = resultSchema.safeParse(parse(match[1] ?? ''))
   if (!parsed.success) return { ok: false, error: `invalid result: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}` }
   return { ok: true, ...parsed.data, body: text.slice(match[0].length).trim() }

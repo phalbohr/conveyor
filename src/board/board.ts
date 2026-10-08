@@ -1,6 +1,8 @@
-export const TASK_STATES = ['idea', 'story', 'plan', 'in-progress', 'needs-input', 'queued', 'review', 'rework', 'done'] as const
+export const TASK_STATES = ['backlog', 'needs-input', 'queued', 'in-progress', 'review', 'rework', 'done'] as const
+export const TASK_FORMS = ['idea', 'story', 'plan'] as const
 
 export type TaskState = (typeof TASK_STATES)[number]
+export type TaskForm = (typeof TASK_FORMS)[number]
 
 export type Task = {
   id: string
@@ -8,6 +10,8 @@ export type Task = {
   body: string
   author: string
   state?: TaskState
+  form?: TaskForm
+  stage?: string
   owner?: string
   assignees: string[]
   priority?: number
@@ -40,12 +44,14 @@ export type MergeMethod = 'merge' | 'squash' | 'rebase'
 
 export interface Board {
   user(): Promise<string>
-  prepare(): Promise<void>
+  prepare(stages: string[]): Promise<void>
   canWrite(user: string): Promise<boolean>
-  createTask(title: string, body: string, state?: TaskState): Promise<Task>
+  createTask(title: string, body: string, labels?: TaskLabels): Promise<Task>
   listTasks(): Promise<Task[]>
   getTask(id: string): Promise<Task | undefined>
   setState(id: string, state: TaskState): Promise<void>
+  setForm(id: string, form: TaskForm | undefined): Promise<void>
+  setStage(id: string, stage: string | undefined): Promise<void>
   setOwner(id: string, owner: string | undefined): Promise<void>
   updateBody(id: string, body: string): Promise<void>
   closeTask(id: string): Promise<void>
@@ -62,28 +68,52 @@ export interface Board {
   closePullRequest(id: string): Promise<void>
 }
 
+export type TaskLabels = { state?: TaskState; form?: TaskForm }
+
 export const STATE_COLORS: Record<TaskState, string> = {
-  idea: 'c5def5',
-  story: 'bfd4f2',
-  plan: '0e8a16',
-  'in-progress': 'fbca04',
+  backlog: 'ededed',
   'needs-input': 'd93f0b',
   queued: 'cccccc',
+  'in-progress': 'fbca04',
   review: '5319e7',
   rework: 'b60205',
   done: '0052cc',
 }
+export const FORM_COLOR = '0e8a16'
+export const STAGE_COLOR = 'bfd4f2'
 
 export const STATE_LABEL = 'conveyor::'
+export const FORM_LABEL = 'form::'
+export const STAGE_LABEL = 'stage::'
 export const OWNER_LABEL = 'claimed-by::'
 export const PRIORITY_LABEL = 'priority::'
 
-export function labelsToTask(labels: string[]): Pick<Task, 'state' | 'owner' | 'priority'> {
+export function boardLabels(stages: string[]): { name: string; color: string }[] {
+  return [
+    ...TASK_STATES.map((state) => ({ name: STATE_LABEL + state, color: STATE_COLORS[state] })),
+    ...TASK_FORMS.map((form) => ({ name: FORM_LABEL + form, color: FORM_COLOR })),
+    ...stages.map((stage) => ({ name: STAGE_LABEL + stage, color: STAGE_COLOR })),
+  ]
+}
+
+export function taskLabels(labels: TaskLabels): string[] {
+  return [...(labels.state ? [STATE_LABEL + labels.state] : []), ...(labels.form ? [FORM_LABEL + labels.form] : [])]
+}
+
+export function onBoard(task: Task) {
+  return task.form !== undefined || (task.state !== undefined && task.state !== 'backlog')
+}
+
+export function labelsToTask(labels: string[]): Pick<Task, 'state' | 'form' | 'stage' | 'owner' | 'priority'> {
   const value = (prefix: string) => labels.find((label) => label.startsWith(prefix))?.slice(prefix.length)
   const state = value(STATE_LABEL)
+  const form = value(FORM_LABEL)
+  const stage = value(STAGE_LABEL)
   const priority = Number(value(PRIORITY_LABEL))
   return {
     ...(state && (TASK_STATES as readonly string[]).includes(state) ? { state: state as TaskState } : {}),
+    ...(form && (TASK_FORMS as readonly string[]).includes(form) ? { form: form as TaskForm } : {}),
+    ...(stage ? { stage } : {}),
     ...(value(OWNER_LABEL) ? { owner: value(OWNER_LABEL) } : {}),
     ...(Number.isInteger(priority) && priority > 0 ? { priority } : {}),
   }

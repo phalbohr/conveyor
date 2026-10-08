@@ -1,5 +1,5 @@
 import { redactSecrets } from '../engine/redact.js'
-import type { Board, MergeMethod, TaskState } from './board.js'
+import type { Board, MergeMethod, TaskForm, TaskLabels, TaskState } from './board.js'
 
 export class RedactingBoard implements Board {
   constructor(
@@ -15,16 +15,16 @@ export class RedactingBoard implements Board {
     return this.board.user()
   }
 
-  prepare() {
-    return this.board.prepare()
+  prepare(stages: string[]) {
+    return this.board.prepare(stages)
   }
 
   canWrite(user: string) {
     return this.board.canWrite(user)
   }
 
-  createTask(title: string, body: string, state?: TaskState) {
-    return this.board.createTask(this.clean(title), this.clean(body), state)
+  createTask(title: string, body: string, labels?: TaskLabels) {
+    return this.board.createTask(this.clean(title), this.clean(body), labels)
   }
 
   listTasks() {
@@ -37,6 +37,14 @@ export class RedactingBoard implements Board {
 
   setState(id: string, state: TaskState) {
     return this.board.setState(id, state)
+  }
+
+  setForm(id: string, form: TaskForm | undefined) {
+    return this.board.setForm(id, form)
+  }
+
+  setStage(id: string, stage: string | undefined) {
+    return this.board.setStage(id, stage)
   }
 
   setOwner(id: string, owner: string | undefined) {

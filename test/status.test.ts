@@ -12,7 +12,7 @@ import { tempDir } from './helpers.js'
 async function board() {
   const fake = new FakeBoard('me')
   const claim = async (title: string, state: Parameters<FakeBoard['setState']>[1], owner = 'me') => {
-    const task = await fake.createTask(title, 'body', state)
+    const task = await fake.createTask(title, 'body', { state })
     await fake.setOwner(task.id, owner)
     return task.id
   }
@@ -27,8 +27,8 @@ async function board() {
   await fake.addComment(answered, 'Blue.')
   const review = await claim('Review', 'review')
   await fake.openPullRequest(review)
-  await fake.createTask('Open plan', 'body', 'plan')
-  await fake.createTask('Open idea', 'body', 'idea')
+  await fake.createTask('Open plan', 'body', { form: 'plan' })
+  await fake.createTask('Open idea', 'body', { form: 'idea' })
   await claim('Theirs', 'in-progress', 'alice')
   return fake
 }

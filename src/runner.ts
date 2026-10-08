@@ -69,7 +69,7 @@ export class Runner {
       }
     }
 
-    await board.prepare().catch((error: unknown) => this.emit('warning', `the board labels were not created: ${(error as Error).message}`))
+    await board.prepare(config.stages.map((stage) => stage.name)).catch((error: unknown) => this.emit('warning', `the board labels were not created: ${(error as Error).message}`))
 
     const project = config.board.project
     const lock = acquireRunLock(context.home, project)

@@ -59,7 +59,7 @@ describe('Engine stage chain', () => {
     const { board, cycle, runs, harness, workspaces } = setup({
       config: 'stages:\n  implement: {model: sonnet, effort: medium}\n  review: {harness: codex, model: gpt, effort: high}\n',
     })
-    const task = await board.createTask('Add login', 'plan text', 'plan')
+    const task = await board.createTask('Add login', 'plan text', { form: 'plan' })
 
     await cycle()
 
@@ -73,7 +73,7 @@ describe('Engine stage chain', () => {
 
   it('commits the changes of each stage before pushing', async () => {
     const { board, cycle, workspaces } = setup({ script: () => ({ outcome: 'done', summary: 'did the work\nwith details' }) })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect(workspaces.stageCommits).toEqual(['1:implement: did the work', '1:review: did the work', '1:merge: did the work'])
   })
@@ -83,7 +83,7 @@ describe('Engine stage chain', () => {
       instructions: { implement: 'Write the code test-first.' },
       script: byStage({ implement: { outcome: 'done', summary: 'ok', workpad: '- [x] step one' } }),
     })
-    await board.createTask('Add login', 'the plan body', 'plan')
+    await board.createTask('Add login', 'the plan body', { form: 'plan' })
 
     await cycle()
 
@@ -97,7 +97,7 @@ describe('Engine stage chain', () => {
       config: 'pickup_from: idea\n',
       script: byStage({ story: done({ kind: 'story', content: 'As a user, I want to log in.' }) }),
     })
-    const task = await board.createTask('Login', 'idea: login', 'idea')
+    const task = await board.createTask('Login', 'idea: login', { form: 'idea' })
 
     await cycle()
 
@@ -114,7 +114,7 @@ describe('Engine stage chain', () => {
         plan: done({ kind: 'plan', content: 'the plan' }),
       }),
     })
-    const task = await board.createTask('Login', 'idea', 'idea')
+    const task = await board.createTask('Login', 'idea', { form: 'idea' })
     await cycle()
     await board.addComment(task.id, 'Looks good, approved.')
 
@@ -128,7 +128,7 @@ describe('Engine stage chain', () => {
 
   it('does not resume a task without an answer', async () => {
     const { board, cycle, runs } = setup({ config: 'pickup_from: idea\n' })
-    await board.createTask('Login', 'idea', 'idea')
+    await board.createTask('Login', 'idea', { form: 'idea' })
     await cycle()
     await cycle()
     expect(runs()).toEqual(['1:story'])
@@ -139,7 +139,7 @@ describe('Engine stage chain', () => {
       config: 'pickup_from: idea\ntransitions: {idea_to_story: autonomous, story_to_plan: autonomous}\n',
       script: byStage({ story: done({ kind: 'story', content: 's' }), plan: done({ kind: 'plan', content: 'p' }) }),
     })
-    const task = await board.createTask('Login', 'idea', 'idea')
+    const task = await board.createTask('Login', 'idea', { form: 'idea' })
 
     await cycle()
 
@@ -153,7 +153,7 @@ describe('Engine stage chain', () => {
         implement: (index) => (index === 0 ? { outcome: 'needs_input', summary: 'unclear', questions: ['Which database?'] } : done()),
       }),
     })
-    const task = await board.createTask('Store users', 'plan', 'plan')
+    const task = await board.createTask('Store users', 'plan', { form: 'plan' })
     await cycle()
     expect((await board.getTask(task.id))?.state).toBe('needs-input')
     expect((await board.listComments(task.id)).at(-1)?.body).toContain('Which database?')
@@ -171,14 +171,14 @@ describe('Engine stage chain', () => {
       config: 'pickup_from: story\ntransitions: {story_to_plan: autonomous}\n',
       script: byStage({ plan: { outcome: 'approval', summary: 'ok', artifact: { kind: 'plan', content: 'p' } } }),
     })
-    await board.createTask('Login', 'story', 'story')
+    await board.createTask('Login', 'story', { form: 'story' })
     await cycle()
     expect(runs()).toEqual(['1:plan', '1:implement', '1:review', '1:merge'])
   })
 
   it('ignores story tasks when the pickup point is plan', async () => {
     const { board, cycle, runs } = setup()
-    await board.createTask('Login', 'story', 'story')
+    await board.createTask('Login', 'story', { form: 'story' })
     await cycle()
     expect(runs()).toEqual([])
   })
@@ -190,7 +190,7 @@ describe('Engine artifacts', () => {
       config: 'pickup_from: idea\nartifacts: {story: {write: append}}\ntransitions: {idea_to_story: autonomous}\n',
       script: byStage({ story: done({ kind: 'story', content: 'the story' }), plan: { outcome: 'needs_input', summary: 'q', questions: ['?'] } }),
     })
-    const task = await board.createTask('Login', 'the idea', 'idea')
+    const task = await board.createTask('Login', 'the idea', { form: 'idea' })
     await cycle()
     expect((await board.getTask(task.id))?.body).toBe('the idea\n\n---\n\nthe story')
   })
@@ -201,7 +201,7 @@ describe('Engine artifacts', () => {
       local: 'artifacts:\n  plan: {store: path, path: "~/Plans/{project}"}\n',
       script: byStage({ plan: done({ kind: 'plan', content: '# Plan' }), implement: { outcome: 'needs_input', summary: 'q', questions: ['?'] } }),
     })
-    const task = await board.createTask('Login', 'story', 'story')
+    const task = await board.createTask('Login', 'story', { form: 'story' })
     await cycle()
     expect(readFileSync(join(home, 'Plans', 'acme-app', `${task.id}-plan.md`), 'utf8')).toBe('# Plan')
   })
@@ -211,7 +211,7 @@ describe('Engine artifacts', () => {
       config: 'pickup_from: story\ntransitions: {story_to_plan: autonomous}\nartifacts: {plan: {store: repo, path: docs/plans}}\n',
       script: byStage({ plan: done({ kind: 'plan', content: '# Repo plan' }) }),
     })
-    await board.createTask('Login', 'story', 'story')
+    await board.createTask('Login', 'story', { form: 'story' })
     await cycle()
     expect(workspaces.commits).toEqual([{ taskId: '1', file: 'docs/plans/1-plan.md', content: '# Repo plan' }])
     expect(stageRuns(harness)[1]?.prompt).toContain('# Repo plan')
@@ -225,8 +225,8 @@ describe('Engine scheduling', () => {
       local: 'limits: {running: 1}\n',
       script: (run) => (run.taskId === '1' && run.stage === 'implement' ? gate.promise : done()),
     })
-    await board.createTask('First', 'p', 'plan')
-    await board.createTask('Second', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
+    await board.createTask('Second', 'p', { form: 'plan' })
 
     await engine.tick()
     await vi.waitFor(() => expect(runs()).toEqual(['1:implement']))
@@ -245,18 +245,18 @@ describe('Engine scheduling', () => {
       local: 'limits: {awaiting_me: 1}\n',
       script: byStage({ implement: { outcome: 'needs_input', summary: 'q', questions: ['?'] } }),
     })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
-    await board.createTask('Second', 'p', 'plan')
+    await board.createTask('Second', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement'])
   })
 
   it('does not claim new tasks when too many tasks wait for my review', async () => {
     const { board, cycle, runs } = setup({ local: 'limits: {awaiting_review: 1}\n' })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
-    await board.createTask('Second', 'p', 'plan')
+    await board.createTask('Second', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:review', '1:merge'])
   })
@@ -275,11 +275,11 @@ describe('Engine scheduling', () => {
         return gate.promise
       },
     })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
-    await board.createTask('Second', 'p', 'plan')
+    await board.createTask('Second', 'p', { form: 'plan' })
     await cycle()
-    await board.createTask('Third', 'p', 'plan')
+    await board.createTask('Third', 'p', { form: 'plan' })
     await board.addComment('1', 'answer one')
     await board.addComment('2', 'answer two')
 
@@ -287,14 +287,14 @@ describe('Engine scheduling', () => {
 
     await vi.waitFor(() => expect(runs().slice(2)).toEqual(['1:implement']))
     expect((await board.getTask('2'))?.state).toBe('queued')
-    expect((await board.getTask('3'))?.state).toBe('plan')
+    expect((await board.getTask('3'))?.form).toBe('plan')
     gate.resolve(done())
     await engine.idle()
   })
 
   it('skips a task claimed by another workstation', async () => {
     const { board, cycle, runs } = setup()
-    await board.createTask('Taken', 'p', 'plan')
+    await board.createTask('Taken', 'p', { form: 'plan' })
     await board.claim('1')
     await cycle()
     expect(runs()).toEqual([])
@@ -302,14 +302,14 @@ describe('Engine scheduling', () => {
 
   it('takes my tasks first, then unassigned tasks by priority and age, and skips others and blocked tasks', async () => {
     const { board, cycle, runs } = setup({ local: 'limits: {running: 1, awaiting_review: 10}\n' })
-    await board.createTask('old unassigned', 'p', 'plan')
-    await board.createTask('urgent unassigned', 'p', 'plan')
+    await board.createTask('old unassigned', 'p', { form: 'plan' })
+    await board.createTask('urgent unassigned', 'p', { form: 'plan' })
     board.addLabel('2', 'priority::1')
-    await board.createTask('mine', 'p', 'plan')
+    await board.createTask('mine', 'p', { form: 'plan' })
     board.assign('3', 'me')
-    await board.createTask('theirs', 'p', 'plan')
+    await board.createTask('theirs', 'p', { form: 'plan' })
     board.assign('4', 'alice')
-    await board.createTask('blocked', 'p', 'plan')
+    await board.createTask('blocked', 'p', { form: 'plan' })
     board.addLabel('5', 'priority::1')
     await board.addBlocker('5', '1')
 
@@ -323,8 +323,8 @@ describe('Engine scheduling', () => {
 
   it('takes only assigned tasks when unassigned tasks are excluded', async () => {
     const { board, cycle, runs } = setup({ local: 'pickup: {include_unassigned: false}\n' })
-    await board.createTask('unassigned', 'p', 'plan')
-    await board.createTask('mine', 'p', 'plan')
+    await board.createTask('unassigned', 'p', { form: 'plan' })
+    await board.createTask('mine', 'p', { form: 'plan' })
     board.assign('2', 'me')
     await cycle()
     expect(runs().filter((run) => run.endsWith(':implement'))).toEqual(['2:implement'])
@@ -333,7 +333,7 @@ describe('Engine scheduling', () => {
   it('does not claim anything with an invalid configuration', async () => {
     const { board, cycle, runs, settings } = setup()
     writeFileSync(join(settings, 'config.yaml'), 'board: {provider: jira, project: x}\n')
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual([])
   })
@@ -341,7 +341,7 @@ describe('Engine scheduling', () => {
   it('fails the stage when the before_run hook fails', async () => {
     const { board, cycle, runs, workspaces } = setup()
     workspaces.failBeforeRun = true
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual([])
     expect((await board.listComments('1')).find((c) => c.body.includes('conveyor:workpad'))?.body).toContain('"attempt":1')
@@ -351,14 +351,14 @@ describe('Engine scheduling', () => {
 describe('Engine stage files', () => {
   it('renders template variables in the stage instructions', async () => {
     const { board, cycle, harness } = setup({ instructions: { implement: 'Implement #{{ issue.id }} "{{ issue.title }}" in {{ stage }}.' } })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect(stageRuns(harness)[0]?.prompt).toContain('Implement #1 "Add login" in implement.')
   })
 
   it('does not start a stage with an unknown template variable and asks a human at once', async () => {
     const { board, cycle, runs } = setup({ instructions: { implement: 'Owner: {{ issue.owner }}' } })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual([])
     expect((await board.getTask('1'))?.state).toBe('needs-input')
@@ -367,7 +367,7 @@ describe('Engine stage files', () => {
 
   it('does not start a stage with a missing skill', async () => {
     const { board, cycle, runs } = setup({ instructions: { implement: '---\nskills: [grilling]\n---\nUse grilling.' } })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual([])
     const last = (await board.listComments('1')).at(-1)?.body
@@ -379,7 +379,7 @@ describe('Engine stage files', () => {
     const { board, cycle, harness, home } = setup({ instructions: { implement: '---\nskills: [grilling]\n---\nUse grilling.' } })
     mkdirSync(join(home, '.claude', 'skills', 'grilling'), { recursive: true })
     writeFileSync(join(home, '.claude', 'skills', 'grilling', 'SKILL.md'), '---\nname: grilling\n---\n')
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect(stageRuns(harness)[0]?.skills).toEqual([{ name: 'grilling', source: 'personal', dir: join(home, '.claude', 'skills', 'grilling') }])
   })
@@ -388,7 +388,7 @@ describe('Engine stage files', () => {
 describe('Engine language and formats', () => {
   it('asks for team-visible output in the documentation language', async () => {
     const { board, cycle, harness } = setup({ config: 'language: {docs: German}\n', local: 'language: {chat: Russian}\n' })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
     await cycle()
     expect(stageRuns(harness)[0]?.prompt).toContain('German')
     expect(stageRuns(harness)[0]?.prompt).not.toContain('Russian')
@@ -401,7 +401,7 @@ describe('Engine language and formats', () => {
     })
     mkdirSync(join(settings, 'formats'))
     writeFileSync(join(settings, 'formats', 'story.md'), '**Story:** As a <role>...')
-    await board.createTask('Login', 'idea', 'idea')
+    await board.createTask('Login', 'idea', { form: 'idea' })
     await cycle()
     expect(stageRuns(harness)[0]?.prompt).toContain('Write in English.')
     expect(stageRuns(harness)[0]?.prompt).toContain('**Story:** As a <role>...')
@@ -414,7 +414,7 @@ describe('Engine unknown models', () => {
       config: 'stages:\n  implement: {model: opus-5.5}\n  review: {}\n',
       script: byStage({ implement: { outcome: 'failed', summary: '[claude-code:unrecognized_model] {"model":"opus-5.5"}' } }),
     })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement'])
     expect((await board.getTask('1'))?.state).toBe('needs-input')
@@ -428,10 +428,10 @@ describe('Engine unknown models', () => {
 describe('Engine token budget', () => {
   it('stops claiming new tasks when the daily token limit is reached', async () => {
     const { board, cycle, runs, usage } = setup({ local: 'limits: {daily_tokens: 300, awaiting_review: 10}\n' })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
     expect(usage.today()).toBe(440)
-    await board.createTask('Second', 'p', 'plan')
+    await board.createTask('Second', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:review', '1:merge'])
     expect(usage.today()).toBe(440)

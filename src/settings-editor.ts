@@ -30,7 +30,7 @@ const BOOLEAN = ['true', 'false']
 const GATE = ['interactive', 'autonomous', 'smart']
 
 const TEAM: Spec[] = [
-  { key: 'pickup_from', label: 'Pick up tasks from', kind: 'select', options: ['idea', 'story', 'plan'], help: 'earliest board state the conveyor takes' },
+  { key: 'pickup_from', label: 'Pick up tasks from', kind: 'select', options: ['idea', 'story', 'plan'], help: 'earliest form:: label the conveyor takes' },
   { key: 'transitions.idea_to_story', label: 'Gate idea → story', kind: 'select', options: GATE, help: 'who decides when an idea becomes a story' },
   { key: 'transitions.story_to_plan', label: 'Gate story → plan', kind: 'select', options: GATE, help: 'who decides when a story gets its plan' },
   { key: 'transitions.merge', label: 'Merge mode', kind: 'select', options: ['human', 'ai', 'smart'], help: 'human reviews / agent merges / agent decides by smart/merge.md' },

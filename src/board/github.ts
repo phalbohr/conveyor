@@ -1,16 +1,22 @@
 import type { Run } from '../cli.js'
 import {
+  boardLabels,
+  FORM_LABEL,
+  labelsToTask,
+  onBoard,
   OWNER_LABEL,
   PRIORITY_LABEL,
-  STATE_COLORS,
+  STAGE_LABEL,
   STATE_LABEL,
   TASK_STATES,
-  labelsToTask,
+  taskLabels,
   type Board,
   type Comment,
   type MergeMethod,
   type PullRequest,
   type Task,
+  type TaskForm,
+  type TaskLabels,
   type TaskState,
 } from './board.js'
 
@@ -73,9 +79,9 @@ export class GitHubBoard implements Board {
     return this.login
   }
 
-  async prepare() {
-    for (const state of TASK_STATES) {
-      const result = await this.call(['-X', 'POST', `${this.repo}/labels`, '-f', `name=${STATE_LABEL}${state}`, '-f', `color=${STATE_COLORS[state]}`])
+  async prepare(stages: string[]) {
+    for (const label of boardLabels(stages)) {
+      const result = await this.call(['-X', 'POST', `${this.repo}/labels`, '-f', `name=${label.name}`, '-f', `color=${label.color}`])
       if (result.status !== 422) this.parse(result)
     }
     if (this.options.projectNumber) await this.projectMirror(this.options.projectNumber)
@@ -88,10 +94,10 @@ export class GitHubBoard implements Board {
     return WRITE_PERMISSIONS.includes(this.parse<{ permission: string }>(result).permission)
   }
 
-  async createTask(title: string, body: string, state?: TaskState) {
-    const labels = state ? ['-f', `labels[]=${STATE_LABEL}${state}`] : []
-    const task = toTask(await this.api<Issue>(['-X', 'POST', `${this.repo}/issues`, '-f', `title=${title}`, '-f', `body=${body}`, ...labels]))
-    if (state) await this.mirrorState(task.id, state)
+  async createTask(title: string, body: string, labels: TaskLabels = {}) {
+    const flags = taskLabels(labels).flatMap((label) => ['-f', `labels[]=${label}`])
+    const task = toTask(await this.api<Issue>(['-X', 'POST', `${this.repo}/issues`, '-f', `title=${title}`, '-f', `body=${body}`, ...flags]))
+    if (labels.state) await this.mirrorState(task.id, labels.state)
     return task
   }
 
@@ -101,7 +107,7 @@ export class GitHubBoard implements Board {
       .flat()
       .filter((issue) => !issue.pull_request)
       .map(toTask)
-      .filter((task) => task.state)
+      .filter(onBoard)
   }
 
   async getTask(id: string) {
@@ -113,6 +119,14 @@ export class GitHubBoard implements Board {
   async setState(id: string, state: TaskState) {
     await this.replaceLabel(id, STATE_LABEL, STATE_LABEL + state)
     await this.mirrorState(id, state)
+  }
+
+  async setForm(id: string, form: TaskForm | undefined) {
+    await this.replaceLabel(id, FORM_LABEL, form ? FORM_LABEL + form : undefined)
+  }
+
+  async setStage(id: string, stage: string | undefined) {
+    await this.replaceLabel(id, STAGE_LABEL, stage ? STAGE_LABEL + stage : undefined)
   }
 
   async setOwner(id: string, owner: string | undefined) {

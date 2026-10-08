@@ -49,7 +49,7 @@ if (sandbox && projectNumber) {
     it('mirrors the task state to the Conveyor field of the project', async () => {
       const warnings: string[] = []
       const board = new GitHubBoard(sandbox, createRun(), { projectNumber, warn: (message) => warnings.push(message) })
-      const task = await board.createTask('Project mirror test', 'body', 'review')
+      const task = await board.createTask('Project mirror test', 'body', { state: 'review' })
       try {
         await board.setState(task.id, 'needs-input')
         const owner = sandbox.split('/')[0] ?? ''

@@ -33,15 +33,19 @@ describe('conveyor init', () => {
 
     expect(result.code).toBe(0)
     expect([...board.labels].sort()).toEqual(
-      ['done', 'idea', 'in-progress', 'needs-input', 'plan', 'queued', 'review', 'rework', 'story'].map((state) => `conveyor::${state}`),
+      [
+        ...['backlog', 'done', 'in-progress', 'needs-input', 'queued', 'review', 'rework'].map((state) => `conveyor::${state}`),
+        ...['idea', 'plan', 'story'].map((form) => `form::${form}`),
+        ...['implement', 'merge', 'plan', 'review', 'story'].map((stage) => `stage::${stage}`),
+      ].sort(),
     )
-    expect(result.stdout).toContain('Labels: conveyor::idea, conveyor::story, conveyor::plan')
+    expect(result.stdout).toContain('form::idea, form::story, form::plan')
     expect(result.stdout).toContain('create a GitHub project, set board.github_project')
   })
 
   it('explains the GitLab board lists', async () => {
     const result = await runCli(['init', '--provider', 'gitlab', '--project', 'group/app'], { board: new FakeBoard('me') })
-    expect(result.stdout).toContain('Issues → Boards and add one list per conveyor:: label')
+    expect(result.stdout).toContain('add one list per label, in this order: conveyor::backlog, conveyor::needs-input, conveyor::queued, conveyor::in-progress, conveyor::review, conveyor::done')
   })
 
   it('reports a board that cannot be prepared as a warning', async () => {

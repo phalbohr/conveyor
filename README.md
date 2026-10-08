@@ -36,7 +36,7 @@ conveyor run
 
 `conveyor init` reads the board from `git remote origin` and creates `.conveyor/`. Without a terminal, pass `--provider github --project owner/repo`. To keep the settings outside the repository, use `--path <dir>`; to reuse existing settings, use `--use <dir>`.
 
-Put a task on the board with the label `conveyor::plan` (or `conveyor::story` / `conveyor::idea`, depending on `pickup_from`), or shape one with an agent:
+Put a task on the board with the labels `conveyor::backlog` and `form::plan` (or `form::story` / `form::idea`, depending on `pickup_from`), or shape one with an agent:
 
 ```bash
 conveyor new
@@ -45,12 +45,12 @@ conveyor new
 ### First run, step by step
 
 1. In a repository whose `origin` is on GitHub or GitLab, run `conveyor init` and commit `.conveyor/`.
-2. Create an issue yourself (the conveyor takes only tasks from users with write access) and add the label `conveyor::plan`. Write the plan in the issue text.
+2. Create an issue yourself (the conveyor takes only tasks from users with write access) and add the labels `conveyor::backlog` and `form::plan`. Write the plan in the issue text.
 3. Run `conveyor`: the control screen opens. Press `c` to start the conveyor.
 4. The log shows `claimed task <number>` and each stage. The issue gets `conveyor::in-progress`, then a pull request opens and the issue gets `conveyor::review`.
 5. Review the pull request. Write `/merge` (or approve) to merge, `/fix <notes>` to fix on the same branch, or `/rework <notes>` to start over.
 
-The task is not taken? Check that the label matches `pickup_from` and the issue has no open blockers. The control screen shows your limits and the team queue with the owner of each task; its log shows tasks skipped because their author has no write access. Every stage call costs tokens of the harness account; set `limits.daily_tokens` and the subscription reserves in `conveyor settings`. Stop with `c` or `q`; running stages abort, and the next start resumes the tasks.
+The task is not taken? Check that the issue has a `form::` label that `pickup_from` allows and the issue has no open blockers. The control screen shows your limits and the team queue with the owner of each task; its log shows tasks skipped because their author has no write access. Every stage call costs tokens of the harness account; set `limits.daily_tokens` and the subscription reserves in `conveyor settings`. Stop with `c` or `q`; running stages abort, and the next start resumes the tasks.
 
 ## Commands
 
@@ -150,12 +150,24 @@ On GitLab, `/merge` in a merge request comment is a GitLab quick action and neve
 
 ### Board
 
-The conveyor creates the labels `conveyor::idea`, `story`, `plan`, `in-progress`, `needs-input`, `queued`, `review`, `rework`, and `done` on `conveyor init` and on every start of the conveyor; existing labels stay as they are. The board with columns is yours to set up once:
+Three kinds of labels describe a task. The conveyor creates all of them on `conveyor init` and on every start; existing labels stay as they are.
 
-- **GitHub:** create a project, then `conveyor config set board.github_project <number>`. On the next start the conveyor adds the single-select field `Conveyor` with one option per state and keeps it in sync with the labels. In a Board view of the project, choose `Conveyor` under "Column by": the nine columns appear.
-- **GitLab:** open Issues → Boards and add one list per `conveyor::*` label, in the order above. The conveyor moves an issue between lists by changing its label.
+| Labels | Meaning | Set by |
+|---|---|---|
+| `conveyor::backlog` | the column of tasks that wait for the conveyor or for humans | humans |
+| `form::idea`, `form::story`, `form::plan` | the task is ready for the conveyor in this form; without a form it is a draft for humans | humans; the conveyor removes the form when it takes the task |
+| `conveyor::needs-input`, `queued`, `in-progress`, `review`, `done` | the column of a task the conveyor works on | the conveyor |
+| `stage::<name>` | the stage that runs or waits for input, one label for every stage in `config.yaml` | the conveyor; removed at review and done |
+| `conveyor::rework` | a signal: start the task over after `plan`, like `/rework` | humans |
 
-Columns follow the task state, not the stage: every stage between taking a task and its pull request, custom stages such as `polish` included, runs under `conveyor::in-progress`. The conveyor reads labels, not columns: an issue it should take needs the label of `pickup_from` (`conveyor::plan` by default); an open issue without a `conveyor::*` label stays where it is.
+The board has one column per state: **Backlog → Needs input → Queued → In progress → Review → Done**, then Closed. Every stage, from `story` to `merge` and custom stages such as `polish`, runs in In progress; its `stage::` label shows which one. A card in In progress with `stage::plan` is a plan being written; a card in Needs input with `stage::plan` is a plan that waits for an answer.
+
+The conveyor takes an open task that has a `form::` label allowed by `pickup_from` and no `conveyor::` state other than `backlog`. `form::idea` starts with the `story` stage, `form::story` with `plan`, `form::plan` with the first stage after `plan`.
+
+Set up the board once:
+
+- **GitHub:** create a project, then `conveyor config set board.github_project <number>`. On the next start the conveyor adds the single-select field `Conveyor` with one option per state and keeps it in sync. In a Board view, choose `Conveyor` under "Column by". Labels, `stage::` included, show on the cards.
+- **GitLab:** open Issues → Boards and add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
 
 A finished task gets `conveyor::done` and stays open (`close_on_done: false`, the default), so a human closes it, for example after a sprint review. With `close_on_done: true` the conveyor closes the issue itself; on GitLab it then moves to the built-in Closed list.
 

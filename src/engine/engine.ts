@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import { join } from 'node:path'
-import type { Board, Comment, PullRequest, Task } from '../board/board.js'
+import type { Board, Comment, PullRequest, Task, TaskForm } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, Quota, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { NO_USAGE, failed } from '../harness/harness.js'
@@ -71,7 +71,6 @@ type TaskRun = {
 
 const TRIAGE_LOCK = 'triage'
 const DEFAULT_PRIORITY = 3
-const NEW_STATES: Task['state'][] = ['idea', 'story', 'plan']
 const triageSchema = z.object({
   tasks: z.array(
     z.object({
@@ -101,7 +100,7 @@ type StageContext = {
   merge?: string | undefined
 }
 
-const PICKUP: Record<Config['pickup_from'], Task['state'][]> = {
+const PICKUP: Record<Config['pickup_from'], TaskForm[]> = {
   idea: ['idea', 'story', 'plan'],
   story: ['story', 'plan'],
   plan: ['plan'],
@@ -184,11 +183,11 @@ export class Engine {
           else if (await this.retryDue(task.id, now)) resumable.push(task)
           break
         }
-        case 'idea':
-        case 'story':
-        case 'plan':
+        case undefined:
+        case 'backlog':
+          if (!task.form) break
           if (owned) resumable.push(task)
-          else if (PICKUP[config.pickup_from].includes(task.state) && task.openBlockers === 0 && this.pickable(task, config, me)) {
+          else if (PICKUP[config.pickup_from].includes(task.form) && task.openBlockers === 0 && this.pickable(task, config, me)) {
             fresh.push(task)
           }
           break
@@ -326,6 +325,7 @@ export class Engine {
     }
 
     await board.setState(id, 'in-progress')
+    if (initial.form) await board.setForm(id, undefined)
     await run.save()
     run.workspace = (await workspaces.prepare(id)).path
 
@@ -359,7 +359,7 @@ export class Engine {
     }
 
     if (!state.landing && state.stage !== LAND) {
-      const start = state.stage ?? (initial.state === 'idea' ? 'story' : initial.state === 'story' ? 'plan' : names[names.indexOf('plan') + 1])
+      const start = state.stage ?? (initial.form === 'idea' ? 'story' : initial.form === 'story' ? 'plan' : names[names.indexOf('plan') + 1])
       const chain = await this.runChain(run, config.stages.slice(names.indexOf(start ?? 'merge'), mergeIndex + 1), {
         approvalStage,
         conversation,
@@ -373,6 +373,7 @@ export class Engine {
         delete state.stage
         state.waiting = { kind: 'review', since: new Date().toISOString() }
         await board.setState(id, 'review')
+        await board.setStage(id, undefined)
         await run.save()
         return
       }
@@ -406,6 +407,7 @@ export class Engine {
     for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError'] as const) delete state[key]
     state.attempt = 0
     await board.setState(id, 'done')
+    await board.setStage(id, undefined)
     await run.save()
     if (config.close_on_done) await board.closeTask(id)
     await board.release(id)
@@ -437,6 +439,7 @@ export class Engine {
       }
       await run.save()
       const task = (await board.getTask(id)) ?? (await this.mustGetTask(id))
+      if (task.stage !== stage.name) await board.setStage(id, stage.name)
       const comments = await this.comments(id)
       const gate = this.gate(stage, config)
       const heartbeat = setInterval(() => void run.save().catch(() => undefined), config.timeouts.heartbeat / 3)
@@ -535,6 +538,7 @@ export class Engine {
       state.waiting = { kind: 'review', since: new Date().toISOString() }
       await board.addComment(id, agentComment('review', changedText(pull.headSha)))
       await board.setState(id, 'review')
+      await board.setStage(id, undefined)
       await run.save()
       this.log(`task ${id}: the branch changed after approval, back to review`)
       return 'stop'
@@ -609,7 +613,7 @@ export class Engine {
     if (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) return
     if (this.quotaBlock(config.triage.harness, config)) return
     const tasks = await this.trust.only(await board.listTasks())
-    const fresh = tasks.filter((task) => !task.owner && NEW_STATES.includes(task.state) && task.priority === undefined).map((task) => task.id)
+    const fresh = tasks.filter((task) => !task.owner && task.form !== undefined && task.priority === undefined).map((task) => task.id)
     if (fresh.length === 0) return
     const harness = this.options.harnesses[config.triage.harness]
     if (!harness) {

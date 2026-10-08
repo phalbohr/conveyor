@@ -12,7 +12,7 @@ Talk to the human in {{ language.chat }}. Write the result file in {{ language.d
    ```
    ---
    title: <short title>
-   state: idea or story
+   form: idea or story
    ---
    <the text of the idea or the story>
    ```

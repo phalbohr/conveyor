@@ -49,7 +49,7 @@ function setup(options: { config?: string; script?: Script } = {}) {
 }
 
 async function foreignTask(board: FakeBoard, state: WorkpadState, label: 'in-progress' | 'needs-input' | 'review' = 'in-progress') {
-  const task = await board.createTask('Foreign', 'plan', 'plan')
+  const task = await board.createTask('Foreign', 'plan', { form: 'plan' })
   await board.claim(task.id)
   await board.setOwner(task.id, 'alice')
   await board.setState(task.id, label)
@@ -71,7 +71,7 @@ describe('Engine retries', () => {
     const { board, cycle, runs, workpad } = setup({
       script: (run, index) => (run.stage === 'implement' && index === 0 ? { outcome: 'failed', summary: 'tests are red' } : done),
     })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
 
     await cycle()
     expect(await workpad()).toContain('tests are red')
@@ -89,7 +89,7 @@ describe('Engine retries', () => {
       config: 'retry: {max_attempts: 2}\n',
       script: (run) => (run.stage === 'implement' && failures-- > 0 ? { outcome: 'failed', summary: 'broken build' } : done),
     })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
 
     await cycle()
     await vi.advanceTimersByTimeAsync(10_000)
@@ -109,7 +109,7 @@ describe('Engine timeouts', () => {
       config: 'timeouts: {stage: 2m, stall: 0}\n',
       script: (run, index) => (index === 0 ? never() : done),
     })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
 
     await engine.tick()
     await started(['1:implement'])
@@ -122,7 +122,7 @@ describe('Engine timeouts', () => {
 
   it('stops a stage without events after the stall timeout', async () => {
     const { board, engine, workpad, started } = setup({ config: 'timeouts: {stage: 60m, stall: 1m}\n', script: never })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
 
     await engine.tick()
     await started(['1:implement'])
@@ -146,7 +146,7 @@ describe('Engine timeouts', () => {
             })
           : done,
     })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
 
     await engine.tick()
     await vi.advanceTimersByTimeAsync(5 * MINUTE + 1)
@@ -157,7 +157,7 @@ describe('Engine timeouts', () => {
 
   it('refreshes the heartbeat during a long stage', async () => {
     const { board, engine, workpad, started } = setup({ config: 'timeouts: {stall: 0, heartbeat: 30m}\n', script: never })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
     await engine.tick()
     await started(['1:implement'])
     const before = await workpad()
@@ -172,7 +172,7 @@ describe('Engine timeouts', () => {
 describe('Engine reconciliation', () => {
   it('stops the stage and removes the workspace when the task is closed', async () => {
     const { board, engine, workspaces, started } = setup({ script: never })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
     await engine.tick()
     await started(['1:implement'])
 
@@ -186,7 +186,7 @@ describe('Engine reconciliation', () => {
 
   it('stops the stage and keeps the workspace when the task is taken back', async () => {
     const { board, engine, workspaces, workpad, started } = setup({ script: never })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
     await engine.tick()
     await started(['1:implement'])
     const before = await workpad()
@@ -201,7 +201,7 @@ describe('Engine reconciliation', () => {
 
   it('reconciles even with an invalid configuration', async () => {
     const { board, engine, settings, workspaces, started } = setup({ script: never })
-    await board.createTask('Login', 'p', 'plan')
+    await board.createTask('Login', 'p', { form: 'plan' })
     await engine.tick()
     await started(['1:implement'])
 

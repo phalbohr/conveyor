@@ -55,7 +55,7 @@ function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; 
 describe('merge mode human', () => {
   it('opens a pull request after the merge stage and waits for review', async () => {
     const { board, cycle, runs } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
 
     await cycle()
 
@@ -69,7 +69,7 @@ describe('merge mode human', () => {
     const { board, cycle, runs, workspaces } = setup({
       stages: '  implement: {}\n  merge: {}\n  verify: {when: success}\n  fix-ci: {when: failure}',
     })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     board.updatePullRequest('1', { state: 'merged' })
 
@@ -84,7 +84,7 @@ describe('merge mode human', () => {
 
   it('leaves a done task open by default and does not take it again', async () => {
     const { board, cycle, runs } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', '/merge')
     await cycle()
@@ -98,7 +98,7 @@ describe('merge mode human', () => {
 
   it('closes a done task with close_on_done', async () => {
     const { board, cycle } = setup({ config: 'close_on_done: true' })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', '/merge')
     await cycle()
@@ -107,7 +107,7 @@ describe('merge mode human', () => {
 
   it('keeps waiting for a plain comment', async () => {
     const { board, cycle, runs } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', 'Looks good so far, I will check it tomorrow.')
     await cycle()
@@ -118,7 +118,7 @@ describe('merge mode human', () => {
 
   it('merges after a /merge comment on the issue', async () => {
     const { board, cycle } = setup({ stages: '  implement: {}\n  merge: {}\n  verify: {when: success}' })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', '/merge')
     await cycle()
@@ -128,7 +128,7 @@ describe('merge mode human', () => {
 
   it('merges after a /merge comment on the pull request', async () => {
     const { board, cycle } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     board.updatePullRequest('1', { comments: [{ author: 'alice', body: '/merge looks right', createdAt: new Date().toISOString() }] })
     await cycle()
@@ -137,7 +137,7 @@ describe('merge mode human', () => {
 
   it('waits for the configured number of distinct approvals', async () => {
     const { board, cycle } = setup({ config: 'review: {approvals: 2}' })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', '/merge')
     await board.addComment('1', '/merge again')
@@ -151,7 +151,7 @@ describe('merge mode human', () => {
 
   it('lets a /rework comment on the pull request win over approvals', async () => {
     const { board, cycle, harness } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', '/merge')
     board.updatePullRequest('1', { comments: [{ author: 'alice', body: '/rework Validate the email format.', createdAt: new Date().toISOString() }] })
@@ -165,7 +165,7 @@ describe('merge mode human', () => {
 describe('merge mode ai', () => {
   it('merges the pull request with the configured method and finishes the task', async () => {
     const { board, cycle, runs } = setup({ mode: 'ai', config: 'merge_method: squash' })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
 
     await cycle()
 
@@ -182,8 +182,8 @@ describe('merge mode ai', () => {
         return done
       },
     })
-    await board.createTask('Feature', 'p', 'plan')
-    await board.createTask('Foundation', 'p', 'story')
+    await board.createTask('Feature', 'p', { form: 'plan' })
+    await board.createTask('Foundation', 'p', { form: 'story' })
     await cycle()
     expect(board.merges).toEqual([])
     expect((await board.getTask('1'))?.state).toBe('in-progress')
@@ -202,7 +202,7 @@ describe('merge mode ai', () => {
         return done
       },
     })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await board.openPullRequest('1')
     await cycle()
     expect(board.merges).toEqual([])
@@ -225,7 +225,7 @@ describe('merge mode ai', () => {
         return done
       },
     })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await board.openPullRequest('1')
 
     await cycle()
@@ -241,7 +241,7 @@ describe('merge mode ai', () => {
   it('asks a human when the merge fails and no failure stage exists', async () => {
     const { board, cycle } = setup({ mode: 'ai' })
     board.mergeError = 'merge conflict'
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect((await board.getTask('1'))?.state).toBe('needs-input')
     expect((await board.listComments('1')).at(-1)?.body).toContain('merge conflict')
@@ -250,7 +250,7 @@ describe('merge mode ai', () => {
   it('waits while another workstation merges', async () => {
     const { board, cycle, expireRetry } = setup({ mode: 'ai' })
     await board.claim('merge')
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect(board.merges).toEqual([])
 
@@ -267,7 +267,7 @@ describe('merge mode smart', () => {
       mode: 'smart',
       script: (run) => (run.stage === 'merge' ? { outcome: 'approval', summary: 'touches the schema' } : done),
     })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect((await board.getTask('1'))?.state).toBe('review')
     expect(board.merges).toEqual([])
@@ -276,7 +276,7 @@ describe('merge mode smart', () => {
 
   it('merges when the merge stage returns done', async () => {
     const { board, cycle } = setup({ mode: 'smart' })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     expect(board.merges).toHaveLength(1)
   })
@@ -287,7 +287,7 @@ describe('fix and rework', () => {
 
   it('fixes on the existing branch from the plan stage after a Request changes review', async () => {
     const { board, cycle, runs, harness, workspaces } = setup({ plan: 'autonomous' })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     const pull = await board.pullRequest('1')
     board.updatePullRequest('1', {
@@ -307,7 +307,7 @@ describe('fix and rework', () => {
 
   it('fixes from the plan stage after a /fix comment', async () => {
     const { board, cycle, runs } = setup({ plan: 'autonomous' })
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', '/fix Rename the helper.')
     await cycle()
@@ -316,7 +316,7 @@ describe('fix and rework', () => {
 
   it('fixes from the named stage after a /fix_from comment', async () => {
     const { board, cycle, runs, harness } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', '/fix_from: merge Remove the extra comments.')
     await cycle()
@@ -327,7 +327,7 @@ describe('fix and rework', () => {
 
   it('answers once when /fix_from names an unknown stage', async () => {
     const { board, cycle, runs } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', '/fix_from: deploy now')
     await cycle()
@@ -341,7 +341,7 @@ describe('fix and rework', () => {
 
   it('ignores reviews from before the task entered review', async () => {
     const { board, cycle, runs } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     board.updatePullRequest('1', { reviews: [{ author: 'alice', state: 'changes_requested', body: 'old', submittedAt: '2000-01-01T00:00:00.000Z' }] })
     await cycle()
@@ -350,7 +350,7 @@ describe('fix and rework', () => {
 
   it('restarts from a fresh branch after a /rework comment', async () => {
     const { board, cycle, runs, harness, workspaces } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     const pull = await board.pullRequest('1')
     await board.addComment('1', '/rework Use a different storage approach.')
@@ -366,7 +366,7 @@ describe('fix and rework', () => {
 
   it('restarts when a human sets the rework state, with the comments as feedback', async () => {
     const { board, cycle, harness } = setup()
-    await board.createTask('Add login', 'p', 'plan')
+    await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     await board.addComment('1', 'Please split the controller.')
     await board.setState('1', 'rework')

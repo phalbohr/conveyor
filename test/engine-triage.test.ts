@@ -59,9 +59,9 @@ describe('Engine triage', () => {
           ])
         : stageDone,
     )
-    await board.createTask('Nice to have', 'p', 'plan')
-    await board.createTask('Foundation', 'p', 'plan')
-    await board.createTask('Feature on top', 'p', 'plan')
+    await board.createTask('Nice to have', 'p', { form: 'plan' })
+    await board.createTask('Foundation', 'p', { form: 'plan' })
+    await board.createTask('Feature on top', 'p', { form: 'plan' })
 
     await cycle()
 
@@ -78,7 +78,7 @@ describe('Engine triage', () => {
 
   it('does not run when every new task has a priority', async () => {
     const { board, cycle, runs } = setup(() => stageDone)
-    await board.createTask('Ready', 'p', 'plan')
+    await board.createTask('Ready', 'p', { form: 'plan' })
     await board.setPriority('1', 2)
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:merge'])
@@ -88,8 +88,8 @@ describe('Engine triage', () => {
     const { board, cycle } = setup((run) =>
       run.stage === 'triage' ? triage([{ id: '1', priority: 1, blocked_by: ['1', '99'] }, { id: '42', priority: 2 }]) : stageDone,
     )
-    await board.createTask('First', 'p', 'plan')
-    await board.createTask('Second', 'p', 'story')
+    await board.createTask('First', 'p', { form: 'plan' })
+    await board.createTask('Second', 'p', { form: 'story' })
     await cycle()
     expect(await board.getTask('1')).toMatchObject({ priority: 1, openBlockers: 0 })
     expect((await board.getTask('2'))?.priority).toBe(3)
@@ -98,7 +98,7 @@ describe('Engine triage', () => {
   it('waits while another workstation runs the triage', async () => {
     const { board, cycle, runs } = setup((run) => (run.stage === 'triage' ? triage([]) : stageDone))
     await board.claim('triage')
-    await board.createTask('New', 'p', 'plan')
+    await board.createTask('New', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:merge'])
     expect((await board.getTask('1'))?.priority).toBeUndefined()
@@ -106,7 +106,7 @@ describe('Engine triage', () => {
 
   it('does not retry a failed triage before the backoff', async () => {
     const { board, cycle, runs } = setup((run) => (run.stage === 'triage' ? { outcome: 'failed', summary: 'no idea' } : stageDone))
-    await board.createTask('New', 'p', 'story')
+    await board.createTask('New', 'p', { form: 'story' })
     await cycle()
     await cycle()
     expect(runs()).toEqual(['-:triage'])

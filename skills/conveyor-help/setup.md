@@ -16,15 +16,15 @@ Before step 1, show the user the current flow as a chain, for example `plan → 
 
 ## 1. Where tasks start — `pickup_from`
 
-The earliest board state the conveyor takes. Everything before it is written by humans.
+The earliest form the conveyor takes. A task is ready for the conveyor when it has a `form::` label; without one it is a draft in the backlog. Everything before the form is written by humans.
 
-| Value | Humans write | The conveyor runs |
+| Value | Takes tasks with | The conveyor runs |
 |---|---|---|
-| `plan` | idea, story, and plan (label `conveyor::plan`) | stages after `plan` |
-| `story` | idea and story (label `conveyor::story`) | `plan` and everything after it |
-| `idea` | only the idea (label `conveyor::idea`) | `story`, `plan`, and everything after |
+| `plan` | `form::plan` | stages after `plan` |
+| `story` | `form::story`, `form::plan` | `plan` and everything after it (from `form::story`) |
+| `idea` | `form::idea`, `form::story`, `form::plan` | `story`, `plan`, and everything after (from `form::idea`) |
 
-The `story` and `plan` stages stay in `stages` in every case; they run only when the pickup point is before them. Tasks with a later label than the pickup point are still taken (with `story`, a task labelled `conveyor::plan` starts after `plan`).
+The `story` and `plan` stages stay in `stages` in every case; the form decides where a task starts. The conveyor removes the `form::` label when it takes the task and shows the running stage with a `stage::` label.
 
 ## 2. Decisions on story and plan — `transitions.idea_to_story`, `transitions.story_to_plan`
 
@@ -97,7 +97,7 @@ Personal and never committed:
 
 ## 10. The board view
 
-The conveyor creates the `conveyor::*` labels on `init` and on every start; the board itself is set up once by a human. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor` with one option per state), then in a Board view choose `Conveyor` under "Column by". GitLab: Issues → Boards, add one list per `conveyor::*` label in this order: idea, story, plan, in-progress, needs-input, queued, review, rework, done.
+The conveyor creates the `conveyor::*`, `form::*`, and `stage::*` labels on `init` and on every start; the board itself is set up once by a human. Columns: Backlog, Needs input, Queued, In progress, Review, Done. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor` with one option per state), then in a Board view choose `Conveyor` under "Column by". GitLab: Issues → Boards, add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
 
 ## Finish
 
