@@ -97,7 +97,7 @@ describe('UsageLedger', () => {
 describe('manualRelease', () => {
   async function claimed(owner: string, state: { private?: boolean } = {}) {
     const board = new FakeBoard('me')
-    const task = await board.createTask('Task', 'p', 'in-progress')
+    const task = await board.createTask('Task', 'p', { state: 'in-progress' })
     await board.claim(task.id)
     await board.setOwner(task.id, owner)
     await board.addComment(task.id, renderWorkpad({ attempt: 0, ...state }, ''))
@@ -126,7 +126,7 @@ describe('manualRelease', () => {
 
   it('removes an orphaned lock of a task without an owner', async () => {
     const board = new FakeBoard('me')
-    const task = await board.createTask('Task', 'p', 'plan')
+    const task = await board.createTask('Task', 'p', { form: 'plan' })
     await board.claim(task.id)
     expect(await manualRelease(board, task.id, false)).toEqual({ ok: true })
     expect(await board.claim(task.id)).toBe(true)

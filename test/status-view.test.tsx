@@ -171,7 +171,7 @@ describe('conveyor without arguments', () => {
   it('prints the status as JSON', async () => {
     const init = await runCli(['init', '--provider', 'github', '--project', 'acme/app'])
     const board = new FakeBoard('me')
-    const task = await board.createTask('Mine', 'p', 'in-progress')
+    const task = await board.createTask('Mine', 'p', { state: 'in-progress' })
     await board.setOwner(task.id, 'me')
     const result = await runCli(['--json'], { cwd: init.context.cwd, home: init.context.home, board })
     const output = JSON.parse(result.stdout)

@@ -236,15 +236,15 @@ A comment without the marker after an agent question is the answer. The task goe
 
 | Label | Meaning |
 |---|---|
-| `conveyor::idea` | idea only |
-| `conveyor::story` | story exists |
-| `conveyor::plan` | plan exists |
-| `conveyor::in-progress` | a stage is running |
+| `conveyor::backlog` | waits for humans or for the conveyor; only tasks with a `form::` label are taken |
+| `form::idea`, `form::story`, `form::plan` | the task is ready in this form; the conveyor removes it when it takes the task |
 | `conveyor::needs-input` | waiting for a human answer |
 | `conveyor::queued` | answer received, waiting for a free slot |
+| `conveyor::in-progress` | a stage is running; `stage::<name>` shows which one |
 | `conveyor::review` | waiting for code review |
-| `conveyor::rework` | review rejected, the task restarts |
+| `conveyor::rework` | a human signal: the task restarts after `plan` |
 | `conveyor::done` | merged and post-merge stages complete |
+| `stage::<name>` | the running or waiting stage; removed at review and done |
 
 GitHub Projects: with `board.github_project: <number>` the CLI adds every task to the project and mirrors its state to the single-select field `Conveyor` (created automatically with one option per state). The standard `Status` field stays untouched. Choose `Conveyor` as the column field of a board view.
 

@@ -48,12 +48,12 @@ describe('Engine subscription reserve', () => {
       local: 'limits: {subscription: {five_hour_reserve: 10}}\n',
       script: withQuota({ fiveHour: { utilization: 0.92, resetsAt: later(30) } }),
     })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement'])
     expect((await board.getTask('1'))?.state).toBe('in-progress')
 
-    await board.createTask('Second', 'p', 'plan')
+    await board.createTask('Second', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement'])
   })
@@ -63,7 +63,7 @@ describe('Engine subscription reserve', () => {
       local: 'limits: {subscription: {five_hour_reserve: 10, seven_day_reserve: 20}}\n',
       script: withQuota({ fiveHour: { utilization: 0.5, resetsAt: later(30) }, sevenDay: { utilization: 0.85, resetsAt: later(3000) } }),
     })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement'])
   })
@@ -73,14 +73,14 @@ describe('Engine subscription reserve', () => {
       local: 'limits: {subscription: {five_hour_reserve: 10, seven_day_reserve: 15}}\n',
       script: withQuota({ fiveHour: { utilization: 0.95, resetsAt: earlier(1) }, sevenDay: { utilization: 0.8, resetsAt: later(3000) } }),
     })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:review', '1:merge'])
   })
 
   it('ignores the quota when no reserve is configured', async () => {
     const { board, cycle, runs } = setup({ local: 'limits: {}\n', script: withQuota({ fiveHour: { utilization: 0.99, resetsAt: later(30) } }) })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:review', '1:merge'])
   })
@@ -94,7 +94,7 @@ describe('Engine subscription reserve', () => {
         return { fiveHour: { utilization: 0.95, resetsAt: later(30) } }
       },
     })
-    await board.createTask('First', 'p', 'plan')
+    await board.createTask('First', 'p', { form: 'plan' })
     await cycle()
     expect(probes).toBe(1)
     expect(runs()).toEqual([])

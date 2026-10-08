@@ -41,8 +41,8 @@ describe('checkStages', () => {
 describe('cleanupWorkspaces', () => {
   it('removes workspaces of closed and missing tasks', async () => {
     const board = new FakeBoard('me')
-    const open = await board.createTask('Open', 'p', 'in-progress')
-    const closed = await board.createTask('Closed', 'p', 'review')
+    const open = await board.createTask('Open', 'p', { state: 'in-progress' })
+    const closed = await board.createTask('Closed', 'p', { state: 'review' })
     await board.closeTask(closed.id)
     const workspaces = new FakeWorkspaces()
     for (const id of [open.id, closed.id, '99']) await workspaces.prepare(id)

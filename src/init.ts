@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from './cli.js'
 import { loadConfig, type Config } from './config.js'
-import { STATE_LABEL, TASK_STATES } from './board/board.js'
+import { FORM_LABEL, STATE_LABEL, TASK_FORMS, TASK_STATES, type TaskState } from './board/board.js'
 import { boardAdapter } from './commands/run.js'
 import { SETTINGS_DIR, findSettings, linkSettings } from './settings.js'
 
@@ -12,6 +12,8 @@ export type Target = { kind: 'here' } | { kind: 'path'; path: string } | { kind:
 export type InitResult = { ok: true; settings: string; warnings: string[]; board: string[] } | { ok: false; errors: string[] }
 
 type Check = [command: string, args: string[]]
+
+const COLUMNS: TaskState[] = ['backlog', 'needs-input', 'queued', 'in-progress', 'review', 'done']
 
 const TEMPLATES = fileURLToPath(new URL('../templates/', import.meta.url))
 const BOARD_TOOLS: Record<Board['provider'], Check> = { github: ['gh', ['auth', 'status']], gitlab: ['glab', ['auth', 'status']] }
@@ -57,21 +59,20 @@ export async function initProject(context: Context, target: Target, board?: Boar
 async function finish(context: Context, settings: string, config: Config): Promise<InitResult> {
   const warnings = await checkTools(config, context)
   await boardAdapter(context, config)
-    .prepare()
+    .prepare(config.stages.map((stage) => stage.name))
     .catch((error: unknown) => warnings.push(`the board labels were not created: ${(error as Error).message}`))
   return { ok: true, settings, warnings, board: boardSteps(config) }
 }
 
 function boardSteps(config: Config): string[] {
-  const labels = TASK_STATES.map((state) => STATE_LABEL + state).join(', ')
-  if (config.board.provider === 'gitlab') {
-    return [`Labels: ${labels}.`, 'Board: open Issues → Boards and add one list per conveyor:: label, in this order.']
-  }
+  const labels = `Labels: ${TASK_STATES.map((state) => STATE_LABEL + state).join(', ')}; ${TASK_FORMS.map((form) => FORM_LABEL + form).join(', ')}; stage:: for every stage.`
+  const columns = COLUMNS.map((state) => STATE_LABEL + state).join(', ')
+  if (config.board.provider === 'gitlab') return [labels, `Board: open Issues → Boards and add one list per label, in this order: ${columns}.`]
   if (config.board.github_project) {
-    return [`Labels: ${labels}.`, `Board: in project ${config.board.github_project}, open a Board view and choose the field Conveyor under "Column by".`]
+    return [labels, `Board: in project ${config.board.github_project}, open a Board view and choose the field Conveyor under "Column by".`]
   }
   return [
-    `Labels: ${labels}.`,
+    labels,
     'Board: create a GitHub project, set board.github_project to its number (conveyor config set board.github_project <number>), start the conveyor, then choose the field Conveyor under "Column by" in a Board view.',
   ]
 }

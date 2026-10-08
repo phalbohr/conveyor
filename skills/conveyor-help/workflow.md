@@ -8,13 +8,13 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 
 | # | Step | Who | Board label |
 |---|---|---|---|
-| 1 | Write an idea, story, or story with plan as an issue, or shape it in `conveyor new` | human | `conveyor::idea` / `story` / `plan` |
+| 1 | Write an idea, story, or story with plan as an issue, or shape it in `conveyor new`. Without a form it is a draft; with a form the conveyor may take it | human | `conveyor::backlog` + `form::idea` / `story` / `plan` |
 | 2 | Triage: priorities 1–4 and "blocked by" links for new tasks | agent (triage settings) | `priority::N` |
-| 3 | Claim: the first workstation with free limits locks the task (branch `conveyor-lock/<number>`) | conveyor | `claimed-by::<user>`, `conveyor::in-progress` |
-| 4 | `story` stage (only if `pickup_from: idea`): idea → user story in `formats/story.md` | agent | in-progress |
+| 3 | Claim: the first workstation with free limits locks the task (branch `conveyor-lock/<number>`) and removes the form | conveyor | `claimed-by::<user>`, `conveyor::in-progress` |
+| 4 | `story` stage (for `form::idea`): idea → user story in `formats/story.md` | agent | in-progress + `stage::story` |
 | 5 | Gate idea → story: questions or approval in issue comments, depending on `transitions.idea_to_story` | human or agent | `conveyor::needs-input` while waiting |
-| 6 | `plan` stage (if `pickup_from` is `idea` or `story`) and gate story → plan | agent, human | in-progress / needs-input |
-| 7 | `implement`, `review`, and custom stages before `merge`, each in the task worktree on branch `conveyor/<number>`; the conveyor commits and pushes after every stage | agents | in-progress |
+| 6 | `plan` stage (for `form::idea` and `form::story`) and gate story → plan | agent, human | in-progress / needs-input + `stage::plan` |
+| 7 | `implement`, `review`, and custom stages before `merge`, each in the task worktree on branch `conveyor/<number>`; the conveyor commits and pushes after every stage | agents | in-progress + `stage::<name>` |
 | 8 | `merge` stage prepares the branch; the conveyor opens a pull/merge request | agent, conveyor | — |
 | 9 | Merge gate by `transitions.merge`: `human` → review; `ai` → merge; `smart` → the merge stage decides by `smart/merge.md` | human or agent | `conveyor::review` while waiting |
 | 10 | Review: `/merge` or Approve → merge; `/fix`, `/fix_from:`, `/rework` → back to work. An approval counts only for the head commit under review; a push by someone else asks for a new approval | human | review / in-progress |
@@ -45,7 +45,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 1. Install: `npm install -g @phalbohr/conveyor`; sign in `gh` or `glab`; install the harness CLIs your stages use.
 2. In the repository: `conveyor init` (reads the board from `git remote origin`). Commit `.conveyor/` except `local.yaml`.
 3. Each member: `conveyor settings` → Personal (limits, chat language), then `conveyor skill install` for agent help.
-4. Board columns (once, by a human): `init` and every start create the `conveyor::*` labels. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor`), then choose `Conveyor` under "Column by" in a Board view. GitLab: Issues → Boards, one list per `conveyor::*` label: idea, story, plan, in-progress, needs-input, queued, review, rework, done.
+4. Board columns (once, by a human): `init` and every start create the `conveyor::*`, `form::*`, and `stage::*` labels; columns are Backlog, Needs input, Queued, In progress, Review, Done. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor`), then choose `Conveyor` under "Column by" in a Board view. GitLab: Issues → Boards, one list per label: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
 
 ## Team settings
 
@@ -61,7 +61,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 | see my tasks, limits, subscription windows | `conveyor` (control screen; `h` help) |
 | start working the board | `c` on the control screen, or `conveyor run` (opens the control screen already running; without a terminal it prints the log). Stopping (`c` again, `q`, or Ctrl+C) aborts running stages; tasks resume on the next start. Log file: `~/.conveyor/logs/<project>.log` |
 | use everything from one place | `conveyor`: `c` start/stop, `n` new, `a` attach, `l` release, `s` settings |
-| add a task | `conveyor new`, or an issue with a `conveyor::idea`, `story`, or `plan` label |
+| add a task | `conveyor new`, or an issue with `conveyor::backlog` and `form::idea`, `story`, or `plan` (a draft without a form is ignored) |
 | answer a question | reply in the issue, or `conveyor attach <number>` |
 | merge a reviewed task | `/merge` on the issue or pull request, or Approve. GitLab: Approve the MR or `/merge` on the issue (`/merge` in an MR is a GitLab quick action) |
 | request small fixes | `/fix <notes>` (from `plan`) or `/fix_from: <stage> <notes>`; branch and pull request stay |

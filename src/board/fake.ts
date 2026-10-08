@@ -1,14 +1,20 @@
 import {
+  boardLabels,
+  FORM_LABEL,
+  labelsToTask,
+  onBoard,
   OWNER_LABEL,
   PRIORITY_LABEL,
+  STAGE_LABEL,
   STATE_LABEL,
-  TASK_STATES,
-  labelsToTask,
+  taskLabels,
   type Board,
   type Comment,
   type MergeMethod,
   type PullRequest,
   type Task,
+  type TaskForm,
+  type TaskLabels,
   type TaskState,
 } from './board.js'
 
@@ -43,25 +49,25 @@ export class FakeBoard implements Board {
     return this.login
   }
 
-  async prepare() {
-    for (const state of TASK_STATES) this.labels.add(STATE_LABEL + state)
+  async prepare(stages: string[]) {
+    for (const label of boardLabels(stages)) this.labels.add(label.name)
   }
 
   async canWrite(user: string) {
     return Boolean(user) && !this.outsiders.has(user)
   }
 
-  async createTask(title: string, body: string, state?: TaskState) {
-    return this.createTaskAs(this.login, title, body, state)
+  async createTask(title: string, body: string, labels: TaskLabels = {}) {
+    return this.createTaskAs(this.login, title, body, labels)
   }
 
-  async createTaskAs(author: string, title: string, body: string, state?: TaskState) {
+  async createTaskAs(author: string, title: string, body: string, labels: TaskLabels = {}) {
     const id = String(this.nextId++)
     this.issues.set(id, {
       title,
       body,
       author,
-      labels: state ? [STATE_LABEL + state] : [],
+      labels: taskLabels(labels),
       assignees: [],
       closed: false,
       createdAt: this.now().toISOString(),
@@ -71,7 +77,7 @@ export class FakeBoard implements Board {
   }
 
   async listTasks() {
-    return [...this.issues.keys()].map((id) => this.toTask(id)).filter((task) => !task.closed && task.state)
+    return [...this.issues.keys()].map((id) => this.toTask(id)).filter((task) => !task.closed && onBoard(task))
   }
 
   async getTask(id: string) {
@@ -80,6 +86,14 @@ export class FakeBoard implements Board {
 
   async setState(id: string, state: TaskState) {
     this.replaceLabel(id, STATE_LABEL, STATE_LABEL + state)
+  }
+
+  async setForm(id: string, form: TaskForm | undefined) {
+    this.replaceLabel(id, FORM_LABEL, form ? FORM_LABEL + form : undefined)
+  }
+
+  async setStage(id: string, stage: string | undefined) {
+    this.replaceLabel(id, STAGE_LABEL, stage ? STAGE_LABEL + stage : undefined)
   }
 
   async setOwner(id: string, owner: string | undefined) {

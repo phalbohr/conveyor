@@ -14,8 +14,8 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     const board = makeBoard()
     const created: string[] = []
 
-    async function task(state?: TaskState, title = 'contract test task'): Promise<Task> {
-      const result = await board.createTask(title, 'body', state)
+    async function task(labels: TaskLabels = {}, title = 'contract test task'): Promise<Task> {
+      const result = await board.createTask(title, 'body', labels)
       created.push(result.id)
       return result
     }
@@ -32,13 +32,13 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
       for (const id of branches) await options.removeBranch?.(id)
     }, 120_000)
 
-    it('creates a task with a state and lists it', async () => {
-      const created = await task('idea')
-      expect(created).toMatchObject({ title: 'contract test task', body: 'body', state: 'idea', closed: false, openBlockers: 0 })
+    it('creates a task with a form and lists it', async () => {
+      const created = await task({ state: 'backlog', form: 'idea' })
+      expect(created).toMatchObject({ title: 'contract test task', body: 'body', state: 'backlog', form: 'idea', closed: false, openBlockers: 0 })
       await eventually(async () => {
         expect((await board.listTasks()).map((t) => t.id)).toContain(created.id)
       })
-      expect(await board.getTask(created.id)).toMatchObject({ id: created.id, state: 'idea' })
+      expect(await board.getTask(created.id)).toMatchObject({ id: created.id, state: 'backlog', form: 'idea' })
     })
 
     it('does not list tasks without a conveyor state', async () => {
@@ -48,7 +48,7 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('does not list closed tasks', async () => {
-      const closed = await task('plan')
+      const closed = await task({ form: 'plan' })
       await board.closeTask(closed.id)
       await eventually(async () => {
         expect((await board.listTasks()).map((t) => t.id)).not.toContain(closed.id)
@@ -57,14 +57,14 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('replaces the state', async () => {
-      const t = await task('story')
+      const t = await task({ form: 'story' })
       await board.setState(t.id, 'in-progress')
       await board.setState(t.id, 'needs-input')
       expect((await board.getTask(t.id))?.state).toBe('needs-input')
     })
 
     it('sets and clears the owner', async () => {
-      const t = await task('plan')
+      const t = await task({ form: 'plan' })
       await board.setOwner(t.id, 'someone')
       expect((await board.getTask(t.id))?.owner).toBe('someone')
       await board.setOwner(t.id, undefined)
@@ -72,13 +72,13 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('updates the body', async () => {
-      const t = await task('idea')
+      const t = await task({ form: 'idea' })
       await board.updateBody(t.id, 'story text')
       expect((await board.getTask(t.id))?.body).toBe('story text')
     })
 
     it('adds, lists, and updates comments', async () => {
-      const t = await task('plan')
+      const t = await task({ form: 'plan' })
       const user = await board.user()
       const first = await board.addComment(t.id, 'first')
       await board.addComment(t.id, 'second')
@@ -89,11 +89,16 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('prepares the state labels more than once without errors', async () => {
-      await board.prepare()
-      await board.prepare()
-      const t = await task('plan')
-      await board.setState(t.id, 'needs-input')
-      expect((await board.getTask(t.id))?.state).toBe('needs-input')
+      await board.prepare(['implement'])
+      await board.prepare(['implement'])
+      const t = await task({ form: 'plan' })
+      await board.setState(t.id, 'in-progress')
+      await board.setForm(t.id, undefined)
+      await board.setStage(t.id, 'implement')
+      expect(await board.getTask(t.id)).toMatchObject({ state: 'in-progress', stage: 'implement' })
+      expect((await board.getTask(t.id))?.form).toBeUndefined()
+      await board.setStage(t.id, undefined)
+      expect((await board.getTask(t.id))?.stage).toBeUndefined()
     })
 
     it('tells who has write access', async () => {
@@ -102,13 +107,13 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('reports the author of a task', async () => {
-      const t = await task('plan')
+      const t = await task({ form: 'plan' })
       expect((await board.getTask(t.id))?.author).toBe(await board.user())
     })
 
     it('counts open blockers', async () => {
-      const blocked = await task('plan', 'blocked task')
-      const blocker = await task('plan', 'blocker task')
+      const blocked = await task({ form: 'plan' }, 'blocked task')
+      const blocker = await task({ form: 'plan' }, 'blocker task')
       await board.addBlocker(blocked.id, blocker.id)
       await eventually(async () => {
         expect((await board.getTask(blocked.id))?.openBlockers).toBe(1)
@@ -120,7 +125,7 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('claims a task only once until release', async () => {
-      const t = await task('plan')
+      const t = await task({ form: 'plan' })
       expect(await board.claim(t.id)).toBe(true)
       expect(await board.claim(t.id)).toBe(false)
       await board.release(t.id)
@@ -129,19 +134,19 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('replaces the priority', async () => {
-      const t = await task('plan')
+      const t = await task({ form: 'plan' })
       await board.setPriority(t.id, 3)
       await board.setPriority(t.id, 1)
       expect((await board.getTask(t.id))?.priority).toBe(1)
     })
 
     it('has no pull request for a new task', async () => {
-      const t = await task('plan')
+      const t = await task({ form: 'plan' })
       expect(await board.pullRequest(t.id)).toBeUndefined()
     })
 
     it('opens one pull request for the task branch and merges it', async () => {
-      const t = await task('review')
+      const t = await task({ state: 'review' })
       await branch(t.id)
       const opened = await board.openPullRequest(t.id, `Task ${t.id}`, 'Part of the contract test.')
       expect(opened).toMatchObject({ state: 'open', reviews: [], feedback: [] })
@@ -160,7 +165,7 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('closes a pull request', async () => {
-      const t = await task('review')
+      const t = await task({ state: 'review' })
       await branch(t.id)
       await board.openPullRequest(t.id, `Task ${t.id}`, 'Part of the contract test.')
       await board.closePullRequest(t.id)
@@ -168,7 +173,7 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
     })
 
     it('releases an unclaimed task without error', async () => {
-      const t = await task('plan')
+      const t = await task({ form: 'plan' })
       await board.release(t.id)
     })
   })

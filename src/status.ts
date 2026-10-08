@@ -43,8 +43,6 @@ export type StatusSnapshot = {
   }
 }
 
-const NEW_STATES: Task['state'][] = ['idea', 'story', 'plan']
-
 const FETCH_EVERY = 5 * 60_000
 let lastFetch = 0
 
@@ -90,7 +88,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     undescribed: undescribedStages(options.settings, config),
     mine,
     team: {
-      unclaimed: tasks.filter((task) => !task.owner && NEW_STATES.includes(task.state)).length,
+      unclaimed: tasks.filter((task) => !task.owner && task.form !== undefined).length,
       claimedByOthers: tasks.filter((task) => task.owner && task.owner !== me).length,
     },
     limits: {

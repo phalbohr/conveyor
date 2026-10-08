@@ -65,7 +65,7 @@ export function helpLines(): Line[] {
     { text: '' },
     { text: 'Your actions', tone: 'title' },
     { text: '  answer a question         reply in the issue, or `conveyor attach <number>` for a live session' },
-    { text: '  new task                  `conveyor new` (live session), or an issue with a conveyor::idea|story|plan label' },
+    { text: '  new task                  `conveyor new` (live session), or an issue with conveyor::backlog and a form::idea|story|plan label' },
     { text: '  merge a reviewed task     `/merge` or Approve   (on GitLab: Approve the MR, or `/merge` on the issue)' },
     { text: '  small fixes               `/fix <notes>`, or `/fix_from: <stage> <notes>` to start later' },
     { text: '  start over                `/rework <notes>`' },

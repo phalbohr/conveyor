@@ -1,16 +1,21 @@
 import type { Run } from '../cli.js'
 import {
+  boardLabels,
+  FORM_LABEL,
+  labelsToTask,
+  onBoard,
   OWNER_LABEL,
   PRIORITY_LABEL,
-  STATE_COLORS,
+  STAGE_LABEL,
   STATE_LABEL,
-  TASK_STATES,
-  labelsToTask,
+  taskLabels,
   type Board,
   type Comment,
   type MergeMethod,
   type PullRequest,
   type Task,
+  type TaskForm,
+  type TaskLabels,
   type TaskState,
 } from './board.js'
 
@@ -65,9 +70,9 @@ export class GitLabBoard implements Board {
     return this.login
   }
 
-  async prepare() {
-    for (const state of TASK_STATES) {
-      const result = await this.call(['-X', 'POST', `${this.api}/labels`, '-f', `name=${STATE_LABEL}${state}`, '-f', `color=#${STATE_COLORS[state]}`])
+  async prepare(stages: string[]) {
+    for (const label of boardLabels(stages)) {
+      const result = await this.call(['-X', 'POST', `${this.api}/labels`, '-f', `name=${label.name}`, '-f', `color=#${label.color}`])
       if (result.code !== 0 && result.status !== 409) this.fail(result, 'labels')
     }
   }
@@ -78,9 +83,10 @@ export class GitLabBoard implements Board {
     return members.some((member) => member.username === user && member.access_level >= DEVELOPER)
   }
 
-  async createTask(title: string, body: string, state?: TaskState) {
-    const labels = state ? ['-f', `labels=${STATE_LABEL}${state}`] : []
-    const created = await this.json<{ iid: number }>(['-X', 'POST', `${this.api}/issues`, '-f', `title=${title}`, '-f', `description=${body}`, ...labels])
+  async createTask(title: string, body: string, labels: TaskLabels = {}) {
+    const names = taskLabels(labels)
+    const flags = names.length ? ['-f', `labels=${names.join(',')}`] : []
+    const created = await this.json<{ iid: number }>(['-X', 'POST', `${this.api}/issues`, '-f', `title=${title}`, '-f', `description=${body}`, ...flags])
     const task = await this.getTask(String(created.iid))
     if (!task) throw new Error(`issue ${created.iid} not found after creation`)
     return task
@@ -100,7 +106,7 @@ export class GitLabBoard implements Board {
       after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null
     } while (after)
     const tasks = await this.toTasks(issues)
-    return tasks.filter((task) => task.state)
+    return tasks.filter(onBoard)
   }
 
   async getTask(id: string) {
@@ -113,6 +119,14 @@ export class GitLabBoard implements Board {
 
   async setState(id: string, state: TaskState) {
     await this.replaceLabel(id, STATE_LABEL, STATE_LABEL + state)
+  }
+
+  async setForm(id: string, form: TaskForm | undefined) {
+    await this.replaceLabel(id, FORM_LABEL, form ? FORM_LABEL + form : undefined)
+  }
+
+  async setStage(id: string, stage: string | undefined) {
+    await this.replaceLabel(id, STAGE_LABEL, stage ? STAGE_LABEL + stage : undefined)
   }
 
   async setOwner(id: string, owner: string | undefined) {
