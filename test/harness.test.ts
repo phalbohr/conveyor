@@ -158,6 +158,34 @@ describe('claude permission mode', () => {
   })
 })
 
+describe('codex subscription windows', () => {
+  it('reads the 5h and 7d windows from the session file and removes it', async () => {
+    const home = tempDir('conveyor-codex-home-')
+    const now = new Date()
+    const day = join(home, 'sessions', String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0'))
+    mkdirSync(day, { recursive: true })
+    const session = join(day, 'rollout-2026-10-08T10-00-00-01a10707-4d1c-75a3-b285-af43a340a572.jsonl')
+    const limits = { primary: { used_percent: 18, window_minutes: 300, resets_at: 1_791_470_433 }, secondary: { used_percent: 11, window_minutes: 10_080, resets_at: 1_791_965_674 } }
+    writeFileSync(session, `${JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', rate_limits: limits } })}\n`)
+    const s = stub('codex-done.jsonl')
+    const output = await new CodexHarness({ command: s.command, env: { ...process.env, CODEX_HOME: home } }).runStage(run())
+    expect(output.quota).toEqual({
+      fiveHour: { utilization: 0.18, resetsAt: new Date(1_791_470_433_000).toISOString() },
+      sevenDay: { utilization: 0.11, resetsAt: new Date(1_791_965_674_000).toISOString() },
+    })
+    expect(existsSync(session)).toBe(false)
+    const { argv } = JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[] }
+    expect(argv).not.toContain('--ephemeral')
+  })
+
+  it('probes with the default model', async () => {
+    const s = stub('codex-done.jsonl')
+    await new CodexHarness({ command: s.command, env: { ...process.env, CODEX_HOME: tempDir() } }).probeQuota(tempDir())
+    const { argv } = JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[] }
+    expect(argv).not.toContain('-m')
+  })
+})
+
 describe('codex sandbox options', () => {
   const argv = async (options: { sandbox?: 'workspace-write' | 'full-access'; network?: boolean }) => {
     const s = stub('codex-done.jsonl')
