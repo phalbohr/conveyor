@@ -20,7 +20,7 @@ export type Field = {
   inherited?: string
 }
 
-type Spec = { key: string; label: string; kind: FieldKind; help: string; options?: string[]; other?: boolean; optionHelp?: Record<string, string> }
+type Spec = { key: string; label: string; kind: FieldKind; help: string; options?: string[]; other?: boolean; optionHelp?: Record<string, string>; fallback?: string }
 
 const FILES = { config: 'config.yaml', local: 'local.yaml' } as const
 const RESERVED = ['story', 'plan', 'merge']
@@ -74,6 +74,18 @@ const TEAM: Spec[] = [
   },
   { key: 'review.approvals', label: 'Approvals for merge', kind: 'number', help: 'distinct people who approve before the conveyor merges' },
   { key: 'language.docs', label: 'Documentation language', kind: 'text', help: 'language of everything the team sees' },
+  { key: 'timeouts.stage', label: 'Stage timeout', kind: 'text', fallback: '60m', help: 'longest run of one stage before it fails and retries, e.g. 60m' },
+  { key: 'timeouts.stall', label: 'Stall timeout (0 = off)', kind: 'text', fallback: '5m', help: 'a stage with no agent output for this long fails and retries' },
+  {
+    key: 'timeouts.heartbeat',
+    label: 'Heartbeat timeout',
+    kind: 'text',
+    fallback: '30m',
+    help: 'a running task writes a heartbeat every third of this; a claim without one for this long is released',
+  },
+  { key: 'timeouts.waiting', label: 'Waiting timeout', kind: 'text', fallback: '4d', help: 'a task that waits this long for its owner is released; 4d calendar days, 2wd working days' },
+  { key: 'retry.max_attempts', label: 'Attempts before a human', kind: 'number', fallback: '5', help: 'failed attempts of a stage before it asks a human' },
+  { key: 'retry.max_backoff', label: 'Longest retry pause', kind: 'text', fallback: '5m', help: 'pauses between attempts double up to this' },
   { key: 'board.github_project', label: 'GitHub project number', kind: 'number', help: 'GitHub only: the project whose Conveyor field shows the task state as columns' },
 ]
 
@@ -326,12 +338,12 @@ export class SettingsDocument {
   private field(group: Field['group'], file: keyof typeof FILES, spec: Spec): Field {
     const path = spec.key.split('.')
     const raw = this.docs[file].getIn(path)
-    const effective = group === 'Stages' ? undefined : pick(this.config, spec.key)
+    const effective = group === 'Stages' ? undefined : (spec.fallback ?? pick(this.config, spec.key))
     const value = raw ?? effective
     const text = value === undefined || value === null ? '' : String(value)
     const options = spec.options && text && !spec.options.includes(text) ? [text, ...spec.options] : spec.options
     const inherited = this.inherited(path)
-    const { optionHelp, ...rest } = spec
+    const { optionHelp, fallback: _fallback, ...rest } = spec
     return { ...rest, help: optionHelp?.[text || inherited || ''] ?? spec.help, ...(options ? { options } : {}), ...(inherited ? { inherited } : {}), group, value: text }
   }
 
