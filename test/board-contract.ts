@@ -88,6 +88,14 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
       expect(comments[0]?.author).toBe(user)
     })
 
+    it('prepares the state labels more than once without errors', async () => {
+      await board.prepare()
+      await board.prepare()
+      const t = await task('plan')
+      await board.setState(t.id, 'needs-input')
+      expect((await board.getTask(t.id))?.state).toBe('needs-input')
+    })
+
     it('tells who has write access', async () => {
       expect(await board.canWrite(await board.user())).toBe(true)
       expect(await board.canWrite('')).toBe(false)

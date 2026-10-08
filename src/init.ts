@@ -3,11 +3,13 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from './cli.js'
 import { loadConfig, type Config } from './config.js'
+import { STATE_LABEL, TASK_STATES } from './board/board.js'
+import { boardAdapter } from './commands/run.js'
 import { SETTINGS_DIR, findSettings, linkSettings } from './settings.js'
 
 export type Board = Config['board']
 export type Target = { kind: 'here' } | { kind: 'path'; path: string } | { kind: 'use'; path: string }
-export type InitResult = { ok: true; settings: string; warnings: string[] } | { ok: false; errors: string[] }
+export type InitResult = { ok: true; settings: string; warnings: string[]; board: string[] } | { ok: false; errors: string[] }
 
 type Check = [command: string, args: string[]]
 
@@ -38,7 +40,7 @@ export async function initProject(context: Context, target: Target, board?: Boar
     const loaded = loadConfig(settings)
     if (!loaded.ok) return loaded
     linkSettings(context.cwd, context.home, settings)
-    return { ok: true, settings, warnings: await checkTools(loaded.config, context) }
+    return finish(context, settings, loaded.config)
   }
 
   if (!board) return { ok: false, errors: ['the board is unknown: pass --provider and --project'] }
@@ -49,7 +51,29 @@ export async function initProject(context: Context, target: Target, board?: Boar
   if (target.kind === 'path') linkSettings(context.cwd, context.home, settings)
   const loaded = loadConfig(settings)
   if (!loaded.ok) return loaded
-  return { ok: true, settings, warnings: await checkTools(loaded.config, context) }
+  return finish(context, settings, loaded.config)
+}
+
+async function finish(context: Context, settings: string, config: Config): Promise<InitResult> {
+  const warnings = await checkTools(config, context)
+  await boardAdapter(context, config)
+    .prepare()
+    .catch((error: unknown) => warnings.push(`the board labels were not created: ${(error as Error).message}`))
+  return { ok: true, settings, warnings, board: boardSteps(config) }
+}
+
+function boardSteps(config: Config): string[] {
+  const labels = TASK_STATES.map((state) => STATE_LABEL + state).join(', ')
+  if (config.board.provider === 'gitlab') {
+    return [`Labels: ${labels}.`, 'Board: open Issues → Boards and add one list per conveyor:: label, in this order.']
+  }
+  if (config.board.github_project) {
+    return [`Labels: ${labels}.`, `Board: in project ${config.board.github_project}, open a Board view and choose the field Conveyor under "Column by".`]
+  }
+  return [
+    `Labels: ${labels}.`,
+    'Board: create a GitHub project, set board.github_project to its number (conveyor config set board.github_project <number>), start the conveyor, then choose the field Conveyor under "Column by" in a Board view.',
+  ]
 }
 
 function createSettings(dir: string, board: Board) {

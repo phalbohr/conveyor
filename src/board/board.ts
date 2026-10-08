@@ -40,6 +40,7 @@ export type MergeMethod = 'merge' | 'squash' | 'rebase'
 
 export interface Board {
   user(): Promise<string>
+  prepare(): Promise<void>
   canWrite(user: string): Promise<boolean>
   createTask(title: string, body: string, state?: TaskState): Promise<Task>
   listTasks(): Promise<Task[]>
@@ -59,6 +60,18 @@ export interface Board {
   pullRequest(id: string): Promise<PullRequest | undefined>
   mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }>
   closePullRequest(id: string): Promise<void>
+}
+
+export const STATE_COLORS: Record<TaskState, string> = {
+  idea: 'c5def5',
+  story: 'bfd4f2',
+  plan: '0e8a16',
+  'in-progress': 'fbca04',
+  'needs-input': 'd93f0b',
+  queued: 'cccccc',
+  review: '5319e7',
+  rework: 'b60205',
+  done: '0052cc',
 }
 
 export const STATE_LABEL = 'conveyor::'

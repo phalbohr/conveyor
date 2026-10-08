@@ -2,6 +2,7 @@ import type { Run } from '../cli.js'
 import {
   OWNER_LABEL,
   PRIORITY_LABEL,
+  STATE_COLORS,
   STATE_LABEL,
   TASK_STATES,
   labelsToTask,
@@ -70,6 +71,14 @@ export class GitHubBoard implements Board {
   async user() {
     this.login ??= (await this.api<{ login: string }>(['user'])).login
     return this.login
+  }
+
+  async prepare() {
+    for (const state of TASK_STATES) {
+      const result = await this.call(['-X', 'POST', `${this.repo}/labels`, '-f', `name=${STATE_LABEL}${state}`, '-f', `color=${STATE_COLORS[state]}`])
+      if (result.status !== 422) this.parse(result)
+    }
+    if (this.options.projectNumber) await this.projectMirror(this.options.projectNumber)
   }
 
   async canWrite(user: string) {

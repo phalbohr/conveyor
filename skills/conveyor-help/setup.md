@@ -95,7 +95,7 @@ Personal and never committed:
 
 ## 10. The board view
 
-GitHub: create a project, set `board.github_project: <number>` in `config.yaml`, and choose the field `Conveyor` as the column field of a board view. GitLab: create an issue board with one list per `conveyor::*` label.
+The conveyor creates the `conveyor::*` labels on `init` and on every start; the board itself is set up once by a human. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor` with one option per state), then in a Board view choose `Conveyor` under "Column by". GitLab: Issues → Boards, add one list per `conveyor::*` label in this order: idea, story, plan, in-progress, needs-input, queued, review, rework, done.
 
 ## Finish
 
