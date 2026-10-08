@@ -73,7 +73,7 @@ A description can use `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.pla
 
 `merge_method`: `merge` (merge commit), `squash` (one commit per task), or `rebase`. Ask about `review.approvals` only for `human` and `smart`. Branch protection on the board still applies on top.
 
-`close_on_done` (`conveyor config set close_on_done true`): `false` (default) leaves a finished issue open with `conveyor::done`, so the team closes it after acceptance, for example in a sprint review; `true` makes the conveyor close it. On GitLab with `true`, done issues go straight to the board's Closed list.
+`close_on_done` (`conveyor config set close_on_done true`): `false` (default) leaves a finished issue open with `conveyor::done`, so the team closes it after acceptance, for example in a sprint review; `true` makes the conveyor close it. On GitLab with `true`, done issues go straight to the board's Closed list; on GitHub the closed issue keeps the `Conveyor` value `done` and stays in the Done column unless the view hides closed items.
 
 ## 7. Triage — `triage.harness`, `triage.model`, `triage.effort`, `triage.md`
 
