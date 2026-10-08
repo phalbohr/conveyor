@@ -63,7 +63,7 @@ Go through every stage in the chain. For each, read its file and tell the user i
 
 A description can use `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.plan }}`, `{{ stage }}`, `{{ attempt }}`, `{{ review }}`, `{{ language.docs }}`, `{{ formats.story }}`, and a frontmatter `skills: [name]` (claude stages only). An unknown variable stops the stage, so use only these, and wrap an artifact that may be missing: `{% if artifacts.plan %}{{ artifacts.plan }}{% endif %}`.
 
-## 6. Merge — `transitions.merge`, `merge_method`, `review.approvals`
+## 6. Merge — `transitions.merge`, `merge_method`, `review.approvals`, `close_on_done`
 
 | `transitions.merge` | What happens after the `merge` stage |
 |---|---|
@@ -72,6 +72,8 @@ A description can use `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.pla
 | `ai` | The conveyor merges without a human, after blockers are closed and CI is green. |
 
 `merge_method`: `merge` (merge commit), `squash` (one commit per task), or `rebase`. Ask about `review.approvals` only for `human` and `smart`. Branch protection on the board still applies on top.
+
+`close_on_done`: `false` (default) leaves a finished issue open with `conveyor::done`, so the team closes it after acceptance, for example in a sprint review; `true` makes the conveyor close it. On GitLab with `true`, done issues go straight to the board's Closed list.
 
 ## 7. Triage — `triage.harness`, `triage.model`, `triage.effort`, `triage.md`
 

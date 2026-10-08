@@ -20,7 +20,7 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 | 10 | Review: `/merge` or Approve → merge; `/fix`, `/fix_from:`, `/rework` → back to work. An approval counts only for the head commit under review; a push by someone else asks for a new approval | human | review / in-progress |
 | 11 | Landing: waits for blockers and CI, merges under the lock `conveyor-lock/merge` | conveyor | — |
 | 12 | Post-merge stages with `when: success`, `failure`, or `always` (for example `fix-ci`) | agents | in-progress |
-| 13 | Done: issue closed, lock, workspace, and task branch removed | conveyor | `conveyor::done` |
+| 13 | Done: lock, workspace, and task branch removed; the issue stays open for a human to close (for example after a sprint review), or the conveyor closes it with `close_on_done: true` | conveyor | `conveyor::done` |
 
 Questions, approvals, and errors always go to the issue as comments. Any reply without the conveyor marker from a user with write access to the repository is the answer; the next cycle continues the stage. `conveyor attach <number>` answers in a live session instead.
 
@@ -73,7 +73,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 
 | File | Controls |
 |---|---|
-| `config.yaml` (team) | board, `pickup_from`, `transitions`, `stages`, `defaults`, `triage`, `harnesses`, `artifacts`, `hooks`, `timeouts`, `retry`, `merge_method`, `review.approvals`, `language.docs` |
+| `config.yaml` (team) | board, `pickup_from`, `transitions`, `stages`, `defaults`, `triage`, `harnesses`, `artifacts`, `hooks`, `timeouts`, `retry`, `merge_method`, `close_on_done`, `review.approvals`, `language.docs` |
 | `local.yaml` (personal) | `limits` (running, awaiting_me, awaiting_review, daily_tokens, subscription reserves), `poll_interval`, `pickup`, `workspace.root`, `language.chat`, personal `harnesses` overrides, private `artifacts` |
 | `stages/<name>.md` | what a stage does: Liquid template with `issue`, `stage`, `attempt`, `artifacts`, `review`, `language`, `formats`; frontmatter `skills: [a, b]` attaches skills (claude stages) |
 | `smart/<gate>.md` | when a smart gate asks a human (`idea-story`, `story-plan`, `merge`) |

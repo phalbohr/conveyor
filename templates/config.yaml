@@ -13,6 +13,7 @@ transitions:
   story_to_plan: interactive
   merge: human
 merge_method: merge
+close_on_done: false
 review:
   approvals: 1
 defaults: {harness: claude, model: sonnet, effort: medium}
