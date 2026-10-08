@@ -12,7 +12,7 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 | 2 | Triage: priorities 1–4 and "blocked by" links for new tasks | agent (triage settings) | `priority::N` |
 | 3 | Claim: the first workstation with free limits locks the task (branch `conveyor-lock/<number>`) and removes the form | conveyor | `claimed-by::<user>`, `conveyor::in-progress` |
 | 4 | `story` stage (for `form::idea`): idea → user story in `formats/story.md` | agent | in-progress + `stage::story` |
-| 5 | Gate idea → story: questions or approval in issue comments, depending on `transitions.idea_to_story`. An answered task waits in `conveyor::queued` when the workstation has no free slot | human or agent | `conveyor::needs-input` while waiting, then `queued` or in-progress |
+| 5 | Gate idea → story: questions or approval in issue comments, depending on `transitions.idea_to_story` | human or agent | `conveyor::needs-input` while waiting, then `queued` or in-progress |
 | 6 | `plan` stage (for `form::idea` and `form::story`) and gate story → plan | agent, human | in-progress / needs-input + `stage::plan` |
 | 7 | `implement`, `review`, and custom stages before `merge`, each in the task worktree on branch `conveyor/<number>`; the conveyor commits and pushes after every stage | agents | in-progress + `stage::<name>` |
 | 8 | `merge` stage prepares the branch; the conveyor opens a pull/merge request | agent, conveyor | — |
@@ -22,7 +22,7 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 | 12 | Post-merge stages with `when: success`, `failure`, or `always` (for example `fix-ci`) | agents | in-progress |
 | 13 | Done: lock, workspace, and task branch removed; the issue stays open for a human to close (for example after a sprint review), or the conveyor closes it with `close_on_done: true` | conveyor | `conveyor::done` |
 
-Questions, approvals, and errors always go to the issue as comments. Any reply without the conveyor marker from a user with write access to the repository is the answer; the next cycle continues the stage. `conveyor attach <number>` answers in a live session instead.
+Any task in `conveyor::needs-input` (a gate question or approval, a stage question, or an error) that gets an answer moves to `conveyor::queued` when the owner's workstation has no free slot, and to `conveyor::in-progress` when the next cycle starts it. Questions, approvals, and errors always go to the issue as comments. Any reply without the conveyor marker from a user with write access to the repository is the answer; the next cycle continues the stage. `conveyor attach <number>` answers in a live session instead.
 
 ## Task numbers
 
@@ -67,7 +67,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 | request small fixes | `/fix <notes>` reruns from `plan` (the plan stage adapts the plan to your notes, then the later stages run) or `/fix_from: <stage> <notes>`, e.g. `/fix_from: implement`, to skip the plan; branch and pull request stay |
 | start over | `/rework <notes>` or the label `conveyor::rework`; new branch from `plan` on |
 | give a task back | `conveyor release <number>` (`--force` for private tasks of others) |
-| change settings | `conveyor settings`, or `conveyor config list|get|set`, `conveyor config stage add|remove|move`. In the editor, help follows the chosen option; `(defaults: claude)` shows the value a stage takes from `defaults`; switching a harness drops options the new harness does not take and picks a model and effort it lists; a yellow "Not valid yet" block names what blocks saving Switching to a harness other than claude drops `permission_mode`; to one other than codex drops `sandbox` and `network`; the model stays when the new harness lists it, otherwise it becomes the first listed model; the effort becomes `medium` when listed, otherwise the first listed effort; a harness without a model list gets a text field |
+| change settings | `conveyor settings`, or `conveyor config list|get|set`, `conveyor config stage add|remove|move`. In the editor, help follows the chosen option; `(defaults: claude)` shows the value a stage takes from `defaults`; switching a harness drops options the new harness does not take and picks a model and effort it lists; a yellow "Not valid yet" block names what blocks saving. Switching to a harness other than claude drops `permission_mode`; to one other than codex drops `sandbox` and `network`; the model stays when the new harness lists it, otherwise it becomes the first listed model; the effort becomes `medium` when listed, otherwise the first listed effort; a harness without a model list gets a text field |
 
 ## Files and what they control
 
@@ -100,7 +100,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 
 **A stage on a self-hosted model through LiteLLM (OpenCode):**
 1. Add a provider, for example `litellm`, to OpenCode's global `~/.config/opencode/opencode.json` (or `opencode.json` in the repository) with `"npm": "@ai-sdk/openai-compatible"` and `"options": {"baseURL": "http://localhost:4000/v1", "apiKey": "{env:LITELLM_API_KEY}"}`; keep the key in that variable, not in the file. Kilo Code uses the same format in `~/.config/kilo/kilo.jsonc`.
-2. `conveyor config set stages.implement.harness opencode`, then `conveyor config set stages.implement.model litellm/<model>`.
+2. `conveyor config set stages.implement.harness opencode` (or `kilocode`), then `conveyor config set stages.implement.model litellm/<model>`; `conveyor models opencode` (or `kilocode`) lists the names.
 
 **OpenHands with a personal endpoint:** in `local.yaml`:
 ```yaml
