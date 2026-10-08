@@ -17,7 +17,7 @@ type Mode =
   | { kind: 'add-when'; name: string }
 
 const stageOf = (field: Field | undefined) => (field?.group === 'Stages' ? field.key.split('.')[1] : undefined)
-const inheritable = (field: Field) => field.group === 'Stages' || field.key.startsWith('defaults.') || field.key.startsWith('triage.')
+const inheritable = (field: Field) => field.group === 'Stages' || field.key.startsWith('triage.')
 const FROM_DEFAULTS = ['harness', 'model', 'effort']
 const shown = (field: Field) => {
   if (field.value) return field.value

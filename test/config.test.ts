@@ -153,6 +153,14 @@ stages:
 `)).toContainEqual(expect.stringContaining('implement'))
   })
 
+  it('rejects timeouts that would make tasks hang or run twice', () => {
+    expect(errors(`${BOARD}\ntimeouts: {heartbeat: 0m}\n`)).toContainEqual(expect.stringContaining('timeouts.heartbeat: must be at least 1m'))
+    expect(errors(`${BOARD}\ntimeouts: {heartbeat: 30s}\n`)).toContainEqual(expect.stringContaining('take over tasks that still run'))
+    expect(errors(`${BOARD}\ntimeouts: {waiting: 0d}\n`)).toContainEqual(expect.stringContaining('timeouts.waiting: must be at least 1d'))
+    expect(errors(`${BOARD}\ntimeouts: {stage: 10s}\n`)).toContainEqual(expect.stringContaining('timeouts.stage: must be at least 1m'))
+    expect(config(`${BOARD}\ntimeouts: {stall: "0"}\n`).timeouts.stall).toBe(0)
+  })
+
   it('accepts a permission mode for claude stages', () => {
     const c = config(`${BOARD}
 stages:

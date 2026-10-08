@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { PRESETS } from './harness/presets.js'
 
 const UNIT_MS = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const
+const MINUTE = UNIT_MS.m
 
 const duration = z
   .string()
@@ -93,10 +94,14 @@ const teamSchema = z.strictObject({
     .prefault({}),
   timeouts: z
     .strictObject({
-      stage: duration.prefault('60m'),
-      stall: z.union([z.literal(0), duration]).prefault('5m'),
-      heartbeat: duration.prefault('30m'),
-      waiting: waiting.prefault('4d'),
+      stage: duration.refine((ms) => ms >= MINUTE, 'must be at least 1m').prefault('60m'),
+      stall: z
+        .union([z.literal(0), z.literal('0').transform(() => 0), duration.refine((ms) => ms >= MINUTE, 'must be 0 (off) or at least 1m')])
+        .prefault('5m'),
+      heartbeat: duration
+        .refine((ms) => ms >= MINUTE, 'must be at least 1m: a shorter heartbeat timeout lets other workstations take over tasks that still run, and tasks can hang or run twice; the default is 30m')
+        .prefault('30m'),
+      waiting: waiting.refine((value) => value.days >= 1, 'must be at least 1d: a shorter waiting timeout releases tasks before anyone can answer').prefault('4d'),
     })
     .prefault({}),
   retry: z.strictObject({ max_backoff: duration.prefault('5m'), max_attempts: count.default(5) }).prefault({}),
