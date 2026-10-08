@@ -1,4 +1,5 @@
 import type { Board, Task } from './board/board.js'
+import { harnessesInUse } from './commands/models.js'
 import { quotaFile, usageFile } from './commands/run.js'
 import type { Config } from './config.js'
 import { findWorkpad, repliesSince } from './engine/workpad.js'
@@ -39,10 +40,11 @@ export type StatusSnapshot = {
     awaitingMe: Limit
     awaitingReview: Limit
     dailyTokens: Limit
-    subscription: Record<string, { fiveHour?: QuotaWindow; sevenDay?: QuotaWindow; observedAt: string; fiveHourReserve: number; sevenDayReserve: number }>
+    subscription: Record<string, { fiveHour?: QuotaWindow; sevenDay?: QuotaWindow; observedAt?: string; reports: boolean; fiveHourReserve: number; sevenDayReserve: number }>
   }
 }
 
+const QUOTA_HARNESSES = ['claude', 'codex']
 const FETCH_EVERY = 5 * 60_000
 let lastFetch = 0
 
@@ -97,15 +99,19 @@ export async function collectStatus(options: { board: Board; config: Config; set
       awaitingReview: { used: mine.filter((task) => task.state === 'review').length, limit: config.limits.awaiting_review },
       dailyTokens: { used: new UsageLedger(usageFile(home, project)).today(), limit: config.limits.daily_tokens },
       subscription: Object.fromEntries(
-        Object.entries(readings).map(([harness, reading]) => [
-          harness,
-          {
-            ...reading.quota,
-            observedAt: new Date(reading.observedAt).toISOString(),
-            fiveHourReserve: subscription.five_hour_reserve,
-            sevenDayReserve: subscription.seven_day_reserve,
-          },
-        ]),
+        [...new Set([...harnessesInUse(config), ...Object.keys(readings)])].map((harness) => {
+          const reading = readings[harness]
+          return [
+            harness,
+            {
+              ...reading?.quota,
+              ...(reading ? { observedAt: new Date(reading.observedAt).toISOString() } : {}),
+              reports: QUOTA_HARNESSES.includes(harness),
+              fiveHourReserve: subscription.five_hour_reserve,
+              sevenDayReserve: subscription.seven_day_reserve,
+            },
+          ]
+        }),
       ),
     },
   }

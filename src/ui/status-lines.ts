@@ -37,11 +37,17 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
     for (const task of tasks) lines.push({ text: `  #${task.id} ${task.title}${task.stage ? ` — ${task.stage}` : ''}${task.state === 'needs-input' && task.answered ? ' — answered' : ''}` })
   }
   lines.push({ text: `usage: tokens today ${number(limits.dailyTokens.used)}${limits.dailyTokens.limit ? ` / ${number(limits.dailyTokens.limit)}` : ''}`, tone: 'muted' })
-  if (Object.keys(limits.subscription).length === 0) {
-    lines.push({ text: 'subscription windows: not seen yet; they appear after a claude stage runs, or turn on limits.subscription.probe', tone: 'muted' })
-  }
 
   for (const [harness, quota] of Object.entries(limits.subscription)) {
+    if (!quota.observedAt) {
+      lines.push({
+        text: quota.reports
+          ? `${harness}: subscription windows not seen yet; they appear after its first stage, or with limits.subscription.probe`
+          : `${harness}: no subscription windows; this harness does not report them`,
+        tone: 'muted',
+      })
+      continue
+    }
     const windows = [
       quota.fiveHour ? `5h ${percent(quota.fiveHour.utilization)} (reserve ${quota.fiveHourReserve}%, resets ${time(quota.fiveHour.resetsAt)})` : '',
       quota.sevenDay ? `7d ${percent(quota.sevenDay.utilization)} (reserve ${quota.sevenDayReserve}%, resets ${time(quota.sevenDay.resetsAt)})` : '',

@@ -103,7 +103,7 @@ Personal and never committed:
 - `limits.running`: tasks this workstation runs at once (the control screen shows them as my tasks in progress);
 - `limits.awaiting_me`, `limits.awaiting_review`: no new tasks while this many wait for your answer or review;
 - `limits.daily_tokens`: no new tasks after this many tokens a day (0 = off);
-- `limits.subscription.five_hour_reserve`, `seven_day_reserve`: percent of the subscription windows kept for your own work (claude);
+- `limits.subscription.five_hour_reserve`, `seven_day_reserve`: percent of the subscription windows kept for your own work (claude and codex report their windows; command harnesses do not);
 - `language.chat`: the language of `conveyor new` and `conveyor attach`;
 - `poll_interval`, `pickup.include_unassigned`.
 

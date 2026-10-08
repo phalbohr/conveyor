@@ -51,9 +51,14 @@ describe('statusLines', () => {
     expect(selected?.text).toBe('review 0/2')
   })
 
-  it('explains missing subscription windows', () => {
-    const text = statusLines({ ...snapshot, limits: { ...snapshot.limits, subscription: {} } }).map((line) => line.text)
-    expect(text).toContain('subscription windows: not seen yet; they appear after a claude stage runs, or turn on limits.subscription.probe')
+  it('shows a subscription line for every harness in use', () => {
+    const subscription = {
+      codex: { reports: true, fiveHourReserve: 0, sevenDayReserve: 0 },
+      opencode: { reports: false, fiveHourReserve: 0, sevenDayReserve: 0 },
+    }
+    const text = statusLines({ ...snapshot, limits: { ...snapshot.limits, subscription } }).map((line) => line.text)
+    expect(text).toContain('codex: subscription windows not seen yet; they appear after its first stage, or with limits.subscription.probe')
+    expect(text).toContain('opencode: no subscription windows; this harness does not report them')
   })
 
   it('warns about newer team settings', () => {
