@@ -36,27 +36,13 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
     if (tasks.length === 0) lines.push({ text: `  no tasks ${selected.label}`, tone: 'muted' })
     for (const task of tasks) lines.push({ text: `  #${task.id} ${task.title}${task.stage ? ` — ${task.stage}` : ''}${task.state === 'needs-input' && task.answered ? ' — answered' : ''}` })
   }
-  lines.push({ text: `usage: tokens today ${number(limits.dailyTokens.used)}${limits.dailyTokens.limit ? ` / ${number(limits.dailyTokens.limit)}` : ''}`, tone: 'muted' })
-
-  for (const [harness, quota] of Object.entries(limits.subscription)) {
-    if (!quota.observedAt) {
-      lines.push({
-        text: quota.reports
-          ? `${harness}: subscription windows not seen yet; they appear after its first stage, or with limits.subscription.probe`
-          : `${harness}: no subscription windows; this harness does not report them`,
-        tone: 'muted',
-      })
-      continue
-    }
-    const windows = [
-      quota.fiveHour ? `5h ${percent(quota.fiveHour.utilization)} (reserve ${quota.fiveHourReserve}%, resets ${time(quota.fiveHour.resetsAt)})` : '',
-      quota.sevenDay ? `7d ${percent(quota.sevenDay.utilization)} (reserve ${quota.sevenDayReserve}%, resets ${time(quota.sevenDay.resetsAt)})` : '',
-    ].filter(Boolean)
-    const low =
-      (quota.fiveHour && quota.fiveHourReserve > 0 && quota.fiveHour.utilization * 100 >= 100 - quota.fiveHourReserve) ||
-      (quota.sevenDay && quota.sevenDayReserve > 0 && quota.sevenDay.utilization * 100 >= 100 - quota.sevenDayReserve)
-    lines.push({ text: `${harness}: ${windows.join(' · ')} · seen ${time(quota.observedAt)}`, tone: low ? 'warning' : 'muted' })
-  }
+  const blocked = [
+    ...(limits.dailyTokens.limit && limits.dailyTokens.used >= limits.dailyTokens.limit ? ['the daily token limit'] : []),
+    ...Object.entries(limits.subscription)
+      .filter(([, quota]) => reserveReached(quota))
+      .map(([harness]) => `the ${harness} subscription reserve`),
+  ]
+  if (blocked.length) lines.push({ text: `no new tasks: ${blocked.join(' and ')} reached · [u] usage`, tone: 'warning' })
 
   lines.push({ text: '' }, { text: 'My tasks', tone: 'title' })
   if (status.mine.length === 0) lines.push({ text: '  none', tone: 'muted' })
@@ -76,6 +62,41 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   return lines
 }
 
+export function usageLines(status: StatusSnapshot): Line[] {
+  const { limits } = status
+  const lines: Line[] = [
+    { text: 'Usage', tone: 'title' },
+    { text: `tokens today ${number(limits.dailyTokens.used)}${limits.dailyTokens.limit ? ` / ${number(limits.dailyTokens.limit)} (limits.daily_tokens)` : ' (no daily limit)'}` },
+    { text: '' },
+    { text: 'Subscription windows', tone: 'title' },
+  ]
+  for (const [harness, quota] of Object.entries(limits.subscription)) {
+    if (!quota.observedAt) {
+      lines.push({
+        text: quota.reports
+          ? `${harness}: not seen yet; they appear after its first stage, or with limits.subscription.probe`
+          : `${harness}: none; this harness does not report subscription windows`,
+        tone: 'muted',
+      })
+      continue
+    }
+    const windows = [
+      quota.fiveHour ? `5h ${percent(quota.fiveHour.utilization)} (reserve ${quota.fiveHourReserve}%, resets ${time(quota.fiveHour.resetsAt)})` : '',
+      quota.sevenDay ? `7d ${percent(quota.sevenDay.utilization)} (reserve ${quota.sevenDayReserve}%, resets ${time(quota.sevenDay.resetsAt)})` : '',
+    ].filter(Boolean)
+    lines.push({ text: `${harness}: ${windows.join(' · ')} · seen ${time(quota.observedAt)}`, ...(reserveReached(quota) ? { tone: 'warning' as const } : {}) })
+  }
+  lines.push({ text: '' }, { text: 'A reached reserve or daily limit stops new tasks and stages of that harness until the window resets. [u] back', tone: 'muted' })
+  return lines
+}
+
+function reserveReached(quota: StatusSnapshot['limits']['subscription'][string]) {
+  return Boolean(
+    (quota.fiveHour && quota.fiveHourReserve > 0 && quota.fiveHour.utilization * 100 >= 100 - quota.fiveHourReserve) ||
+      (quota.sevenDay && quota.sevenDayReserve > 0 && quota.sevenDay.utilization * 100 >= 100 - quota.sevenDayReserve),
+  )
+}
+
 export function helpLines(): Line[] {
   return [
     { text: 'conveyor help', tone: 'title' },
@@ -88,7 +109,7 @@ export function helpLines(): Line[] {
     { text: 'My status', tone: 'title' },
     { text: '  in progress / needs input / review: my tasks in these columns against limits.running, awaiting_me, awaiting_review;' },
     { text: '  at a limit the conveyor takes no new tasks until one moves on. ←→ select a column, Enter lists its tasks' },
-    { text: '  usage: tokens today and subscription windows (5h and 7d use of each subscription, with your reserve)' },
+    { text: '  [u] usage: tokens today and the 5h and 7d subscription windows of every harness in use, with your reserve' },
     { text: '' },
     { text: 'Your actions', tone: 'title' },
     { text: '  answer a question         reply in the issue, or `conveyor attach <number>` for a live session' },
