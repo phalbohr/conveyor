@@ -12,11 +12,11 @@ Walk the user through the conveyor configuration, one decision at a time. Every 
 
 Before step 1, show the user the current flow as a chain, for example `plan → implement → polish → review → merge (human)`, and this list of steps; let the user pick all steps or some of them.
 
-`config.yaml` is the team file: changes apply to everyone after a commit. Say so once at the start of the team steps (1–8) and get the user's agreement to change team settings.
+`config.yaml` is the team file: changes apply to everyone after a commit. Say so once at the start of the team steps (1–8a) and get the user's agreement to change team settings.
 
 ## 1. Where tasks start — `pickup_from`
 
-The earliest form the conveyor takes. A task is ready for the conveyor when it has a `form::` label; without one it is a draft in the backlog. Everything before the form is written by humans.
+The earliest form the conveyor takes. A task is ready for the conveyor when it has a `form::` label; without one it is a draft in the backlog. Everything before the form is written by humans, alone or with an agent in `conveyor new`.
 
 | Value | Takes tasks with | The conveyor runs |
 |---|---|---|
@@ -47,7 +47,7 @@ Offer: keep the list; add a stage (common: `polish` for cleanup, `review-2` as a
 `defaults.harness`, `defaults.model`, `defaults.effort` apply to every stage without its own value. Ask about the defaults first, then offer: keep the defaults for all stages, or go through the stages one by one.
 
 - **Harness**: `claude`, `codex`, or a configured harness (`opencode`, `kilocode`, `pi`, `openhands`, `agent-zero` presets, or any `harnesses` entry). Self-hosted models run through `opencode`, `kilocode`, `pi`, or `openhands`.
-- **Model**: run `conveyor models <harness>` and offer its models by version and name (for example `claude-opus-5-5 — Opus 5.5`). Claude aliases (`opus`, `sonnet`, `haiku`) always mean the newest version; a full name such as `claude-opus-5-5` pins a version, which suits a team configuration.
+- **Model**: run `conveyor models <harness>` and offer its models by version and name (for example `claude-opus-5-5 — Opus 5.5`). Claude aliases (`opus`, `sonnet`, `haiku`, `fable`) always mean the newest version; a full name such as `claude-opus-5-5` pins a version, which suits a team configuration.
 - **Effort**: the efforts that `conveyor models` lists for that model or harness.
 - **Permissions** (claude stages, `stages.<name>.permission_mode`): `bypassPermissions` (default, every tool without asking), `auto`, `acceptEdits`, or `dontAsk`; with a limiting mode, allow rules come from the repository's `.claude/settings.json`. Codex stages: `sandbox` (`workspace-write` default, or `full-access`) and `network` (`false` default).
 
@@ -67,13 +67,13 @@ A description can use `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.pla
 
 | `transitions.merge` | What happens after the `merge` stage |
 |---|---|
-| `human` | The pull request waits in `conveyor::review`; it merges after `/merge` or Approve from `review.approvals` distinct people. |
+| `human` | The pull request waits in `conveyor::review`; it merges after `/merge` or Approve from `review.approvals` distinct people (with `2`, one `/merge` is not enough). |
 | `smart` | The merge stage decides by `smart/merge.md` (offer to review it): risky changes go to review as with `human`, the rest merges. |
 | `ai` | The conveyor merges without a human, after blockers are closed and CI is green. |
 
 `merge_method`: `merge` (merge commit), `squash` (one commit per task), or `rebase`. Ask about `review.approvals` only for `human` and `smart`. Branch protection on the board still applies on top.
 
-`close_on_done`: `false` (default) leaves a finished issue open with `conveyor::done`, so the team closes it after acceptance, for example in a sprint review; `true` makes the conveyor close it. On GitLab with `true`, done issues go straight to the board's Closed list.
+`close_on_done` (`conveyor config set close_on_done true`): `false` (default) leaves a finished issue open with `conveyor::done`, so the team closes it after acceptance, for example in a sprint review; `true` makes the conveyor close it. On GitLab with `true`, done issues go straight to the board's Closed list.
 
 ## 7. Triage — `triage.harness`, `triage.model`, `triage.effort`, `triage.md`
 
@@ -100,7 +100,7 @@ All six are in `conveyor settings` (Team) and `conveyor config set`.
 
 Personal and never committed:
 
-- `limits.running`: stages this machine runs at once;
+- `limits.running`: tasks this workstation runs at once (the control screen shows them as my tasks in progress);
 - `limits.awaiting_me`, `limits.awaiting_review`: no new tasks while this many wait for your answer or review;
 - `limits.daily_tokens`: no new tasks after this many tokens a day (0 = off);
 - `limits.subscription.five_hour_reserve`, `seven_day_reserve`: percent of the subscription windows kept for your own work (claude);
