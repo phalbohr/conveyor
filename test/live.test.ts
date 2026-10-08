@@ -73,6 +73,14 @@ describe('conveyor new', () => {
     expect(await board.listTasks()).toEqual([])
   })
 
+  it('creates a task with a prepared plan', async () => {
+    const board = new FakeBoard('me')
+    const { interact } = agent('---\ntitle: Export\nform: plan\n---\nAs a user, I want CSV.\n\n## Plan\n\n1. Add the endpoint.\n')
+    const result = await runCli(['new'], { ...(await project()), board, interact })
+    expect(result.code).toBe(0)
+    expect(await board.getTask('1')).toMatchObject({ title: 'Export', state: 'backlog', form: 'plan' })
+  })
+
   it('rejects a result with an invalid form', async () => {
     const board = new FakeBoard('me')
     const { interact } = agent('---\ntitle: T\nform: done\n---\nBody\n')
