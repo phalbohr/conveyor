@@ -34,7 +34,7 @@ When the user wants to go through the settings or set up the conveyor, follow `s
    - `conveyor config set <key> <value>` (an empty value makes a stage setting inherit from `defaults`);
    - `conveyor config stage add <name>` (before merge), `conveyor config stage add <name> --after-merge --when success|failure|always`, `conveyor config stage remove <name>`, `conveyor config stage move <name> up|down`.
    On an error, explain it and correct the value.
-4. For settings outside `conveyor config` (harness `command`/`args`/`env`, `hooks`, `artifacts`, `timeouts`, `retry`), stage instructions (`stages/<name>.md`), smart criteria (`smart/*.md`), or formats, edit the files in the settings directory as `workflow.md` describes. Then run `conveyor --json` and check `"valid": true`.
+4. For settings outside `conveyor config` (harness `command`/`args`/`env`, `hooks`, `artifacts`, codex `sandbox`/`network`), stage instructions (`stages/<name>.md`), smart criteria (`smart/*.md`), or formats, edit the files in the settings directory as `workflow.md` describes. Then run `conveyor --json` and check `"valid": true`.
 5. Finish with a summary: each changed key or file with its new value, and a reminder to commit the changed team files in `.conveyor/`.
 
 Change settings and files only. The conveyor itself writes to the board; start `conveyor run` only when the user asks for it.
