@@ -47,7 +47,7 @@ describe('statusLines', () => {
     const lines = statusLines(snapshot)
     const text = lines.map((line) => line.text).join('\n')
     expect(text).toContain('acme/app (github) · @me · stopped')
-    expect(text).toContain('waiting for me 1/1')
+    expect(text).toContain('needs input 1/1')
     expect(text).toContain('tokens today 12,345')
     expect(text).toContain('claude: 5h 93% (reserve 10%')
     expect(text).toContain('#3 needs-input')

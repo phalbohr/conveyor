@@ -16,12 +16,12 @@ export function statusLines(status: StatusSnapshot, here?: string): Line[] {
     ...(status.settingsSync.state === 'behind' ? syncNotice(status.settingsSync).split('\n').map((text): Line => ({ text, tone: 'warning' })) : []),
     ...undescribedNotice(status.undescribed).map((text): Line => ({ text, tone: 'warning' })),
     {
-      text: [
-        `running ${limits.running.used}/${limits.running.limit}`,
-        `waiting for me ${limits.awaitingMe.used}/${limits.awaitingMe.limit}`,
+      text: `my limits: ${[
+        `in progress ${limits.running.used}/${limits.running.limit}`,
+        `needs input ${limits.awaitingMe.used}/${limits.awaitingMe.limit}`,
         `review ${limits.awaitingReview.used}/${limits.awaitingReview.limit}`,
         `tokens today ${number(limits.dailyTokens.used)}${limits.dailyTokens.limit ? ` / ${number(limits.dailyTokens.limit)}` : ''}`,
-      ].join(' · '),
+      ].join(' · ')}`,
       tone: limits.awaitingMe.used >= limits.awaitingMe.limit || limits.awaitingReview.used >= limits.awaitingReview.limit ? 'warning' : 'muted',
     },
   ]
@@ -62,6 +62,11 @@ export function helpLines(): Line[] {
     { text: '' },
     { text: 'Flow', tone: 'title' },
     { text: '  idea → story → plan → implement → review → merge → done   (stages and gates come from .conveyor/config.yaml)' },
+    { text: '  board columns: backlog → needs input → queued → in progress → review → done; stage:: labels show the stage' },
+    { text: '' },
+    { text: 'My limits', tone: 'title' },
+    { text: '  in progress / needs input / review: my tasks in these columns against limits.running, awaiting_me, awaiting_review;' },
+    { text: '  at a limit the conveyor takes no new tasks until one moves on' },
     { text: '' },
     { text: 'Your actions', tone: 'title' },
     { text: '  answer a question         reply in the issue, or `conveyor attach <number>` for a live session' },

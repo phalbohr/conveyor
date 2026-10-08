@@ -66,7 +66,7 @@ describe('SettingsScreen', () => {
     await press(...Array.from({ length: row }, () => DOWN), LEFT)
     await until(() => expect(rendered.lastFrame()).toMatch(/implement: effort\s+max/))
     await press(RIGHT)
-    await until(() => expect(rendered.lastFrame()).toMatch(/implement: effort\s+\(inherit\)/))
+    await until(() => expect(rendered.lastFrame()).toMatch(/implement: effort\s+\(defaults: medium\)/))
   })
 
   it('takes a model name outside the list through other…', async () => {

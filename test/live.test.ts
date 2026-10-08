@@ -81,6 +81,14 @@ describe('conveyor new', () => {
     expect(await board.getTask('1')).toMatchObject({ title: 'Export', state: 'backlog', form: 'plan' })
   })
 
+  it('accepts the state field of older new.md templates', async () => {
+    const board = new FakeBoard('me')
+    const { interact } = agent('---\ntitle: Old\nstate: story\n---\nAs a user, I want it.\n')
+    const result = await runCli(['new'], { ...(await project()), board, interact })
+    expect(result.code).toBe(0)
+    expect(await board.getTask('1')).toMatchObject({ title: 'Old', form: 'story' })
+  })
+
   it('rejects a result with an invalid form', async () => {
     const board = new FakeBoard('me')
     const { interact } = agent('---\ntitle: T\nform: done\n---\nBody\n')

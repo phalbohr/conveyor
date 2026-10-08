@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runCli } from './helpers.js'
@@ -28,6 +28,49 @@ stages:
 `
 
 describe('SettingsDocument', () => {
+  const CATALOGS = {
+    claude: { models: [{ id: 'claude-opus-5-5', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] }], efforts: ['low', 'medium', 'high', 'xhigh', 'max'], fetchedAt: '' },
+    codex: { models: [{ id: 'gpt-6-luna', efforts: ['low', 'medium', 'high'] }, { id: 'gpt-6-sol', efforts: ['low', 'high'] }], fetchedAt: '' },
+  }
+
+  it('switches a stage to another harness and drops what the new harness does not take', () => {
+    const dir = settings(CONFIG.replace('  implement: {}', '  implement: {permission_mode: acceptEdits, effort: max}\n  polish: {}'))
+    mkdirSync(join(dir, 'stages'))
+    writeFileSync(join(dir, 'stages', 'polish.md'), 'Polish the code.')
+    const doc = new SettingsDocument(dir, { catalogs: CATALOGS })
+    doc.set('stages.implement.harness', 'codex')
+    expect(doc.problems()).toEqual([])
+    const fields = doc.fields()
+    expect(fields.find((f) => f.key === 'stages.implement.model')).toMatchObject({ value: 'gpt-6-luna', options: ['gpt-6-luna', 'gpt-6-sol'] })
+    expect(fields.find((f) => f.key === 'stages.implement.effort')).toMatchObject({ value: 'medium', options: ['low', 'medium', 'high'] })
+    expect(fields.some((f) => f.key === 'stages.implement.permission_mode')).toBe(false)
+
+    doc.set('stage-files.polish', 'off')
+    expect(doc.fields().find((f) => f.key === 'stage-files.polish')?.value).toBe('off')
+  })
+
+  it('keeps a model the new harness knows', () => {
+    const doc = new SettingsDocument(settings(CONFIG.replace('  implement: {}', '  implement: {harness: codex, model: gpt-6-sol, effort: high}')), { catalogs: CATALOGS })
+    doc.set('stages.implement.harness', 'codex')
+    expect(doc.fields().find((f) => f.key === 'stages.implement.model')?.value).toBe('gpt-6-sol')
+    expect(doc.fields().find((f) => f.key === 'stages.implement.effort')?.value).toBe('high')
+  })
+
+  it('explains the chosen option and where an inherited value comes from', () => {
+    const doc = new SettingsDocument(settings(CONFIG))
+    expect(doc.fields().find((f) => f.key === 'transitions.story_to_plan')?.help).toContain('asks questions and waits for your approval')
+    doc.set('transitions.story_to_plan', 'autonomous')
+    expect(doc.fields().find((f) => f.key === 'transitions.story_to_plan')?.help).toContain('without questions or approval')
+    expect(doc.fields().find((f) => f.key === 'stages.implement.harness')).toMatchObject({ value: '', inherited: 'claude' })
+    expect(doc.fields().find((f) => f.key === 'stages.implement.permission_mode')).toMatchObject({ value: '', inherited: 'bypassPermissions', help: 'every tool without asking' })
+  })
+
+  it('reports why the settings are not valid', () => {
+    const doc = new SettingsDocument(settings(CONFIG))
+    doc.set('review.approvals', '0')
+    expect(doc.problems().join('\n')).toContain('review.approvals')
+  })
+
   it('lists team, stage, and personal fields with current values', () => {
     const doc = new SettingsDocument(settings(CONFIG))
     const fields = doc.fields()
