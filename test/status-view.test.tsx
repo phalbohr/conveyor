@@ -2,7 +2,7 @@ import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import type { StatusSnapshot } from '../src/status.js'
-import { statusLines } from '../src/ui/status-lines.js'
+import { statusLines, usageLines } from '../src/ui/status-lines.js'
 import { StatusScreen, type HubAction, type RunnerControl } from '../src/ui/status-screen.js'
 import type { RunnerEvent } from '../src/runner.js'
 import { runCli } from './helpers.js'
@@ -37,11 +37,10 @@ const snapshot: StatusSnapshot = {
 }
 
 describe('statusLines', () => {
-  it('shows my status columns, the tasks of an open column, and usage on its own line', () => {
+  it('shows my status columns, the tasks of an open column, and no usage', () => {
     const closed = statusLines(snapshot)
     expect(closed.find((line) => line.text.startsWith('my status:'))?.text).toBe('my status: in progress 1/3 · needs input 1/1 · review 0/2')
     expect(closed.some((line) => line.text.startsWith('my status') && line.text.includes('tokens'))).toBe(false)
-    expect(closed.find((line) => line.text.startsWith('usage:'))?.text).toBe('usage: tokens today 12,345')
     const open = statusLines(snapshot, undefined, { column: 1, open: true }).map((line) => line.text)
     const at = open.findIndex((text) => text.startsWith('my status:'))
     expect(open[at + 1]).toBe('  #3 Store users — plan')
@@ -51,14 +50,14 @@ describe('statusLines', () => {
     expect(selected?.text).toBe('review 0/2')
   })
 
-  it('shows a subscription line for every harness in use', () => {
+  it('shows a usage line for every harness in use', () => {
     const subscription = {
       codex: { reports: true, fiveHourReserve: 0, sevenDayReserve: 0 },
       opencode: { reports: false, fiveHourReserve: 0, sevenDayReserve: 0 },
     }
-    const text = statusLines({ ...snapshot, limits: { ...snapshot.limits, subscription } }).map((line) => line.text)
-    expect(text).toContain('codex: subscription windows not seen yet; they appear after its first stage, or with limits.subscription.probe')
-    expect(text).toContain('opencode: no subscription windows; this harness does not report them')
+    const text = usageLines({ ...snapshot, limits: { ...snapshot.limits, subscription } }).map((line) => line.text)
+    expect(text).toContain('codex: not seen yet; they appear after its first stage, or with limits.subscription.probe')
+    expect(text).toContain('opencode: none; this harness does not report subscription windows')
   })
 
   it('warns about newer team settings', () => {
@@ -72,15 +71,18 @@ describe('statusLines', () => {
     const text = lines.map((line) => line.text).join('\n')
     expect(text).toContain('acme/app (github) · @me · stopped')
     expect(text).toContain('needs input 1/1')
-    expect(text).toContain('tokens today 12,345')
-    expect(text).toContain('claude: 5h 93% (reserve 10%')
+    expect(text).not.toContain('tokens today')
+    expect(text).toContain('no new tasks: the claude subscription reserve reached · [u] usage')
+    const usage = usageLines(snapshot).map((line) => line.text).join('\n')
+    expect(usage).toContain('tokens today 12,345 (no daily limit)')
+    expect(usage).toContain('claude: 5h 93% (reserve 10%')
     expect(text).toContain('#3 needs-input')
     expect(text).toContain('waiting for your answer')
     expect(text).toContain('attempt 2')
     expect(text).toContain('last error: tests are red')
     expect(text).toContain('Team: 2 unclaimed · 1 claimed by others')
     expect(lines.find((line) => line.text.includes('#4'))?.tone).toBe('error')
-    expect(lines.find((line) => line.text.startsWith('claude'))?.tone).toBe('warning')
+    expect(usageLines(snapshot).find((line) => line.text.startsWith('claude'))?.tone).toBe('warning')
   })
 })
 
@@ -147,6 +149,17 @@ describe('StatusScreen as the hub', () => {
     await vi.waitFor(() => expect(lastFrame()).toContain('#3 Store users — plan'), { timeout: 5_000 })
     stdin.write('\r')
     await vi.waitFor(() => expect(lastFrame()).not.toContain('#3 Store users — plan'), { timeout: 5_000 })
+  })
+
+  it('shows usage on u and goes back', async () => {
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('u')
+    await vi.waitFor(() => expect(lastFrame()).toContain('tokens today 12,345'), { timeout: 5_000 })
+    expect(lastFrame()).not.toContain('my status:')
+    stdin.write('u')
+    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
   })
 
   it('starts and stops the conveyor with c and shows its log', async () => {
