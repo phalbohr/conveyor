@@ -81,6 +81,14 @@ describe('SettingsDocument', () => {
     expect(doc.fields().find((f) => f.key === 'stages.implement.permission_mode')).toMatchObject({ value: '', inherited: 'bypassPermissions', help: 'every tool without asking' })
   })
 
+  it('shows and saves timeouts and retries', () => {
+    const doc = new SettingsDocument(settings(CONFIG))
+    expect(doc.fields().find((f) => f.key === 'timeouts.heartbeat')).toMatchObject({ group: 'Team', value: '30m' })
+    doc.set('timeouts.heartbeat', '20m')
+    expect(doc.save()).toMatchObject({ ok: true })
+    expect(doc.fields().find((f) => f.key === 'timeouts.heartbeat')?.value).toBe('20m')
+  })
+
   it('reports why the settings are not valid', () => {
     const doc = new SettingsDocument(settings(CONFIG))
     doc.set('review.approvals', '0')

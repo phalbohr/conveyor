@@ -15,10 +15,7 @@ import { prepare } from './run.js'
 
 const TEMPLATES = fileURLToPath(new URL('../../templates/live/', import.meta.url))
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n?/
-const resultSchema = z.preprocess(
-  (value) => (value && typeof value === 'object' && !('form' in value) && 'state' in value ? { ...value, form: (value as { state: unknown }).state } : value),
-  z.object({ title: z.string().min(1), form: z.enum(['idea', 'story', 'plan']) }),
-)
+const resultSchema = z.object({ title: z.string().min(1), form: z.enum(['idea', 'story', 'plan']) })
 
 export async function newCommand(context: Context, json: boolean): Promise<number> {
   const prepared = prepare(context)
