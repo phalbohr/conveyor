@@ -15,7 +15,7 @@ import { prepare } from './run.js'
 
 const TEMPLATES = fileURLToPath(new URL('../../templates/live/', import.meta.url))
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n?/
-const resultSchema = z.object({ title: z.string().min(1), form: z.enum(['idea', 'story']) })
+const resultSchema = z.object({ title: z.string().min(1), form: z.enum(['idea', 'story', 'plan']) })
 
 export async function newCommand(context: Context, json: boolean): Promise<number> {
   const prepared = prepare(context)
@@ -96,7 +96,7 @@ async function session(
   }
 }
 
-function parseNewTask(text: string): { ok: true; title: string; form: 'idea' | 'story'; body: string } | { ok: false; error: string } {
+function parseNewTask(text: string): { ok: true; title: string; form: 'idea' | 'story' | 'plan'; body: string } | { ok: false; error: string } {
   const match = text.match(FRONTMATTER)
   if (!match) return { ok: false, error: 'the result has no frontmatter with title and form' }
   const parsed = resultSchema.safeParse(parse(match[1] ?? ''))

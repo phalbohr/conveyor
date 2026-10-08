@@ -55,7 +55,7 @@ Commands:
 
 - `conveyor new` and `conveyor attach <issue>` start a normal interactive session of the harness in the terminal. `new` uses the harness, model, and effort of the `story` stage; `attach` uses those of the waiting stage.
 - The session instructions are strict templates in `live/new.md` and `live/attach.md` (package defaults if missing). The agent writes its result to a temporary file; the CLI reads it after the session ends and writes to the board.
-- `new`: the result has frontmatter `title` and `state` (`idea` or `story`) and the task text. The CLI creates the task.
+- `new`: the result has frontmatter `title` and `form` (`idea`, `story`, or `plan`) and the task text. The CLI creates the task with `conveyor::backlog` and that `form::` label.
 - `attach`: the result is the decision of the human. The CLI posts it as a normal comment without the agent marker, so the next `run` cycle resumes the stage.
 - The session environment has no board credentials. Interactive sessions use the full personal setup of the harness, because a human supervises them.
 
