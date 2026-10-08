@@ -2,29 +2,44 @@ import { syncNotice } from '../settings-sync.js'
 import { undescribedNotice } from '../stage-catalog.js'
 import type { StatusSnapshot } from '../status.js'
 
-export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title' }
+export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean }[] }
+export type StatusView = { column: number; open: boolean }
+
+export const STATUS_COLUMNS = [
+  { label: 'in progress', state: 'in-progress' },
+  { label: 'needs input', state: 'needs-input' },
+  { label: 'review', state: 'review' },
+] as const
 
 const time = (iso: string) => new Date(iso).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
 const number = (value: number) => value.toLocaleString('en-US')
 const percent = (value: number) => `${Math.round(value * 100)}%`
 
-export function statusLines(status: StatusSnapshot, here?: string): Line[] {
+export function statusLines(status: StatusSnapshot, here?: string, view?: StatusView): Line[] {
   const { limits } = status
   const runner = here ?? (status.runner.running ? `running (pid ${status.runner.pid})` : 'stopped')
   const lines: Line[] = [
     { text: `conveyor · ${status.project} (${status.provider}) · @${status.me} · ${runner}`, tone: 'title' },
     ...(status.settingsSync.state === 'behind' ? syncNotice(status.settingsSync).split('\n').map((text): Line => ({ text, tone: 'warning' })) : []),
     ...undescribedNotice(status.undescribed).map((text): Line => ({ text, tone: 'warning' })),
-    {
-      text: `my limits: ${[
-        `in progress ${limits.running.used}/${limits.running.limit}`,
-        `needs input ${limits.awaitingMe.used}/${limits.awaitingMe.limit}`,
-        `review ${limits.awaitingReview.used}/${limits.awaitingReview.limit}`,
-        `tokens today ${number(limits.dailyTokens.used)}${limits.dailyTokens.limit ? ` / ${number(limits.dailyTokens.limit)}` : ''}`,
-      ].join(' · ')}`,
-      tone: limits.awaitingMe.used >= limits.awaitingMe.limit || limits.awaitingReview.used >= limits.awaitingReview.limit ? 'warning' : 'muted',
-    },
   ]
+  const counts = [limits.running, limits.awaitingMe, limits.awaitingReview]
+  const columns = STATUS_COLUMNS.map((column, index) => `${column.label} ${counts[index]?.used}/${counts[index]?.limit}`)
+  lines.push({
+    text: `my status: ${columns.join(' · ')}`,
+    segments: [{ text: 'my status: ' }, ...columns.flatMap((text, index) => [...(index ? [{ text: ' · ' }] : []), { text, selected: view?.column === index }])],
+    tone: limits.awaitingMe.used >= limits.awaitingMe.limit || limits.awaitingReview.used >= limits.awaitingReview.limit ? 'warning' : 'muted',
+  })
+  const selected = view?.open ? STATUS_COLUMNS[view.column] : undefined
+  if (selected) {
+    const tasks = status.mine.filter((task) => task.state === selected.state)
+    if (tasks.length === 0) lines.push({ text: `  no tasks ${selected.label}`, tone: 'muted' })
+    for (const task of tasks) lines.push({ text: `  #${task.id} ${task.title}${task.stage ? ` — ${task.stage}` : ''}${task.state === 'needs-input' && task.answered ? ' — answered' : ''}` })
+  }
+  lines.push({ text: `usage: tokens today ${number(limits.dailyTokens.used)}${limits.dailyTokens.limit ? ` / ${number(limits.dailyTokens.limit)}` : ''}`, tone: 'muted' })
+  if (Object.keys(limits.subscription).length === 0) {
+    lines.push({ text: 'subscription windows: not seen yet; they appear after a claude stage runs, or turn on limits.subscription.probe', tone: 'muted' })
+  }
 
   for (const [harness, quota] of Object.entries(limits.subscription)) {
     const windows = [
@@ -64,9 +79,10 @@ export function helpLines(): Line[] {
     { text: '  idea → story → plan → implement → review → merge → done   (stages and gates come from .conveyor/config.yaml)' },
     { text: '  board columns: backlog → needs input → queued → in progress → review → done; stage:: labels show the stage' },
     { text: '' },
-    { text: 'My limits', tone: 'title' },
+    { text: 'My status', tone: 'title' },
     { text: '  in progress / needs input / review: my tasks in these columns against limits.running, awaiting_me, awaiting_review;' },
-    { text: '  at a limit the conveyor takes no new tasks until one moves on' },
+    { text: '  at a limit the conveyor takes no new tasks until one moves on. ←→ select a column, Enter lists its tasks' },
+    { text: '  usage: tokens today and subscription windows (5h and 7d use of each subscription, with your reserve)' },
     { text: '' },
     { text: 'Your actions', tone: 'title' },
     { text: '  answer a question         reply in the issue, or `conveyor attach <number>` for a live session' },

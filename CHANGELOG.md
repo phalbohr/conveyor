@@ -6,7 +6,7 @@ First public release.
 
 - Board adapters for GitHub (`gh`) and GitLab (`glab`), with GitHub Projects mirroring and the GitLab Free fallback for blockers.
 - Configurable stages from idea to merge and after merge, with interactive, autonomous, and smart gates.
-- Harnesses: `claude` and `codex` built in; presets for `opencode` and `kilocode` (verified with a self-hosted model behind LiteLLM), `pi`, `openhands`, and `agent-zero` (not yet verified with real runs); any CLI through `harnesses`.
+- Harnesses: `claude` and `codex` built in; presets for `opencode` and `kilocode` (verified with real runs), `pi`, `openhands`, and `agent-zero` (not yet verified with real runs); any CLI through `harnesses`.
 - Several workstations on one board: atomic claims, heartbeats, merge and triage locks, personal limits, and subscription reserves.
 - Board labels: `conveyor::` states as columns (backlog, needs-input, queued, in-progress, review, done), `form::idea|story|plan` marks a task ready for the conveyor, `stage::<name>` shows the running stage.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.

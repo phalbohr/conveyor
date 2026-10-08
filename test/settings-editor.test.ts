@@ -50,7 +50,7 @@ describe('SettingsDocument', () => {
   })
 
   it('switches stages to command harnesses with and without a model list', () => {
-    const catalogs = { ...CATALOGS, opencode: { models: [{ id: 'litellm/local-free-model' }], fetchedAt: '' }, 'agent-zero': { models: [], fetchedAt: '' } }
+    const catalogs = { ...CATALOGS, opencode: { models: [{ id: 'litellm/qwen3-coder' }], fetchedAt: '' }, 'agent-zero': { models: [], fetchedAt: '' } }
     const doc = new SettingsDocument(
       settings(CONFIG.replace('  implement: {}', '  implement: {permission_mode: acceptEdits, model: opus, effort: max}').replace('  review: {model: opus}', '  review: {harness: codex, sandbox: full-access, network: true}')),
       { catalogs },
@@ -59,7 +59,7 @@ describe('SettingsDocument', () => {
     doc.set('stages.review.harness', 'agent-zero')
     expect(doc.problems()).toEqual([])
     const fields = doc.fields()
-    expect(fields.find((f) => f.key === 'stages.implement.model')).toMatchObject({ value: 'litellm/local-free-model' })
+    expect(fields.find((f) => f.key === 'stages.implement.model')).toMatchObject({ value: 'litellm/qwen3-coder' })
     expect(fields.find((f) => f.key === 'stages.implement.effort')?.value).toBe('')
     expect(fields.find((f) => f.key === 'stages.review.model')).toMatchObject({ value: '', kind: 'text' })
     expect(doc.save()).toMatchObject({ ok: true })

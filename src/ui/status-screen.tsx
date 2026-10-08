@@ -3,7 +3,7 @@ import { Box, Text, render, useApp, useInput } from 'ink'
 import { useCallback, useEffect, useState } from 'react'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
-import { helpLines, statusLines, type Line } from './status-lines.js'
+import { STATUS_COLUMNS, helpLines, statusLines, type Line, type StatusView } from './status-lines.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 const EVENT_COLORS: Record<RunnerEvent['level'], string> = { info: 'white', warning: 'yellow', error: 'red' }
@@ -41,6 +41,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   const [ask, setAsk] = useState<'attach' | 'release'>()
   const [message, setMessage] = useState<{ text: string; error?: boolean } | undefined>(notice ? { text: notice } : undefined)
   const [confirmQuit, setConfirmQuit] = useState(false)
+  const [view, setView] = useState<StatusView>({ column: 0, open: false })
   const [, setTick] = useState(0)
 
   const refresh = useCallback(() => {
@@ -67,7 +68,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   }
 
   useInput(
-    (input) => {
+    (input, key) => {
       if (input !== 'q') setConfirmQuit(false)
       if (input === 'q') {
         if (runner?.running && !confirmQuit) {
@@ -78,6 +79,10 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
         act({ kind: 'quit' })
       }
       if (input === 'r') refresh()
+      if (key.leftArrow || key.rightArrow) {
+        setView((current) => ({ ...current, column: (current.column + (key.rightArrow ? 1 : -1) + STATUS_COLUMNS.length) % STATUS_COLUMNS.length }))
+      }
+      if (key.return) setView((current) => ({ ...current, open: !current.open }))
       if (input === 'h' || input === '?') setHelp((value) => !value)
       if (input === 's') act({ kind: 'settings' })
       if (input === 'n') act({ kind: 'new' })
@@ -113,9 +118,15 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   return (
     <Box flexDirection="column">
       {!help && !status && !error && <Text color="gray">Loading the board…</Text>}
-      {(help ? helpLines() : status ? statusLines(status, runner?.running ? 'running here' : undefined) : []).map((line, index) => (
+      {(help ? helpLines() : status ? statusLines(status, runner?.running ? 'running here' : undefined, view) : []).map((line, index) => (
         <Text key={index} {...(line.tone ? { color: COLORS[line.tone] } : {})} bold={line.tone === 'title'}>
-          {line.text || ' '}
+          {line.segments
+            ? line.segments.map((segment, part) => (
+                <Text key={part} inverse={segment.selected ?? false}>
+                  {segment.text}
+                </Text>
+              ))
+            : line.text || ' '}
         </Text>
       ))}
       {error && <Text color="red">Board error: {error}</Text>}
@@ -146,7 +157,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
       )}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
       <Text color="gray">
-        {runner ? `[c] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[n] new · [a] attach · [l] release · [s] settings · [r] refresh · [h] help · [q] quit
+        {runner ? `[c] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] status column · [Enter] its tasks · [n] new · [a] attach · [l] release · [s] settings · [r] refresh · [h] help · [q] quit
         {updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}
       </Text>
     </Box>
