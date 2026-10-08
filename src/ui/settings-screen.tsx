@@ -18,18 +18,29 @@ type Mode =
 
 const stageOf = (field: Field | undefined) => (field?.group === 'Stages' ? field.key.split('.')[1] : undefined)
 const inheritable = (field: Field) => field.group === 'Stages' || field.key.startsWith('defaults.') || field.key.startsWith('triage.')
+const FROM_DEFAULTS = ['harness', 'model', 'effort']
+const shown = (field: Field) => {
+  if (field.value) return field.value
+  if (!inheritable(field)) return '—'
+  if (!field.inherited) return INHERIT
+  return FROM_DEFAULTS.includes(field.key.split('.').at(-1) ?? '') ? `(defaults: ${field.inherited})` : `(default: ${field.inherited})`
+}
 
 type Props = { doc: SettingsDocument; refreshModels?: () => Promise<Record<string, Catalog>> }
 
 export function SettingsScreen({ doc, refreshModels }: Props) {
   const { exit } = useApp()
   const [fields, setFields] = useState(() => doc.fields())
+  const [problems, setProblems] = useState(() => doc.problems())
   const [cursor, setCursor] = useState(0)
   const [mode, setMode] = useState<Mode>({ kind: 'list' })
   const [message, setMessage] = useState<{ text: string; error?: boolean }>()
   const [confirmQuit, setConfirmQuit] = useState(false)
 
-  const reload = () => setFields(doc.fields())
+  const reload = () => {
+    setFields(doc.fields())
+    setProblems(doc.problems())
+  }
   const attempt = (action: () => void) => {
     try {
       action()
@@ -193,6 +204,7 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
 
   const start = Math.max(0, Math.min(cursor - Math.floor(WINDOW / 2), fields.length - WINDOW))
   const visible = fields.slice(start, start + WINDOW)
+  const width = Math.max(16, ...fields.map((field) => shown(field).length + 1))
   return (
     <Box flexDirection="column">
       <Text color="cyan" bold>
@@ -205,12 +217,13 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
           <Box key={field.key} flexDirection="column">
             {header && <Text color="gray">{field.group}</Text>}
             <Text {...(index === cursor ? { color: 'cyan' } : {})}>
-              {index === cursor ? '›' : ' '} {field.label.padEnd(30)} {(field.value || (inheritable(field) ? INHERIT : '—')).padEnd(16)}{' '}
+              {index === cursor ? '›' : ' '} {field.label.padEnd(30)} {shown(field).padEnd(width)}
               <Text color="gray">{field.help}</Text>
             </Text>
           </Box>
         )
       })}
+      {problems.length > 0 && <Text color="yellow">{['Not valid yet, cannot be saved:', ...problems].join('\n')}</Text>}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
       <Text color="gray">↑↓ move · ←→ change option · Enter edit · m refresh models · a add stage · x remove stage · [ ] move stage · s save · q quit</Text>
     </Box>
