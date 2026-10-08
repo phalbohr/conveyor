@@ -216,10 +216,18 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
         return (
           <Box key={field.key} flexDirection="column">
             {header && <Text color="gray">{field.group}</Text>}
-            <Text {...(index === cursor ? { color: 'cyan' } : {})}>
-              {index === cursor ? '›' : ' '} {field.label.padEnd(30)} {shown(field).padEnd(width)}
-              <Text color="gray">{field.help}</Text>
-            </Text>
+            <Box>
+              <Box flexShrink={0} width={33 + width}>
+                <Text {...(index === cursor ? { color: 'cyan' } : {})}>
+                  {index === cursor ? '›' : ' '} {field.label.padEnd(30)} {shown(field).padEnd(width)}
+                </Text>
+              </Box>
+              <Box flexGrow={1} flexShrink={1}>
+                <Text color="gray" wrap="wrap">
+                  {field.help}
+                </Text>
+              </Box>
+            </Box>
           </Box>
         )
       })}
