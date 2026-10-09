@@ -198,6 +198,23 @@ describe('StatusScreen as the hub', () => {
     await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })
   })
 
+  it('wraps the second column of the help inside that column', async () => {
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('h')
+    await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
+    for (let step = 0; step < 40 && !lastFrame()?.includes('this screen'); step++) {
+      stdin.write('\u001B[B')
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    }
+    const lines = lastFrame()?.split('\n') ?? []
+    const row = lines.findIndex((line) => line.startsWith('  this screen'))
+    expect(lines[row]?.indexOf('s start/stop')).toBe(28)
+    expect(lines[row + 1]?.slice(0, 28).trim()).toBe('')
+    expect(lines[row + 1]?.trim().length).toBeGreaterThan(0)
+  })
+
   it('closes help, usage, and log with Esc and names the way back', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })

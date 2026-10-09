@@ -2,7 +2,10 @@ import { syncNotice } from '../settings-sync.js'
 import { undescribedNotice } from '../stage-catalog.js'
 import type { StatusSnapshot } from '../status.js'
 
-export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean }[] }
+export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean }[]; cells?: [string, string] }
+export const CELL_WIDTH = 28
+
+const row = (left: string, right: string): Line => ({ text: `  ${left.padEnd(CELL_WIDTH - 2)}${right}`, cells: [`  ${left}`, right] })
 export type StatusView = { column: number; open: boolean }
 
 export const STATUS_COLUMNS = [
@@ -112,18 +115,18 @@ export function helpLines(): Line[] {
     { text: '  [u] usage: tokens today and the 5h and 7d subscription windows of every harness in use, with your reserve' },
     { text: '' },
     { text: 'Your actions', tone: 'title' },
-    { text: '  answer a question         reply in the issue, or `conveyor attach <number>` for a live session' },
-    { text: '  new task                  `conveyor new` (live session), or an issue with conveyor::backlog and a form::idea|story|plan label' },
-    { text: '  merge a reviewed task     `/merge` or Approve   (on GitLab: Approve the MR, or `/merge` on the issue)' },
-    { text: '  small fixes               `/fix <notes>`, or `/fix_from: <stage> <notes>` to start later' },
-    { text: '  start over                `/rework <notes>`' },
-    { text: '  hand a task over          `conveyor release <number>`' },
-    { text: '  <number>                  the issue number on the board: issues/51 → `conveyor attach 51`' },
+    row('answer a question', 'reply in the issue, or `conveyor attach <number>` for a live session'),
+    row('new task', '`conveyor new` (live session), or an issue with conveyor::backlog and a form::idea|story|plan label'),
+    row('merge a reviewed task', '`/merge` or Approve   (on GitLab: Approve the MR, or `/merge` on the issue)'),
+    row('small fixes', '`/fix <notes>`, or `/fix_from: <stage> <notes>` to start later'),
+    row('start over', '`/rework <notes>`'),
+    row('hand a task over', '`conveyor release <number>`'),
+    row('<number>', 'the issue number on the board: issues/51 → `conveyor attach 51`'),
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },
-    { text: '  this screen               s start/stop the conveyor · ←→ Enter status columns · u usage · o log · n new · a attach · l release · e settings · r refresh · h help · q quit' },
-    { text: '  settings                  `conveyor settings`: every row shows what it does; ←→ switch options; s saves after validation' },
-    { text: '  scripting                 `conveyor config list|get|set`, `conveyor config stage add|remove|move`' },
-    { text: '  agent help                `conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)' },
+    row('this screen', 's start/stop the conveyor · ←→ Enter status columns · u usage · o log · n new · a attach · l release · e settings · r refresh · h help · q quit'),
+    row('settings', '`e` here or `conveyor settings`: the help of the current row is shown under the list; ←→ switch options; s saves after validation'),
+    row('scripting', '`conveyor config list|get|set`, `conveyor config stage add|remove|move`'),
+    row('agent help', '`conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)'),
   ]
 }
