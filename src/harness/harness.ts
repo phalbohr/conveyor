@@ -8,6 +8,7 @@ export type StageResult = {
   artifact?: { kind: string; content: string }
   questions?: string[]
   workpad?: string
+  parts?: string[]
 }
 
 export type Usage = { inputTokens: number; outputTokens: number }
@@ -42,7 +43,7 @@ export type HarnessOptions = { command?: string; env?: NodeJS.ProcessEnv }
 export const RESULT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['outcome', 'summary', 'artifact', 'questions', 'workpad'],
+  required: ['outcome', 'summary', 'artifact', 'questions', 'workpad', 'parts'],
   properties: {
     outcome: { type: 'string', enum: ['done', 'needs_input', 'approval', 'failed'] },
     summary: { type: 'string' },
@@ -59,6 +60,7 @@ export const RESULT_SCHEMA = {
     },
     questions: { type: 'array', items: { type: 'string' } },
     workpad: { type: ['string', 'null'] },
+    parts: { anyOf: [{ type: 'null' }, { type: 'array', items: { type: 'string' } }] },
   },
 } as const
 
@@ -68,6 +70,7 @@ const resultSchema = z.object({
   artifact: z.object({ kind: z.string(), content: z.string() }).nullish(),
   questions: z.array(z.string()).nullish(),
   workpad: z.string().nullish(),
+  parts: z.array(z.string()).nullish(),
 })
 
 const BOARD_CREDENTIALS = [
@@ -89,13 +92,14 @@ export function failed(summary: string): StageResult {
 export function parseResult(value: unknown): StageResult {
   const parsed = resultSchema.safeParse(value)
   if (!parsed.success) return failed(`invalid stage result: ${parsed.error.message}`)
-  const { outcome, summary, artifact, questions, workpad } = parsed.data
+  const { outcome, summary, artifact, questions, workpad, parts } = parsed.data
   return {
     outcome,
     summary,
     ...(artifact ? { artifact } : {}),
     ...(questions?.length ? { questions } : {}),
     ...(workpad ? { workpad } : {}),
+    ...(parts && parts.length > 1 ? { parts } : {}),
   }
 }
 

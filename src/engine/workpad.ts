@@ -22,6 +22,8 @@ export type WorkpadState = {
   review?: string
   reviewMode?: 'fix' | 'rework'
   headSha?: string
+  parts?: string[]
+  part?: number
 }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
@@ -47,6 +49,8 @@ const stateSchema = z.object({
   review: z.string().optional(),
   reviewMode: z.enum(['fix', 'rework']).optional(),
   headSha: z.string().optional(),
+  parts: z.array(z.string()).optional(),
+  part: z.int().nonnegative().optional(),
 })
 
 const AGENT_MARKER = '<!-- conveyor'

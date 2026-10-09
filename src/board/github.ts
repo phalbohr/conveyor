@@ -5,6 +5,7 @@ import {
   labelsToTask,
   onBoard,
   OWNER_LABEL,
+  PART_LABEL,
   PRIORITY_LABEL,
   STAGE_LABEL,
   STATE_LABEL,
@@ -128,6 +129,10 @@ export class GitHubBoard implements Board {
 
   async setStage(id: string, stage: string | undefined) {
     await this.replaceLabel(id, STAGE_LABEL, stage ? STAGE_LABEL + stage : undefined)
+  }
+
+  async setPart(id: string, part: string | undefined) {
+    await this.replaceLabel(id, PART_LABEL, part ? PART_LABEL + part : undefined)
   }
 
   async setOwner(id: string, owner: string | undefined) {

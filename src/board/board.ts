@@ -53,6 +53,7 @@ export interface Board {
   setState(id: string, state: TaskState): Promise<void>
   setForm(id: string, form: TaskForm | undefined): Promise<void>
   setStage(id: string, stage: string | undefined): Promise<void>
+  setPart(id: string, part: string | undefined): Promise<void>
   setOwner(id: string, owner: string | undefined): Promise<void>
   updateBody(id: string, body: string): Promise<void>
   closeTask(id: string): Promise<void>
@@ -87,6 +88,7 @@ export const STAGE_COLOR = 'bfd4f2'
 export const STATE_LABEL = 'conveyor::'
 export const FORM_LABEL = 'form::'
 export const STAGE_LABEL = 'stage::'
+export const PART_LABEL = 'part::'
 export const OWNER_LABEL = 'claimed-by::'
 export const PRIORITY_LABEL = 'priority::'
 

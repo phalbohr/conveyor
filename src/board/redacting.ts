@@ -47,6 +47,10 @@ export class RedactingBoard implements Board {
     return this.board.setStage(id, stage)
   }
 
+  setPart(id: string, part: string | undefined) {
+    return this.board.setPart(id, part)
+  }
+
   setOwner(id: string, owner: string | undefined) {
     return this.board.setOwner(id, owner)
   }

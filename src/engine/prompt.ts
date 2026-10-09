@@ -16,6 +16,7 @@ export type PromptInput = {
   reviewMode?: 'fix' | 'rework'
   merge?: string
   mergeCriteria?: string
+  parts?: { list: string[]; current: number }
 }
 
 const MODES: Record<GateMode, string> = {
@@ -53,6 +54,15 @@ export function buildPrompt(input: PromptInput): string {
         : 'A reviewer asked for a different approach. The task restarts from a fresh branch.'
     sections.push(`## Review feedback\n\n${intro} Address every point:\n\n${feedback}`)
   }
+  if (input.parts) {
+    const { list, current } = input.parts
+    const items = list.map((title, index) => `${index + 1}. ${title}${index < current ? ' (merged)' : index === current ? ' (this part)' : ''}`).join('\n')
+    sections.push(
+      input.stage === 'plan'
+        ? `## Parts\n\nThe work is split into parts, one pull request each:\n\n${items}\n\nThe parts marked merged are in the base branch. Plan only the remaining work and return its parts in \`parts\`.`
+        : `## Parts\n\nThe work is split into ${list.length} parts, one pull request each, merged in this order:\n\n${items}\n\nWork only on part ${current + 1}: ${list[current] ?? ''}. The earlier parts are merged into the base branch.`,
+    )
+  }
   if (input.merge) sections.push(`## Merge\n\n${input.merge}`)
   if (input.mergeCriteria !== undefined) {
     sections.push(
@@ -64,7 +74,7 @@ export function buildPrompt(input: PromptInput): string {
     `## Language\n\nWrite the artifact, the summary, the questions, and the workpad in ${input.language}. The whole team reads them.`,
   )
   sections.push(
-    '## Result\n\nReturn the structured result: `outcome` (`done`, `needs_input`, `approval`, or `failed`), a short `summary`, an `artifact` if this stage produces one, `questions` with `needs_input`, and an updated `workpad` in markdown (plan, checklist, validation, notes). Do not write to the issue tracker yourself.',
+    '## Result\n\nReturn the structured result: `outcome` (`done`, `needs_input`, `approval`, or `failed`), a short `summary`, an `artifact` if this stage produces one, `questions` with `needs_input`, and an updated `workpad` in markdown (plan, checklist, validation, notes), and `parts`: in the plan stage, the ordered titles of the parts when the work needs several pull requests that merge one after another, otherwise null. Do not write to the issue tracker yourself.',
   )
   return `${sections.join('\n\n')}\n`
 }

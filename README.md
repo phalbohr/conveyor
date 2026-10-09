@@ -169,6 +169,8 @@ Set up the board once:
 - **GitHub:** create a project, then `conveyor config set board.github_project <number>`. On the next start the conveyor adds the single-select field `Conveyor` with one option per state and keeps it in sync. In a Board view, choose `Conveyor` under "Column by". Labels, `stage::` included, show on the cards.
 - **GitLab:** open Issues → Boards and add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
 
+A large story can merge in **parts**: the `plan` stage returns their order in `parts`, and each part becomes one pull request. The conveyor runs the stages after `plan` for part 1, reviews and merges it, then moves the task back to In progress for part 2 on a fresh branch from the updated base branch, and so on. The card shows `part::2/3`, the pull request title names the part, and the story is done after the last part merges.
+
 A finished task gets `conveyor::done` and stays open (`close_on_done: false`, the default), so a human closes it, for example after a sprint review. With `close_on_done: true` the conveyor closes the issue itself; on GitLab it then moves to the built-in Closed list.
 
 On GitLab Free, issue links are not available; the conveyor keeps blockers in a `Blocked by: #N` line in the issue description.
