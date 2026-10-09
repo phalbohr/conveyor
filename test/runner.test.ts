@@ -29,4 +29,17 @@ describe('Runner log', () => {
     expect(statSync(file).mode & 0o777).toBe(0o600)
     expect(readFileSync(file, 'utf8')).toContain('skills not found: [redacted]')
   })
+
+  it('writes notes of the control screen to the log', async () => {
+    const home = tempDir('conveyor-home-')
+    const settings = tempDir('conveyor-settings-')
+    writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')
+    const loaded = loadConfig(settings)
+    if (!loaded.ok) throw new Error(loaded.errors.join('\n'))
+    const context = { cwd: tempDir(), home, stdout: () => undefined, stderr: () => undefined } as unknown as Context
+    const runner = new Runner(context, { settings, config: loaded.config, board: new FakeBoard('me'), secrets: () => [] })
+    runner.note('The session on task 15 ended without a comment.')
+    expect(runner.events.at(-1)?.text).toBe('The session on task 15 ended without a comment.')
+    expect(readFileSync(logFile(home, 'acme/app'), 'utf8')).toContain('The session on task 15 ended without a comment.')
+  })
 })

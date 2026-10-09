@@ -44,7 +44,7 @@ describe('checkBoard', () => {
     board.inspect = async () => ({ ...(await inspect()), field: { options: ['backlog', 'in-progress', 'done'] } })
     const check = await checkBoard(board, config())
     expect(check.field).toEqual({ missingOptions: ['needs-input', 'queued', 'review', 'rework'] })
-    expect(boardCheckLines(check).join('\n')).toContain('add them in the project settings')
+    expect(boardCheckLines(check).join('\n')).toContain('conveyor board update adds them and keeps the existing options and card values')
     board.inspect = async () => ({ ...(await inspect()), field: 'missing' })
     expect((await checkBoard(board, config())).field).toBe('missing')
   })

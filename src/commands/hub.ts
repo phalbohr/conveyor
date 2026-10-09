@@ -15,7 +15,8 @@ import { releaseCommand } from './run.js'
 
 export async function hub(context: Context, setup: RunnerSetup, options: { start?: boolean } = {}): Promise<number> {
   const runner = new Runner(context, setup)
-  const load = async () => {
+  const load = async (force?: boolean) => {
+    if (force) forgetBoardCheck()
     const current = loadConfig(setup.settings)
     if (!current.ok) throw new Error(current.errors.join('; '))
     return collectStatus({ board: setup.board, config: current.config, settings: setup.settings, home: context.home })
@@ -60,7 +61,10 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
       const before = await checkBoard(board, current.config)
       await board.prepare(current.config.stages.map((stage) => stage.name))
       forgetBoardCheck()
-      const added = [...before.missing, ...(before.field === 'missing' ? ['the Conveyor field'] : [])]
+      const added = [
+        ...before.missing,
+        ...(before.field === 'missing' ? ['the Conveyor field'] : before.field ? before.field.missingOptions.map((option) => `the Conveyor option ${option}`) : []),
+      ]
       return added.length ? `Added ${added.join(', ')}.` : 'Nothing to add; the rest needs your hand on the board.'
     },
   }
@@ -89,6 +93,7 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     if (action.kind === 'release') await releaseCommand(captured, action.id, false)
     if (action.kind === 'harness') await harnessCommand(captured, action.id)
     notice = output.trim() || undefined
+    if (notice) runner.note(notice)
   }
 }
 

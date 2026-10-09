@@ -253,8 +253,9 @@ GitHub Projects: with `board.github_project: <number>` the CLI adds every task t
 `conveyor init` creates the labels and, with `board.github_project`, the `Conveyor` field. Later versions may need new labels or options. The conveyor never applies such changes on its own:
 
 - every start, the status screen (every 5 minutes), and `conveyor board check` compare the board with this version: missing labels, a missing `Conveyor` field or missing options, `conveyor::`, `form::`, and `stage::` labels this version does not use, and open tasks that carry them;
-- `conveyor board update`, or `k` and Enter on the control screen, adds missing labels and the missing field after the user asks for it;
-- nothing existing is changed or deleted: unused labels and old task labels are reported for manual cleanup, and missing options of an existing field are added by hand, because GitHub's API replaces the whole option list.
+- `conveyor board update`, or `k` and Enter on the control screen, adds missing labels, the missing field, and missing options of an existing field after the user asks for it; options go in through GitHub's `updateProjectV2Field` with the ids, colors, and descriptions of the existing options, so they and the card values stay;
+- nothing existing is changed or deleted: unused labels and old labels on open tasks are reported for manual cleanup; closed tasks are not checked;
+- during normal work the conveyor never creates the field: a missing field only produces a warning.
 
 ## Parts
 

@@ -151,7 +151,7 @@ On GitLab, `/approve` in a merge request comment is GitLab's own approval, and t
 
 ### Board
 
-Three kinds of labels describe a task. `conveyor init` creates all of them. On every start and on the control screen the conveyor compares the board with what its version uses and only reports the difference: missing labels, a missing `Conveyor` field or options, labels it no longer uses, and open tasks that carry them. `conveyor board check` prints the same report. `conveyor board update`, or `k` and Enter on the control screen, adds what is missing (labels and the `Conveyor` field) with your consent; the conveyor never changes or deletes existing labels, fields, options, or task labels. Missing options of an existing `Conveyor` field are added by hand in the project settings, because the GitHub API would replace the whole option list.
+Three kinds of labels describe a task. `conveyor init` creates all of them. On every start and on the control screen the conveyor compares the board with what its version uses and only reports the difference: missing labels, a missing `Conveyor` field or options, labels it no longer uses, and open tasks that carry them. `conveyor board check` prints the same report. `conveyor board update`, or `k` and Enter on the control screen, adds what is missing (labels, the `Conveyor` field, and its missing options) with your consent; the conveyor never changes or deletes existing labels, fields, options, card values, or task labels. Closed tasks are not checked.
 
 | Labels | Meaning | Set by |
 |---|---|---|
