@@ -124,6 +124,7 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
             done()
           }}
         />
+        <Text> </Text>
         <Text color="gray">Enter: apply · Esc: cancel</Text>
       </Box>
     )
@@ -154,6 +155,7 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
             }}
           />
         )}
+        <Text> </Text>
         <Text color="gray">Enter: apply · Esc: cancel{inheritable(field) ? ' · empty value: inherit' : ''}</Text>
       </Box>
     )

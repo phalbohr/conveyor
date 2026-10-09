@@ -131,7 +131,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   const events = runner?.events.slice(-LOG_LINES) ?? []
   const lines = panel === 'help' ? helpLines() : panel === 'usage' && status ? usageLines(status) : panel === 'log' ? logLines(events, status?.project) : status ? statusLines(status, runner?.running ? 'running here' : undefined, view) : []
   const footer = `${runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] status column · [Enter] its tasks · [↑↓] scroll · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}`
-  const room = Math.max(3, rows - heightOf(footer, columns) - heightOf(message?.text ?? '', columns) - (ask ? 4 : 0) - (error ? 1 : 0) - 1)
+  const room = Math.max(3, rows - 1 - heightOf(footer, columns) - heightOf(message?.text ?? '', columns) - (ask ? 4 : 0) - (error ? 1 : 0) - 1)
   const page = viewport(lines, scroll, room, columns)
   return (
     <Box flexDirection="column">
@@ -163,6 +163,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
         </Box>
       )}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
+      <Text> </Text>
       <Text color="gray">{footer}</Text>
     </Box>
   )

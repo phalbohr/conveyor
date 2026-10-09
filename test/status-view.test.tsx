@@ -200,10 +200,15 @@ describe('StatusScreen as the hub', () => {
       await settle()
       stdin.write(key)
       await vi.waitFor(() => expect(lastFrame()).toContain(title), { timeout: 5_000 })
+      const lines = lastFrame()?.split('\n') ?? []
+      const footer = lines.findIndex((line) => line.includes('status column'))
+      expect(lines[footer - 1]?.trim()).toBe('')
       await settle()
       stdin.write('\u001B')
       await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
     }
+    const lines = lastFrame()?.split('\n') ?? []
+    expect(lines[lines.findIndex((line) => line.includes('status column')) - 1]?.trim()).toBe('')
   })
 
   it('opens the settings with e', async () => {
