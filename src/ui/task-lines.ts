@@ -11,11 +11,11 @@ export type TaskDetail = {
 }
 
 export type TaskControl = {
-  harnesses: string[]
   detail(id: string): Promise<TaskDetail>
   comment(id: string, target: Target, body: string): Promise<void>
   toggleIdea(id: string): Promise<string>
   open(url: string): Promise<void>
+  openBoard(): Promise<void>
 }
 
 const time = (iso: string) => new Date(iso).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })

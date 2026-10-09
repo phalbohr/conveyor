@@ -89,6 +89,13 @@ export class GitHubBoard implements Board {
     if (this.options.projectNumber) await this.projectMirror(this.options.projectNumber)
   }
 
+  async boardUrl() {
+    const number = this.options.projectNumber
+    if (!number) return `https://github.com/${this.project}/issues`
+    const project = JSON.parse(await this.gh(['project', 'view', String(number), '--owner', this.owner(), '--format', 'json'])) as { url: string }
+    return project.url
+  }
+
   async canWrite(user: string) {
     if (!user) return false
     const result = await this.call([`${this.repo}/collaborators/${encodeURIComponent(user)}/permission`])

@@ -116,9 +116,9 @@ describe('agent session on a task', () => {
       boardFor: () => board,
     }
 
-    expect(await agentCommand(context, task.id, 'codex')).toBe(0)
+    expect(await agentCommand(context, task.id)).toBe(0)
 
-    expect(sessions[0]?.command).toBe('codex')
+    expect(sessions[0]?.command).toBe('claude')
     expect(sessions[0]?.args.at(-1)).toContain('Find tasks by text')
     expect(sessions[0]?.args.at(-1)).toContain('Should it search comments too?')
     expect(sessions[0]?.args.at(-1)).toContain('form::idea')

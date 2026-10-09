@@ -101,6 +101,10 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
       expect((await board.getTask(t.id))?.stage).toBeUndefined()
     })
 
+    it('gives the board URL', async () => {
+      expect(await board.boardUrl()).toMatch(/^https:\/\//)
+    })
+
     it('tells who has write access', async () => {
       expect(await board.canWrite(await board.user())).toBe(true)
       expect(await board.canWrite('')).toBe(false)

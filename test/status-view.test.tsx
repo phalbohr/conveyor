@@ -45,12 +45,12 @@ const snapshot: StatusSnapshot = {
 describe('statusLines', () => {
   it('shows the board columns, the tasks of an open column, and no usage', () => {
     const closed = statusLines(snapshot, undefined, { column: 0, open: false, focus: 'columns', task: 0 })
-    expect(closed.find((line) => line.text.startsWith('board:'))?.text).toBe('board: backlog 1|1|0|1 · in progress 1/3 · needs input 1/1 · review 0/2')
+    expect(closed.find((line) => line.text.startsWith('my board:'))?.text).toBe('my board: backlog 1|1|0|1 · in progress 1/3 · needs input 1/1 · review 0/2')
     expect(closed.some((line) => line.text.includes('tokens'))).toBe(false)
     const backlog = statusLines(snapshot, undefined, { column: 0, open: true, focus: 'columns', task: 0 }).map((line) => line.text)
     expect(backlog).toEqual(expect.arrayContaining(['  #7 Dark mode — no form', '  #8 Search — form::idea', '  #9 Export — form::plan']))
     const open = statusLines(snapshot, undefined, { column: 2, open: true, focus: 'columns', task: 0 }).map((line) => line.text)
-    expect(open[open.findIndex((text) => text.startsWith('board:')) + 1]).toContain('#3 Store users — stage::plan · waits for your answer')
+    expect(open[open.findIndex((text) => text.startsWith('my board:')) + 1]).toContain('#3 Store users — stage::plan · waits for your answer')
     expect(statusLines(snapshot, undefined, { column: 3, open: true, focus: 'columns', task: 0 }).map((line) => line.text)).toContain('  no tasks in review')
     const selected = statusLines(snapshot, undefined, { column: 3, open: false, focus: 'columns', task: 0 }).find((line) => line.segments)?.segments?.find((segment) => segment.selected)
     expect(selected?.text).toBe('review 0/2')
@@ -99,7 +99,7 @@ describe('StatusScreen', () => {
   it('renders the snapshot and reloads on r', async () => {
     const load = vi.fn(async () => snapshot)
     const { lastFrame, stdin } = render(<StatusScreen load={load} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('r')
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2), { timeout: 5_000 })
@@ -107,7 +107,7 @@ describe('StatusScreen', () => {
 
   it('toggles the help with h and scrolls it within the window', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('h')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
@@ -127,7 +127,7 @@ describe('StatusScreen', () => {
     expect((lastFrame() ?? '').split('\n').length).toBeLessThanOrEqual(24)
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('h')
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
   })
 
   it('shows a board error', async () => {
@@ -169,7 +169,7 @@ describe('StatusScreen as a control panel', () => {
     const calls: string[] = []
     const pull = { number: '52', url: 'https://example.test/pull/52', headSha: 'a', state: 'open' as const, checks: 'success' as const, mergeable: 'yes' as const, feedback: [], reviews: [], comments: [{ author: 'alice', body: 'Looks fine', createdAt: '2026-10-05T10:00:00.000Z' }] }
     const value: TaskControl = {
-      harnesses: ['claude', 'codex'],
+      openBoard: async () => void calls.push('open board'),
       detail: async (id) => ({
         task: { id, title: id === '8' ? 'Search' : 'Store users', body: 'The task text', author: 'me', url: `https://example.test/issues/${id}`, assignees: [], openBlockers: 0, closed: false, createdAt: '', ...(id === '8' ? { state: 'backlog' as const, form: 'idea' as const } : { state: 'review' as const }) },
         workpad: { stage: 'plan', text: 'Notes of the agent' },
@@ -189,7 +189,7 @@ describe('StatusScreen as a control panel', () => {
   it('moves into the tasks of a column, opens one with its text, workpad, and comments, and goes back', async () => {
     const { value } = control()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
     stdin.write(DOWN)
     await vi.waitFor(() => expect(lastFrame()).toContain('› #7 Dark mode — no form'), { timeout: 5_000 })
@@ -212,7 +212,7 @@ describe('StatusScreen as a control panel', () => {
   it('comments, opens the browser, and toggles form::idea on a backlog task', async () => {
     const { value, calls } = control()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
     stdin.write(DOWN)
     await settle()
@@ -238,7 +238,7 @@ describe('StatusScreen as a control panel', () => {
     const { value, calls } = control()
     const review = { ...snapshot, mine: [...snapshot.mine, { id: '3', title: 'Store users', url: 'https://example.test/issues/3', state: 'review' as const, attempt: 0, pullRequest: 'https://example.test/pull/52' }] }
     const { lastFrame, stdin } = render(<StatusScreen load={async () => review} refreshMs={60_000} control={value} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     for (const key of [RIGHT, RIGHT, RIGHT, DOWN, '\r']) {
       await settle()
       stdin.write(key)
@@ -259,21 +259,19 @@ describe('StatusScreen as a control panel', () => {
     await vi.waitFor(() => expect(calls).toContain('comment 3 pull /approve'), { timeout: 5_000 })
   })
 
-  it('hands a task to the chosen agent', async () => {
-    const { value } = control()
+  it('hands a task to the agent and opens the board in the browser', async () => {
+    const { value, calls } = control()
     const actions: HubAction[] = []
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} onAction={(action) => actions.push(action)} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('b')
+    await vi.waitFor(() => expect(calls).toContain('open board'), { timeout: 5_000 })
     for (const key of [DOWN, 'h']) {
       await settle()
       stdin.write(key)
     }
-    await vi.waitFor(() => expect(lastFrame()).toContain('Open #7 with an agent'), { timeout: 5_000 })
-    await settle()
-    stdin.write(RIGHT)
-    await settle()
-    stdin.write('\r')
-    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'agent', id: '7', harness: 'codex' }]), { timeout: 5_000 })
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'agent', id: '7' }]), { timeout: 5_000 })
   })
 })
 
@@ -282,7 +280,7 @@ describe('StatusScreen as the hub', () => {
 
   it('moves between status columns with the arrows and lists their tasks with Enter', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
     stdin.write('\u001B[C')
     await settle()
@@ -294,13 +292,13 @@ describe('StatusScreen as the hub', () => {
 
   it('shows usage on u and goes back', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
     stdin.write('u')
     await vi.waitFor(() => expect(lastFrame()).toContain('tokens today 12,345'), { timeout: 5_000 })
-    expect(lastFrame()).not.toContain('board:')
+    expect(lastFrame()).not.toContain('my board:')
     stdin.write('u')
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
   })
 
   it('starts and stops the conveyor with s and shows its log on o', async () => {
@@ -316,10 +314,10 @@ describe('StatusScreen as the hub', () => {
     stdin.write('o')
     await vi.waitFor(() => expect(lastFrame()).toContain('claimed task 7: Login'), { timeout: 5_000 })
     expect(lastFrame()).toContain('full log ~/.conveyor/logs/acme-app.log')
-    expect(lastFrame()).not.toContain('board:')
+    expect(lastFrame()).not.toContain('my board:')
     await settle()
     stdin.write('o')
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
     stdin.write('s')
     await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })
@@ -327,7 +325,7 @@ describe('StatusScreen as the hub', () => {
 
   it('wraps the second column of the help inside that column', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
     stdin.write('h')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
@@ -344,7 +342,7 @@ describe('StatusScreen as the hub', () => {
 
   it('closes help, usage, and log with Esc and names the way back', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     for (const [key, title] of [['h', 'conveyor help · [h] or Esc back'], ['u', 'Usage · [u] or Esc back'], ['o', '[o] or Esc back']] as const) {
       await settle()
       stdin.write(key)
@@ -354,7 +352,7 @@ describe('StatusScreen as the hub', () => {
       expect(lines[footer - 1]?.trim()).toBe('')
       await settle()
       stdin.write('\u001B')
-      await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+      await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     }
     const lines = lastFrame()?.split('\n') ?? []
     expect(lines[lines.findIndex((line) => line.includes('[←→] column')) - 1]?.trim()).toBe('')
@@ -363,7 +361,7 @@ describe('StatusScreen as the hub', () => {
   it('opens the settings with e', async () => {
     const actions: HubAction[] = []
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
     stdin.write('e')
     await vi.waitFor(() => expect(actions).toEqual([{ kind: 'settings' }]), { timeout: 5_000 })
@@ -387,7 +385,7 @@ describe('StatusScreen as the hub', () => {
   it('asks for the task number of attach and release', async () => {
     const actions: HubAction[] = []
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
     stdin.write('a')
     await vi.waitFor(() => expect(lastFrame()).toContain('Answer the questions of the task with issue number'), { timeout: 5_000 })
