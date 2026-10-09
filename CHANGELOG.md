@@ -9,6 +9,7 @@ First public release.
 - Harnesses: `claude` and `codex` built in; presets for `opencode` and `kilocode` (verified with real runs), `pi`, `openhands`, and `agent-zero` (not yet verified with real runs); any CLI through `harnesses`.
 - Several workstations on one board: atomic claims, heartbeats, merge and triage locks, personal limits, and subscription reserves.
 - Board labels: `conveyor::` states as columns (backlog, needs-input, queued, in-progress, review, done), `form::idea|story|plan` marks a task ready for the conveyor, `stage::<name>` shows the running stage.
+- Review command `/approve` (one approval; the conveyor merges after `review.approvals` distinct approvals). On GitLab, `/approve` in a merge request is GitLab's own approval and counts.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - Control screen with a live log, settings editor, `new`, `attach`, `release`, `config`, `models`, and the `conveyor-help` skill.
 - Trust checks: tasks, comments, reviews, and commands only from users with write access; secret redaction on the board, in committed artifacts, and in the log; approvals and merges bound to the reviewed head commit.

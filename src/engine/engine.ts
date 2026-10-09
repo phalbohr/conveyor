@@ -694,7 +694,7 @@ export class Engine {
     const approvers = [
       ...new Set([
         ...reviews.filter((review) => review.state === 'approved').map((review) => review.author),
-        ...human.filter((comment) => isCommand(comment.body, 'merge')).map((comment) => comment.author),
+        ...human.filter((comment) => isCommand(comment.body, 'approve')).map((comment) => comment.author),
       ]),
     ]
     return { kind: pull?.state === 'open' && approvers.length >= config.review.approvals ? 'merge' : 'wait', pull, approvers, feedback }
@@ -933,7 +933,7 @@ export class Engine {
 }
 
 function changedText(sha: string) {
-  return `**The branch changed to \`${sha.slice(0, 7)}\` after the review request.** Earlier approvals and \`/merge\` no longer count. Review the new commits, then approve or write \`/merge\` again.`
+  return `**The branch changed to \`${sha.slice(0, 7)}\` after the review request.** Earlier approvals and \`/approve\` no longer count. Review the new commits, then approve or write \`/approve\` again.`
 }
 
 function withoutOwner(task: Task): Task {
@@ -949,13 +949,13 @@ function parseJson(text: string): unknown {
   }
 }
 
-function isCommand(text: string, command: 'merge' | 'rework' | 'fix') {
+function isCommand(text: string, command: 'approve' | 'rework' | 'fix') {
   return new RegExp(`^/${command}(\\s|$)`, 'i').test(text.trim())
 }
 
 function stripCommand(text: string): string | undefined {
   const trimmed = text.trim()
-  if (isCommand(trimmed, 'merge')) return undefined
+  if (isCommand(trimmed, 'approve')) return undefined
   const match = trimmed.match(/^\/(?:rework|fix|fix_from:?\s+[a-z][a-z0-9-]*)(?:\s+|$)/i)
   return (match ? trimmed.slice(match[0].length) : trimmed).trim() || undefined
 }

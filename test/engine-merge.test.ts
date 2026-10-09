@@ -86,7 +86,7 @@ describe('merge mode human', () => {
     const { board, cycle, runs } = setup()
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
-    await board.addComment('1', '/merge')
+    await board.addComment('1', '/approve')
     await cycle()
     expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: false })
     expect(await board.claim('1')).toBe(true)
@@ -100,9 +100,19 @@ describe('merge mode human', () => {
     const { board, cycle } = setup({ config: 'close_on_done: true' })
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
-    await board.addComment('1', '/merge')
+    await board.addComment('1', '/approve')
     await cycle()
     expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: true })
+  })
+
+  it('does not take /merge as an approval', async () => {
+    const { board, cycle } = setup()
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    await board.addComment('1', '/merge')
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect((await board.getTask('1'))?.state).toBe('review')
   })
 
   it('keeps waiting for a plain comment', async () => {
@@ -116,21 +126,21 @@ describe('merge mode human', () => {
     expect(board.merges).toEqual([])
   })
 
-  it('merges after a /merge comment on the issue', async () => {
+  it('merges after a /approve comment on the issue', async () => {
     const { board, cycle } = setup({ stages: '  implement: {}\n  merge: {}\n  verify: {when: success}' })
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
-    await board.addComment('1', '/merge')
+    await board.addComment('1', '/approve')
     await cycle()
     expect(board.merges).toHaveLength(1)
     expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: false })
   })
 
-  it('merges after a /merge comment on the pull request', async () => {
+  it('merges after a /approve comment on the pull request', async () => {
     const { board, cycle } = setup()
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
-    board.updatePullRequest('1', { comments: [{ author: 'alice', body: '/merge looks right', createdAt: new Date().toISOString() }] })
+    board.updatePullRequest('1', { comments: [{ author: 'alice', body: '/approve looks right', createdAt: new Date().toISOString() }] })
     await cycle()
     expect(board.merges).toHaveLength(1)
   })
@@ -139,8 +149,8 @@ describe('merge mode human', () => {
     const { board, cycle } = setup({ config: 'review: {approvals: 2}' })
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
-    await board.addComment('1', '/merge')
-    await board.addComment('1', '/merge again')
+    await board.addComment('1', '/approve')
+    await board.addComment('1', '/approve again')
     await cycle()
     expect(board.merges).toEqual([])
 
@@ -153,7 +163,7 @@ describe('merge mode human', () => {
     const { board, cycle, harness } = setup()
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
-    await board.addComment('1', '/merge')
+    await board.addComment('1', '/approve')
     board.updatePullRequest('1', { comments: [{ author: 'alice', body: '/rework Validate the email format.', createdAt: new Date().toISOString() }] })
     await cycle()
     expect(board.merges).toEqual([])

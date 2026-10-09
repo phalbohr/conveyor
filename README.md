@@ -48,7 +48,7 @@ conveyor new
 2. Create an issue yourself (the conveyor takes only tasks from users with write access) and add the labels `conveyor::backlog` and `form::plan`. Write the plan in the issue text.
 3. Run `conveyor`: the control screen opens. Press `s` to start the conveyor; `o` shows its log.
 4. The log shows `claimed task <number>` and each stage. The issue gets `conveyor::in-progress`, then a pull request opens and the issue gets `conveyor::review`.
-5. Review the pull request. Write `/merge` (or approve) to merge, `/fix <notes>` to fix on the same branch, or `/rework <notes>` to start over.
+5. Review the pull request. Write `/approve` (or approve it) to merge, `/fix <notes>` to fix on the same branch, or `/rework <notes>` to start over.
 
 The task is not taken? Check that the issue has a `form::` label that `pickup_from` allows and the issue has no open blockers. The control screen shows your limits and the team queue with the owner of each task; its log (`o`) shows tasks skipped because their author has no write access. Every stage call costs tokens of the harness account; set `limits.daily_tokens` and the subscription reserves in `conveyor settings`. Stop with `s` or `q`; running stages abort, and the next start resumes the tasks.
 
@@ -136,17 +136,17 @@ The conveyor writes on the board; you answer in comments.
 | Where | You write | Effect |
 |---|---|---|
 | a question or an approval request | any comment | the stage continues with your answer |
-| a task in `review`, on the issue or the pull request | `/merge` or an "Approve" review | merge (respects blockers, CI, and the merge lock) |
+| a task in `review`, on the issue or the pull request | `/approve` or an "Approve" review | one approval; with `review.approvals` distinct approvals the conveyor merges (respects blockers, CI, and the merge lock) |
 | | `/fix <notes>` or a "Request changes" review | fixes on the same branch, from the `plan` stage |
 | | `/fix_from: <stage> <notes>` | fixes on the same branch, from that stage |
 | | `/rework <notes>` | new branch, new attempt after `plan` |
 | any task | label `conveyor::rework` | same as `/rework` |
 
-An approval or `/merge` counts only for the head commit under review. When someone else pushes to the task branch, the conveyor comments that the branch changed and waits for a new approval.
+An approval or `/approve` counts only for the head commit under review. When someone else pushes to the task branch, the conveyor comments that the branch changed and waits for a new approval.
 
 The conveyor reads commands, reviews, replies, and its own hidden markers only from users with write access to the repository (GitHub: write, maintain, or admin; GitLab: Developer or higher). It takes only tasks whose author has write access; to run a task from an outside contributor, create a new issue with its content.
 
-On GitLab, `/merge` in a merge request comment is a GitLab quick action and never reaches the conveyor. Approve the merge request (button or `/approve`) or write `/merge` on the issue. `/fix`, `/fix_from:`, and `/rework` work on both.
+On GitLab, `/approve` in a merge request comment is GitLab's own approval, and the conveyor counts it. Do not write `/merge` there: it is a GitLab quick action that merges the request at once, past the conveyor's checks. `/fix`, `/fix_from:`, and `/rework` work on both.
 
 ### Board
 

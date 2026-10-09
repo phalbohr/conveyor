@@ -45,19 +45,19 @@ function setup(options: { config?: string; script?: Script; workspaces?: FakeWor
 const now = () => new Date().toISOString()
 
 describe('commands from users without write access', () => {
-  it('ignores /merge comments and approvals from outsiders', async () => {
+  it('ignores /approve comments and approvals from outsiders', async () => {
     const { board, cycle } = setup()
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
-    await board.addCommentAs('mallory', '1', '/merge')
+    await board.addCommentAs('mallory', '1', '/approve')
     board.updatePullRequest('1', {
-      comments: [{ author: 'mallory', body: '/merge', createdAt: now() }],
+      comments: [{ author: 'mallory', body: '/approve', createdAt: now() }],
       reviews: [{ author: 'mallory', state: 'approved', body: '', submittedAt: now() }],
     })
     await cycle()
     expect(board.merges).toEqual([])
 
-    await board.addComment('1', '/merge')
+    await board.addComment('1', '/approve')
     await cycle()
     expect(board.merges).toHaveLength(1)
   })
@@ -92,11 +92,11 @@ describe('commands from users without write access', () => {
 describe('approval bound to the head commit', () => {
   const changed = 'b'.repeat(40)
 
-  it('drops a /merge given before the branch changed and asks again', async () => {
+  it('drops an /approve given before the branch changed and asks again', async () => {
     const { board, cycle } = setup()
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
-    await board.addComment('1', '/merge')
+    await board.addComment('1', '/approve')
     board.updatePullRequest('1', { headSha: changed })
     await cycle()
     expect(board.merges).toEqual([])
@@ -106,7 +106,7 @@ describe('approval bound to the head commit', () => {
     await cycle()
     expect(board.merges).toEqual([])
     await new Promise((resolve) => setTimeout(resolve, 5))
-    await board.addComment('1', '/merge')
+    await board.addComment('1', '/approve')
     await cycle()
     expect(board.merges).toHaveLength(1)
   })
@@ -129,7 +129,7 @@ describe('approval bound to the head commit', () => {
     await board.createTask('Add login', 'p', { form: 'plan' })
     await cycle()
     board.updatePullRequest('1', { checks: 'pending' })
-    await board.addComment('1', '/merge')
+    await board.addComment('1', '/approve')
     await cycle()
     expect((await board.getTask('1'))?.state).toBe('in-progress')
 
