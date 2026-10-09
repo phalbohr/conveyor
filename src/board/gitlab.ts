@@ -79,6 +79,10 @@ export class GitLabBoard implements Board {
     }
   }
 
+  async boardUrl() {
+    return `${(await this.json<{ web_url: string }>([this.api])).web_url}/-/boards`
+  }
+
   async canWrite(user: string) {
     if (!user) return false
     const members = await this.json<{ username: string; access_level: number }[]>([`${this.api}/members/all?query=${encodeURIComponent(user)}&per_page=100`])

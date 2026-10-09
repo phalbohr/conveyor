@@ -55,6 +55,10 @@ export class FakeBoard implements Board {
     for (const label of boardLabels(stages)) this.labels.add(label.name)
   }
 
+  async boardUrl() {
+    return 'https://example.test/board'
+  }
+
   async canWrite(user: string) {
     return Boolean(user) && !this.outsiders.has(user)
   }

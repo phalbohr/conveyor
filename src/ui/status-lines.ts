@@ -52,8 +52,8 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
     index === BACKLOG ? `${label} ${forms.map((group) => group.length).join('|')}` : `${label} ${counts[index - 1]?.used}/${counts[index - 1]?.limit}`,
   )
   lines.push({
-    text: `board: ${columns.join(' · ')}`,
-    segments: [{ text: 'board: ' }, ...columns.flatMap((text, index) => [...(index ? [{ text: ' · ' }] : []), { text, selected: view?.column === index && view.focus === 'columns' }])],
+    text: `my board: ${columns.join(' · ')}`,
+    segments: [{ text: 'my board: ' }, ...columns.flatMap((text, index) => [...(index ? [{ text: ' · ' }] : []), { text, selected: view?.column === index && view.focus === 'columns' }])],
     tone: limits.awaitingMe.used >= limits.awaitingMe.limit || limits.awaitingReview.used >= limits.awaitingReview.limit ? 'warning' : 'muted',
   })
   if (!view) {
@@ -145,7 +145,7 @@ export function helpLines(): Line[] {
     row('<number>', 'the issue number on the board: issues/51 → `conveyor attach 51`'),
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },
-    row('this screen', 's start/stop the conveyor · u usage · o log · n new · a attach · l release · e settings · r refresh · h or ? help · q quit'),
+    row('this screen', 'b board in the browser · s start/stop the conveyor · u usage · o log · n new · a attach · l release · e settings · r refresh · h or ? help · q quit'),
     row('settings', '`e` here or `conveyor settings`: the help of the current row is shown under the list; ←→ switch options; s saves after validation'),
     row('scripting', '`conveyor config list|get|set`, `conveyor config stage add|remove|move`'),
     row('agent help', '`conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)'),

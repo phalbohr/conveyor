@@ -21,7 +21,6 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
   }
   const board = setup.board
   const control: TaskControl = {
-    harnesses: ['claude', 'codex'],
     async detail(id) {
       const task = await board.getTask(id)
       if (!task) throw new Error(`task ${id} not found`)
@@ -51,6 +50,9 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
       const opened = await context.run(process.platform === 'darwin' ? 'open' : 'xdg-open', [url])
       if (opened.code !== 0) throw new Error(`could not open ${url}`)
     },
+    async openBoard() {
+      await this.open(await board.boardUrl())
+    },
   }
   let notice: string | undefined
   if (options.start) {
@@ -75,7 +77,7 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     if (action.kind === 'new') await newCommand(captured, false)
     if (action.kind === 'attach') await attachCommand(captured, action.id)
     if (action.kind === 'release') await releaseCommand(captured, action.id, false)
-    if (action.kind === 'agent') await agentCommand(captured, action.id, action.harness)
+    if (action.kind === 'agent') await agentCommand(captured, action.id)
     notice = output.trim() || undefined
   }
 }

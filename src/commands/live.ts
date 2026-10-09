@@ -62,7 +62,7 @@ export async function attachCommand(context: Context, id: string): Promise<numbe
   return 0
 }
 
-export async function agentCommand(context: Context, id: string, harness: string): Promise<number> {
+export async function agentCommand(context: Context, id: string): Promise<number> {
   const prepared = prepare(context)
   if (!prepared) return 1
   const { config, settings, board } = prepared
@@ -73,7 +73,7 @@ export async function agentCommand(context: Context, id: string, harness: string
   const comments = await trust.only(await board.listComments(id))
   const pad = findWorkpad(comments)
   const pull = await board.pullRequest(id)
-  const stage = config.stages.find((entry) => entry.harness === harness) ?? { ...stageNamed(config, 'plan'), harness, model: '' }
+  const stage = stageNamed(config, 'story')
   const text = await session(context, settings, config, 'task.md', stage, {
     project: config.board.project,
     issue: { id: task.id, title: task.title, body: task.body || '(empty)' },
@@ -87,10 +87,10 @@ export async function agentCommand(context: Context, id: string, harness: string
     pull: pull ? `${pull.url} · ${pull.state} · checks ${pull.checks}` : '(none)',
   })
   if (!text.ok) {
-    context.stdout(`The session with ${harness} on task ${id} ended without a comment.\n`)
+    context.stdout(`The session on task ${id} ended without a comment.\n`)
     return 0
   }
-  await board.addComment(id, `Notes from a live session with ${harness}:\n\n${text.value.trim()}`)
+  await board.addComment(id, `Notes from a live session:\n\n${text.value.trim()}`)
   context.stdout(`Posted the notes of the session on task ${id}.\n`)
   return 0
 }

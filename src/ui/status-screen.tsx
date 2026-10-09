@@ -23,7 +23,7 @@ export type HubAction =
   | { kind: 'new' }
   | { kind: 'attach'; id: string }
   | { kind: 'release'; id: string }
-  | { kind: 'agent'; id: string; harness: string }
+  | { kind: 'agent'; id: string }
 
 type Props = {
   load: () => Promise<StatusSnapshot>
@@ -35,7 +35,7 @@ type Props = {
 }
 
 type Panel = 'status' | 'help' | 'usage' | 'log' | 'task'
-type Input = { kind: 'attach' | 'release' } | { kind: 'comment'; id: string; target: Target } | { kind: 'agent'; id: string; choice: number }
+type Input = { kind: 'attach' | 'release' } | { kind: 'comment'; id: string; target: Target }
 type Opened = { id: string; target: Target; detail?: TaskDetail }
 
 export function StatusScreen({ load, refreshMs, runner, control, notice, onAction }: Props) {
@@ -131,7 +131,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (current && control) {
         if (key === 'c') setInput({ kind: 'comment', id: current.id, target: current.target })
         if (key === 'b' && url) void control.open(url).catch(fail)
-        if (key === 'h') setInput({ kind: 'agent', id: current.id, choice: 0 })
+        if (key === 'h') act({ kind: 'agent', id: current.id })
       }
       if (panel === 'task') {
         if (special.upArrow) setScroll((value) => Math.max(0, value - 1))
@@ -168,6 +168,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (special.return) setView((now) => ({ ...now, open: !now.open }))
       if (special.downArrow && tasks.length > 0) setView((now) => ({ ...now, open: true, focus: 'tasks', task: 0 }))
       if (key === 'h') toggle('help')
+      if (key === 'b' && control) void control.openBoard().catch(fail)
       if (key === 'e') act({ kind: 'settings' })
       if (key === 'n') act({ kind: 'new' })
       if (key === 'a') setInput({ kind: 'attach' })
@@ -194,10 +195,6 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   useInput(
     (_key, special) => {
       if (special.escape) setInput(undefined)
-      if (input?.kind !== 'agent' || !control) return
-      const count = control.harnesses.length
-      if (special.leftArrow || special.rightArrow) setInput({ ...input, choice: (input.choice + (special.rightArrow ? 1 : -1) + count) % count })
-      if (special.return) act({ kind: 'agent', id: input.id, harness: control.harnesses[input.choice] ?? 'claude' })
     },
     { isActive: input !== undefined },
   )
@@ -282,18 +279,6 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
           />
         </Box>
       )}
-      {input?.kind === 'agent' && control && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text color="cyan">{`Open #${input.id} with an agent · ←→ choose · Enter opens a live session · Esc cancels`}</Text>
-          <Text>
-            {control.harnesses.map((harness, index) => (
-              <Text key={harness} inverse={index === input.choice}>
-                {` ${harness} `}
-              </Text>
-            ))}
-          </Text>
-        </Box>
-      )}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
       <Text> </Text>
       <Text color="gray">{footer}</Text>
@@ -310,7 +295,7 @@ function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefine
   if (view.focus === 'tasks') {
     return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] agent${view.column === BACKLOG ? ' · [i] form::idea on/off' : ''} · [Esc] columns · [?] help · [q] quit${time}`
   }
-  return `${runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
+  return `${runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
 }
 
 function heightOf(text: string, columns: number) {

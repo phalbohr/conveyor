@@ -45,6 +45,7 @@ export type MergeMethod = 'merge' | 'squash' | 'rebase'
 
 export interface Board {
   user(): Promise<string>
+  boardUrl(): Promise<string>
   prepare(stages: string[]): Promise<void>
   canWrite(user: string): Promise<boolean>
   createTask(title: string, body: string, labels?: TaskLabels): Promise<Task>
