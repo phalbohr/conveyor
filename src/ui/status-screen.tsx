@@ -147,7 +147,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
             : line.text || ' '}
         </Text>
       ))}
-      {page.more && <Text color="gray">{`\n${page.more}\n`}</Text>}
+      {page.more && <Text color="gray">{`\n${page.more}`}</Text>}
       {error && <Text color="red">Board error: {error}</Text>}
       {ask && (
         <Box flexDirection="column" marginTop={1}>
@@ -179,13 +179,13 @@ function viewport(lines: Line[], scroll: number, room: number, columns: number):
   if (total <= room) return { lines }
   let last = lines.length
   let tail = 0
-  while (last > 0 && tail + heightOf(lines[last - 1]?.text || ' ', columns) <= room - 3) tail += heightOf(lines[--last]?.text || ' ', columns)
+  while (last > 0 && tail + heightOf(lines[last - 1]?.text || ' ', columns) <= room - 2) tail += heightOf(lines[--last]?.text || ' ', columns)
   const start = Math.min(scroll, last)
   const shown: Line[] = []
   let used = 0
   for (const line of lines.slice(start)) {
     const height = heightOf(line.text || ' ', columns)
-    if (used + height > room - 3) break
+    if (used + height > room - 2) break
     shown.push(line)
     used += height
   }

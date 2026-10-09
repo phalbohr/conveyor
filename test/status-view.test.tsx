@@ -103,6 +103,11 @@ describe('StatusScreen', () => {
     stdin.write('h')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
     expect(lastFrame()).toContain('↑↓ scroll')
+    const frame = lastFrame()?.split('\n') ?? []
+    const more = frame.findIndex((line) => line.includes('↑↓ scroll') && line.startsWith('lines'))
+    expect(frame[more - 1]?.trim()).toBe('')
+    expect(frame[more + 1]?.trim()).toBe('')
+    expect(frame[more + 2]).toContain('status column')
     expect((lastFrame() ?? '').split('\n').length).toBeLessThanOrEqual(24)
     for (let step = 0; step < 40 && !lastFrame()?.includes('/fix_from: <stage>'); step++) {
       stdin.write('\u001B[B')
