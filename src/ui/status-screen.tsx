@@ -3,7 +3,7 @@ import { Box, Text, render, useApp, useInput, useWindowSize } from 'ink'
 import { useCallback, useEffect, useState } from 'react'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
-import { STATUS_COLUMNS, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
+import { CELL_WIDTH, STATUS_COLUMNS, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 const LOG_LINES = 30
@@ -136,7 +136,17 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   return (
     <Box flexDirection="column">
       {panel === 'status' && !status && !error && <Text color="gray">Loading the board…</Text>}
-      {page.lines.map((line, index) => (
+      {page.lines.map((line, index) =>
+        line.cells ? (
+          <Box key={index}>
+            <Box flexShrink={0} width={CELL_WIDTH}>
+              <Text>{line.cells[0]}</Text>
+            </Box>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text wrap="wrap">{line.cells[1]}</Text>
+            </Box>
+          </Box>
+        ) : (
         <Text key={index} {...(line.tone ? { color: COLORS[line.tone] } : {})} bold={line.tone === 'title'}>
           {line.segments
             ? line.segments.map((segment, part) => (
@@ -146,7 +156,8 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
               ))
             : line.text || ' '}
         </Text>
-      ))}
+        ),
+      )}
       {page.more && <Text color="gray">{`\n${page.more}`}</Text>}
       {error && <Text color="red">Board error: {error}</Text>}
       {ask && (
@@ -174,17 +185,21 @@ function heightOf(text: string, columns: number) {
   return text.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / Math.max(1, columns))), 0)
 }
 
+function lineHeight(line: Line, columns: number) {
+  return line.cells ? heightOf(line.cells[1] || ' ', columns - CELL_WIDTH) : heightOf(line.text || ' ', columns)
+}
+
 function viewport(lines: Line[], scroll: number, room: number, columns: number): { lines: Line[]; more?: string } {
-  const total = lines.reduce((sum, line) => sum + heightOf(line.text || ' ', columns), 0)
+  const total = lines.reduce((sum, line) => sum + lineHeight(line, columns), 0)
   if (total <= room) return { lines }
   let last = lines.length
   let tail = 0
-  while (last > 0 && tail + heightOf(lines[last - 1]?.text || ' ', columns) <= room - 2) tail += heightOf(lines[--last]?.text || ' ', columns)
+  while (last > 0 && tail + lineHeight(lines[last - 1] as Line, columns) <= room - 2) tail += lineHeight(lines[--last] as Line, columns)
   const start = Math.min(scroll, last)
   const shown: Line[] = []
   let used = 0
   for (const line of lines.slice(start)) {
-    const height = heightOf(line.text || ' ', columns)
+    const height = lineHeight(line, columns)
     if (used + height > room - 2) break
     shown.push(line)
     used += height
