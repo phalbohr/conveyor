@@ -4,7 +4,7 @@ import { FakeBoard } from '../src/board/fake.js'
 import type { Context, Interact } from '../src/cli.js'
 import { renderWorkpad } from '../src/engine/workpad.js'
 import { runCli } from './helpers.js'
-import { agentCommand } from '../src/commands/live.js'
+import { harnessCommand } from '../src/commands/live.js'
 
 type Session = { command: string; args: string[]; env: NodeJS.ProcessEnv }
 
@@ -98,7 +98,7 @@ describe('conveyor new', () => {
   })
 })
 
-describe('agent session on a task', () => {
+describe('harness session on a task', () => {
   it('gives the agent the task, workpad, and comments and posts its notes', async () => {
     const board = new FakeBoard('me')
     const task = await board.createTask('Search', 'Find tasks by text', { state: 'backlog', form: 'idea' })
@@ -116,7 +116,7 @@ describe('agent session on a task', () => {
       boardFor: () => board,
     }
 
-    expect(await agentCommand(context, task.id)).toBe(0)
+    expect(await harnessCommand(context, task.id)).toBe(0)
 
     expect(sessions[0]?.command).toBe('claude')
     expect(sessions[0]?.args.at(-1)).toContain('Find tasks by text')

@@ -14,6 +14,7 @@ import { ModelCache, catalogsFor, modelKnown } from './models.js'
 import { expandPath } from './paths.js'
 import { checkSettingsSync, syncNotice } from './settings-sync.js'
 import { undescribedNotice, undescribedStages } from './stage-catalog.js'
+import { boardCheckLines, checkBoard } from './board-check.js'
 import { redactSecrets } from './engine/redact.js'
 import { QuotaStore, UsageLedger } from './usage.js'
 import { GitWorkspaces } from './workspaces.js'
@@ -69,7 +70,12 @@ export class Runner {
       }
     }
 
-    await board.prepare(config.stages.map((stage) => stage.name)).catch((error: unknown) => this.emit('warning', `the board labels were not created: ${(error as Error).message}`))
+    await checkBoard(board, config)
+      .then((check) => {
+        const lines = boardCheckLines(check)
+        if (lines.length) this.emit('warning', `the board differs from what this version uses; nothing was changed. Run \`conveyor board update\` or press k on the control screen to add what is missing:\n${lines.join('\n')}`)
+      })
+      .catch((error: unknown) => this.emit('warning', `the board check failed: ${(error as Error).message}`))
 
     const project = config.board.project
     const lock = acquireRunLock(context.home, project)

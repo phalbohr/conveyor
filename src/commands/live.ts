@@ -62,7 +62,7 @@ export async function attachCommand(context: Context, id: string): Promise<numbe
   return 0
 }
 
-export async function agentCommand(context: Context, id: string): Promise<number> {
+export async function harnessCommand(context: Context, id: string): Promise<number> {
   const prepared = prepare(context)
   if (!prepared) return 1
   const { config, settings, board } = prepared

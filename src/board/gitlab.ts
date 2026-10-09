@@ -1,6 +1,7 @@
 import type { Run } from '../cli.js'
 import {
   boardLabels,
+  CONVEYOR_PREFIXES,
   FORM_LABEL,
   labelsToTask,
   onBoard,
@@ -11,6 +12,7 @@ import {
   STATE_LABEL,
   taskLabels,
   type Board,
+  type BoardInspection,
   type Comment,
   type MergeMethod,
   type PullRequest,
@@ -77,6 +79,14 @@ export class GitLabBoard implements Board {
       const result = await this.call(['-X', 'POST', `${this.api}/labels`, '-f', `name=${label.name}`, '-f', `color=#${label.color}`])
       if (result.code !== 0 && result.status !== 409) this.fail(result, 'labels')
     }
+  }
+
+  async inspect(): Promise<BoardInspection> {
+    const labels = (await this.pages<{ name: string }>(`${this.api}/labels?include_ancestor_groups=false`)).map((label) => label.name)
+    const issues = (await this.pages<{ iid: number; title: string; labels: string[] }>(`${this.api}/issues?state=opened`))
+      .map((issue) => ({ id: String(issue.iid), title: issue.title, labels: issue.labels }))
+      .filter((issue) => issue.labels.some((label) => CONVEYOR_PREFIXES.some((prefix) => label.startsWith(prefix))))
+    return { labels, issues }
   }
 
   async boardUrl() {
@@ -276,6 +286,7 @@ export class GitLabBoard implements Board {
       body: (issue.description ?? '').replace(BLOCKED_BY, '').trim(),
       author: issue.author.username,
       url: issue.webUrl,
+      labels: issue.labels.nodes.map((node) => node.title),
       assignees: issue.assignees.nodes.map((node) => node.username),
       openBlockers: (issue.blockedByCount ?? 0) + fallbackBlockers(issue.description).filter((iid) => open.has(iid)).length,
       closed: issue.state === 'closed',

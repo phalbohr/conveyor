@@ -14,6 +14,7 @@ import { findSettings } from './settings.js'
 import { collectStatus, type StatusSnapshot } from './status.js'
 import { statusLines } from './ui/status-lines.js'
 import { promptInit } from './ui/init-prompt.js'
+import { boardCheckCommand, boardUpdateCommand } from './commands/board.js'
 
 export type Run = (command: string, args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>
 
@@ -160,6 +161,20 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .option('--refresh', 'ask the harnesses again instead of using the cached list')
     .action(async (harness: string | undefined, options: { refresh?: boolean }) => {
       exitCode = await modelsCommand(context, harness, options, json())
+    })
+
+  const boardCommand = program.command('board').description('compare the board with what this version of the conveyor uses')
+  boardCommand
+    .command('check')
+    .description('list missing labels, a missing Conveyor field or options, and tasks with labels this version does not use; changes nothing')
+    .action(async () => {
+      exitCode = await boardCheckCommand(context, json())
+    })
+  boardCommand
+    .command('update')
+    .description('add the missing labels and the Conveyor field; never changes or deletes existing labels, fields, or options')
+    .action(async () => {
+      exitCode = await boardUpdateCommand(context, json())
     })
 
   program

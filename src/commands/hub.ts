@@ -3,12 +3,13 @@ import { loadConfig } from '../config.js'
 import { ModelCache, catalogsFor } from '../models.js'
 import { Runner, type RunnerSetup } from '../runner.js'
 import { SettingsDocument } from '../settings-editor.js'
-import { collectStatus } from '../status.js'
+import { checkBoard } from '../board-check.js'
+import { collectStatus, forgetBoardCheck } from '../status.js'
 import { showSettings } from '../ui/settings-screen.js'
 import { showStatus } from '../ui/status-screen.js'
 import type { TaskControl } from '../ui/task-lines.js'
 import { commentText, findWorkpad } from '../engine/workpad.js'
-import { agentCommand, attachCommand, newCommand } from './live.js'
+import { attachCommand, harnessCommand, newCommand } from './live.js'
 import { modelsFile } from './models.js'
 import { releaseCommand } from './run.js'
 
@@ -53,6 +54,15 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     async openBoard() {
       await this.open(await board.boardUrl())
     },
+    async updateBoard() {
+      const current = loadConfig(setup.settings)
+      if (!current.ok) throw new Error(current.errors.join('; '))
+      const before = await checkBoard(board, current.config)
+      await board.prepare(current.config.stages.map((stage) => stage.name))
+      forgetBoardCheck()
+      const added = [...before.missing, ...(before.field === 'missing' ? ['the Conveyor field'] : [])]
+      return added.length ? `Added ${added.join(', ')}.` : 'Nothing to add; the rest needs your hand on the board.'
+    },
   }
   let notice: string | undefined
   if (options.start) {
@@ -77,7 +87,7 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     if (action.kind === 'new') await newCommand(captured, false)
     if (action.kind === 'attach') await attachCommand(captured, action.id)
     if (action.kind === 'release') await releaseCommand(captured, action.id, false)
-    if (action.kind === 'agent') await agentCommand(captured, action.id)
+    if (action.kind === 'harness') await harnessCommand(captured, action.id)
     notice = output.trim() || undefined
   }
 }

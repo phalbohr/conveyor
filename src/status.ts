@@ -8,6 +8,7 @@ import { runningPid } from './lock.js'
 import { checkSettingsSync, type SettingsSync } from './settings-sync.js'
 import { undescribedStages } from './stage-catalog.js'
 import { QuotaStore, UsageLedger } from './usage.js'
+import { checkBoard, type BoardCheck } from './board-check.js'
 
 export type MyTask = {
   id: string
@@ -36,6 +37,7 @@ export type StatusSnapshot = {
   me: string
   runner: { running: boolean; pid?: number }
   settingsSync: SettingsSync
+  board?: BoardCheck
   undescribed: string[]
   mine: MyTask[]
   backlog: BacklogTask[]
@@ -52,6 +54,11 @@ export type StatusSnapshot = {
 const QUOTA_HARNESSES = ['claude', 'codex']
 const FETCH_EVERY = 5 * 60_000
 let lastFetch = 0
+let boardCheck: BoardCheck | undefined
+
+export function forgetBoardCheck() {
+  lastFetch = 0
+}
 
 export async function collectStatus(options: { board: Board; config: Config; settings: string; home: string }): Promise<StatusSnapshot> {
   const { board, config, home } = options
@@ -88,6 +95,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
   const fetch = Date.now() - lastFetch >= FETCH_EVERY
   if (fetch) lastFetch = Date.now()
   const settingsSync = await checkSettingsSync(options.settings, { fetch })
+  if (fetch) boardCheck = await checkBoard(board, config).catch(() => boardCheck)
   const { subscription } = config.limits
   const readings = new QuotaStore(quotaFile(home, project)).all()
   return {
@@ -97,6 +105,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     me,
     runner: pid ? { running: true, pid } : { running: false },
     settingsSync,
+    ...(boardCheck ? { board: boardCheck } : {}),
     undescribed: undescribedStages(options.settings, config),
     mine,
     backlog,

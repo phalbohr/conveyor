@@ -170,6 +170,7 @@ describe('StatusScreen as a control panel', () => {
     const pull = { number: '52', url: 'https://example.test/pull/52', headSha: 'a', state: 'open' as const, checks: 'success' as const, mergeable: 'yes' as const, feedback: [], reviews: [], comments: [{ author: 'alice', body: 'Looks fine', createdAt: '2026-10-05T10:00:00.000Z' }] }
     const value: TaskControl = {
       openBoard: async () => void calls.push('open board'),
+      updateBoard: async () => 'Nothing to add.',
       detail: async (id) => ({
         task: { id, title: id === '8' ? 'Search' : 'Store users', body: 'The task text', author: 'me', url: `https://example.test/issues/${id}`, assignees: [], openBlockers: 0, closed: false, createdAt: '', ...(id === '8' ? { state: 'backlog' as const, form: 'idea' as const } : { state: 'review' as const }) },
         workpad: { stage: 'plan', text: 'Notes of the agent' },
@@ -259,7 +260,25 @@ describe('StatusScreen as a control panel', () => {
     await vi.waitFor(() => expect(calls).toContain('comment 3 pull /approve'), { timeout: 5_000 })
   })
 
-  it('hands a task to the agent and opens the board in the browser', async () => {
+  it('shows the board check on k and adds what is missing on Enter', async () => {
+    const { value, calls } = control()
+    value.updateBoard = async () => {
+      calls.push('update board')
+      return 'Added conveyor::backlog.'
+    }
+    const check = { ...snapshot, board: { missing: ['conveyor::backlog'], unused: ['conveyor::plan'], outdated: [{ id: '5', title: 'Old', labels: ['conveyor::plan'] }] } }
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => check} refreshMs={60_000} control={value} />)
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('the board differs from what this version uses: 1 labels missing · 1 tasks with old labels · [k] board check'), { timeout: 5_000 })
+    await settle()
+    stdin.write('k')
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('#5 Old has labels this version does not use'), { timeout: 5_000 })
+    await settle()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(lastFrame()).toContain('Added conveyor::backlog.'), { timeout: 5_000 })
+    expect(calls).toContain('update board')
+  })
+
+  it('hands a task to the harness and opens the board in the browser', async () => {
     const { value, calls } = control()
     const actions: HubAction[] = []
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} onAction={(action) => actions.push(action)} />)
@@ -271,7 +290,7 @@ describe('StatusScreen as a control panel', () => {
       await settle()
       stdin.write(key)
     }
-    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'agent', id: '7' }]), { timeout: 5_000 })
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'harness', id: '7' }]), { timeout: 5_000 })
   })
 })
 

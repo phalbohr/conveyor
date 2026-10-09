@@ -1,5 +1,6 @@
 import {
   boardLabels,
+  CONVEYOR_PREFIXES,
   FORM_LABEL,
   labelsToTask,
   onBoard,
@@ -10,6 +11,7 @@ import {
   STATE_LABEL,
   taskLabels,
   type Board,
+  type BoardInspection,
   type Comment,
   type MergeMethod,
   type PullRequest,
@@ -53,6 +55,13 @@ export class FakeBoard implements Board {
 
   async prepare(stages: string[]) {
     for (const label of boardLabels(stages)) this.labels.add(label.name)
+  }
+
+  async inspect(): Promise<BoardInspection> {
+    const issues = [...this.issues.entries()]
+      .filter(([, issue]) => !issue.closed && issue.labels.some((label) => CONVEYOR_PREFIXES.some((prefix) => label.startsWith(prefix))))
+      .map(([id, issue]) => ({ id, title: issue.title, labels: [...issue.labels] }))
+    return { labels: [...new Set([...this.labels, ...[...this.issues.values()].flatMap((issue) => issue.labels)])], issues }
   }
 
   async boardUrl() {
@@ -241,6 +250,7 @@ export class FakeBoard implements Board {
       body: issue.body,
       author: issue.author,
       url: `https://example.test/issues/${id}`,
+      labels: [...issue.labels],
       assignees: [...issue.assignees],
       openBlockers: [...issue.blockers].filter((blocker) => !this.issue(blocker).closed).length,
       closed: issue.closed,

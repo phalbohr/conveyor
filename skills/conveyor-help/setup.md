@@ -111,7 +111,7 @@ Personal and never committed:
 
 ## 10. The board view
 
-The conveyor creates the `conveyor::*`, `form::*`, and `stage::*` labels on `init` and on every start; the board itself is set up once by a human. Columns: Backlog, Needs input, Queued, In progress, Review, Done. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor` with one option per state), then in a Board view choose `Conveyor` under "Column by". GitLab: Issues → Boards, add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
+`conveyor init` creates the `conveyor::*`, `form::*`, and `stage::*` labels. After an update of the conveyor or a new stage, `conveyor board check` lists what the board lacks and `conveyor board update` adds it (never changes or deletes); offer this when the start log or the control screen reports a board difference. The board itself is set up once by a human. Columns: Backlog, Needs input, Queued, In progress, Review, Done. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor` with one option per state), then in a Board view choose `Conveyor` under "Column by". GitLab: Issues → Boards, add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
 
 ## Finish
 
