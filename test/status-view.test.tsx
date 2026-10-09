@@ -4,6 +4,7 @@ import { FakeBoard } from '../src/board/fake.js'
 import type { StatusSnapshot } from '../src/status.js'
 import { statusLines, usageLines } from '../src/ui/status-lines.js'
 import { StatusScreen, type HubAction, type RunnerControl } from '../src/ui/status-screen.js'
+import type { TaskControl } from '../src/ui/task-lines.js'
 import type { RunnerEvent } from '../src/runner.js'
 import { runCli } from './helpers.js'
 
@@ -16,8 +17,13 @@ const snapshot: StatusSnapshot = {
   settingsSync: { state: 'current' },
   undescribed: [],
   mine: [
-    { id: '3', title: 'Store users', state: 'needs-input', stage: 'plan', attempt: 0, waitingSince: '2026-10-05T09:00:00.000Z', answered: false },
-    { id: '4', title: 'Login', state: 'in-progress', stage: 'implement', attempt: 1, lastError: 'tests are red' },
+    { id: '3', title: 'Store users', url: 'https://example.test/issues/3', state: 'needs-input', stage: 'plan', attempt: 0, waitingSince: '2026-10-05T09:00:00.000Z', answered: false },
+    { id: '4', title: 'Login', url: 'https://example.test/issues/4', state: 'in-progress', stage: 'implement', attempt: 1, lastError: 'tests are red' },
+  ],
+  backlog: [
+    { id: '7', title: 'Dark mode', url: 'https://example.test/issues/7' },
+    { id: '8', title: 'Search', url: 'https://example.test/issues/8', form: 'idea' },
+    { id: '9', title: 'Export', url: 'https://example.test/issues/9', form: 'plan' },
   ],
   team: { unclaimed: 2, claimedByOthers: 1 },
   limits: {
@@ -37,17 +43,19 @@ const snapshot: StatusSnapshot = {
 }
 
 describe('statusLines', () => {
-  it('shows my status columns, the tasks of an open column, and no usage', () => {
-    const closed = statusLines(snapshot)
-    expect(closed.find((line) => line.text.startsWith('my status:'))?.text).toBe('my status: in progress 1/3 · needs input 1/1 · review 0/2')
-    expect(closed.some((line) => line.text.startsWith('my status') && line.text.includes('tokens'))).toBe(false)
-    const open = statusLines(snapshot, undefined, { column: 1, open: true }).map((line) => line.text)
-    const at = open.findIndex((text) => text.startsWith('my status:'))
-    expect(open[at + 1]).toBe('  #3 Store users — plan')
-    const review = statusLines(snapshot, undefined, { column: 2, open: true }).map((line) => line.text)
-    expect(review).toContain('  no tasks review')
-    const selected = statusLines(snapshot, undefined, { column: 2, open: false }).find((line) => line.segments)?.segments?.find((segment) => segment.selected)
+  it('shows the board columns, the tasks of an open column, and no usage', () => {
+    const closed = statusLines(snapshot, undefined, { column: 0, open: false, focus: 'columns', task: 0 })
+    expect(closed.find((line) => line.text.startsWith('board:'))?.text).toBe('board: backlog 1|1|0|1 · in progress 1/3 · needs input 1/1 · review 0/2')
+    expect(closed.some((line) => line.text.includes('tokens'))).toBe(false)
+    const backlog = statusLines(snapshot, undefined, { column: 0, open: true, focus: 'columns', task: 0 }).map((line) => line.text)
+    expect(backlog).toEqual(expect.arrayContaining(['  #7 Dark mode — no form', '  #8 Search — form::idea', '  #9 Export — form::plan']))
+    const open = statusLines(snapshot, undefined, { column: 2, open: true, focus: 'columns', task: 0 }).map((line) => line.text)
+    expect(open[open.findIndex((text) => text.startsWith('board:')) + 1]).toContain('#3 Store users — stage::plan · waits for your answer')
+    expect(statusLines(snapshot, undefined, { column: 3, open: true, focus: 'columns', task: 0 }).map((line) => line.text)).toContain('  no tasks in review')
+    const selected = statusLines(snapshot, undefined, { column: 3, open: false, focus: 'columns', task: 0 }).find((line) => line.segments)?.segments?.find((segment) => segment.selected)
     expect(selected?.text).toBe('review 0/2')
+    const focused = statusLines(snapshot, undefined, { column: 0, open: true, focus: 'tasks', task: 1 })
+    expect(focused.find((line) => line.text.startsWith('›'))?.text).toBe('› #8 Search — form::idea')
   })
 
   it('shows a usage line for every harness in use', () => {
@@ -76,8 +84,9 @@ describe('statusLines', () => {
     const usage = usageLines(snapshot).map((line) => line.text).join('\n')
     expect(usage).toContain('tokens today 12,345 (no daily limit)')
     expect(usage).toContain('claude: 5h 93% (reserve 10%')
-    expect(text).toContain('#3 needs-input')
-    expect(text).toContain('waiting for your answer')
+    expect(text).toContain('needs input:')
+    expect(text).toContain('#3 Store users — stage::plan')
+    expect(text).toContain('waits for your answer')
     expect(text).toContain('attempt 2')
     expect(text).toContain('last error: tests are red')
     expect(text).toContain('Team: 2 unclaimed · 1 claimed by others')
@@ -90,7 +99,7 @@ describe('StatusScreen', () => {
   it('renders the snapshot and reloads on r', async () => {
     const load = vi.fn(async () => snapshot)
     const { lastFrame, stdin } = render(<StatusScreen load={load} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('r')
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2), { timeout: 5_000 })
@@ -98,7 +107,7 @@ describe('StatusScreen', () => {
 
   it('toggles the help with h and scrolls it within the window', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('h')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
@@ -107,7 +116,7 @@ describe('StatusScreen', () => {
     const more = frame.findIndex((line) => line.includes('↑↓ scroll') && line.startsWith('lines'))
     expect(frame[more - 1]?.trim()).toBe('')
     expect(frame[more + 1]?.trim()).toBe('')
-    expect(frame[more + 2]).toContain('status column')
+    expect(frame[more + 2]).toContain('[Esc] back')
     expect((lastFrame() ?? '').split('\n').length).toBeLessThanOrEqual(24)
     for (let step = 0; step < 40 && !lastFrame()?.includes('/fix_from: <stage>'); step++) {
       stdin.write('\u001B[B')
@@ -118,7 +127,7 @@ describe('StatusScreen', () => {
     expect((lastFrame() ?? '').split('\n').length).toBeLessThanOrEqual(24)
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('h')
-    await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
   })
 
   it('shows a board error', async () => {
@@ -150,30 +159,148 @@ function fakeRunner() {
   return runner satisfies RunnerControl
 }
 
+describe('StatusScreen as a control panel', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
+  const DOWN = '\u001B[B'
+  const RIGHT = '\u001B[C'
+  const ESC = '\u001B'
+
+  function control() {
+    const calls: string[] = []
+    const pull = { number: '52', url: 'https://example.test/pull/52', headSha: 'a', state: 'open' as const, checks: 'success' as const, mergeable: 'yes' as const, feedback: [], reviews: [], comments: [{ author: 'alice', body: 'Looks fine', createdAt: '2026-10-05T10:00:00.000Z' }] }
+    const value: TaskControl = {
+      harnesses: ['claude', 'codex'],
+      detail: async (id) => ({
+        task: { id, title: id === '8' ? 'Search' : 'Store users', body: 'The task text', author: 'me', url: `https://example.test/issues/${id}`, assignees: [], openBlockers: 0, closed: false, createdAt: '', ...(id === '8' ? { state: 'backlog' as const, form: 'idea' as const } : { state: 'review' as const }) },
+        workpad: { stage: 'plan', text: 'Notes of the agent' },
+        comments: [{ id: 'c1', author: 'bob', body: 'Which date format?', createdAt: '2026-10-05T09:00:00.000Z', updatedAt: '' }],
+        ...(id === '3' ? { pull } : {}),
+      }),
+      comment: async (id, target, body) => void calls.push(`comment ${id} ${target} ${body}`),
+      toggleIdea: async (id) => {
+        calls.push(`idea ${id}`)
+        return `Removed form::idea from #${id}.`
+      },
+      open: async (url) => void calls.push(`open ${url}`),
+    }
+    return { value, calls }
+  }
+
+  it('moves into the tasks of a column, opens one with its text, workpad, and comments, and goes back', async () => {
+    const { value } = control()
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write(DOWN)
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #7 Dark mode — no form'), { timeout: 5_000 })
+    expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[i] form::idea on/off')
+    await settle()
+    stdin.write(DOWN)
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #8 Search — form::idea'), { timeout: 5_000 })
+    await settle()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(lastFrame()).toContain('The task text'), { timeout: 5_000 })
+    expect(lastFrame()).toContain('Workpad · stage plan')
+    expect(lastFrame()).toContain('Notes of the agent')
+    expect(lastFrame()).toContain('Which date format?')
+    expect(lastFrame()).toContain('form::idea')
+    await settle()
+    stdin.write(ESC)
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #8 Search'), { timeout: 5_000 })
+  })
+
+  it('comments, opens the browser, and toggles form::idea on a backlog task', async () => {
+    const { value, calls } = control()
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write(DOWN)
+    await settle()
+    stdin.write(DOWN)
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #8 Search'), { timeout: 5_000 })
+    await settle()
+    stdin.write('b')
+    await vi.waitFor(() => expect(calls).toContain('open https://example.test/issues/8'), { timeout: 5_000 })
+    await settle()
+    stdin.write('i')
+    await vi.waitFor(() => expect(lastFrame()).toContain('Removed form::idea from #8.'), { timeout: 5_000 })
+    await settle()
+    stdin.write('c')
+    await vi.waitFor(() => expect(lastFrame()).toContain('Comment on #8'), { timeout: 5_000 })
+    await settle()
+    stdin.write('Needs a design')
+    await settle()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(calls).toContain('comment 8 issue Needs a design'), { timeout: 5_000 })
+  })
+
+  it('switches an opened review task to its pull request and comments there', async () => {
+    const { value, calls } = control()
+    const review = { ...snapshot, mine: [...snapshot.mine, { id: '3', title: 'Store users', url: 'https://example.test/issues/3', state: 'review' as const, attempt: 0, pullRequest: 'https://example.test/pull/52' }] }
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => review} refreshMs={60_000} control={value} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    for (const key of [RIGHT, RIGHT, RIGHT, DOWN, '\r']) {
+      await settle()
+      stdin.write(key)
+    }
+    await vi.waitFor(() => expect(lastFrame()).toContain('[p] pull request'), { timeout: 5_000 })
+    await settle()
+    stdin.write('p')
+    await vi.waitFor(() => expect(lastFrame()).toContain('Looks fine'), { timeout: 5_000 })
+    await settle()
+    stdin.write('b')
+    await vi.waitFor(() => expect(calls).toContain('open https://example.test/pull/52'), { timeout: 5_000 })
+    await settle()
+    stdin.write('c')
+    await settle()
+    stdin.write('/approve')
+    await settle()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(calls).toContain('comment 3 pull /approve'), { timeout: 5_000 })
+  })
+
+  it('hands a task to the chosen agent', async () => {
+    const { value } = control()
+    const actions: HubAction[] = []
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
+    for (const key of [DOWN, 'h']) {
+      await settle()
+      stdin.write(key)
+    }
+    await vi.waitFor(() => expect(lastFrame()).toContain('Open #7 with an agent'), { timeout: 5_000 })
+    await settle()
+    stdin.write(RIGHT)
+    await settle()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'agent', id: '7', harness: 'codex' }]), { timeout: 5_000 })
+  })
+})
+
 describe('StatusScreen as the hub', () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
 
   it('moves between status columns with the arrows and lists their tasks with Enter', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     await settle()
     stdin.write('\u001B[C')
     await settle()
     stdin.write('\r')
-    await vi.waitFor(() => expect(lastFrame()).toContain('#3 Store users — plan'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('#4 Login — stage::implement'), { timeout: 5_000 })
     stdin.write('\r')
-    await vi.waitFor(() => expect(lastFrame()).not.toContain('#3 Store users — plan'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).not.toContain('#4 Login — stage::implement'), { timeout: 5_000 })
   })
 
   it('shows usage on u and goes back', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     await settle()
     stdin.write('u')
     await vi.waitFor(() => expect(lastFrame()).toContain('tokens today 12,345'), { timeout: 5_000 })
-    expect(lastFrame()).not.toContain('my status:')
+    expect(lastFrame()).not.toContain('board:')
     stdin.write('u')
-    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
   })
 
   it('starts and stops the conveyor with s and shows its log on o', async () => {
@@ -189,10 +316,10 @@ describe('StatusScreen as the hub', () => {
     stdin.write('o')
     await vi.waitFor(() => expect(lastFrame()).toContain('claimed task 7: Login'), { timeout: 5_000 })
     expect(lastFrame()).toContain('full log ~/.conveyor/logs/acme-app.log')
-    expect(lastFrame()).not.toContain('my status:')
+    expect(lastFrame()).not.toContain('board:')
     await settle()
     stdin.write('o')
-    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     await settle()
     stdin.write('s')
     await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })
@@ -200,7 +327,7 @@ describe('StatusScreen as the hub', () => {
 
   it('wraps the second column of the help inside that column', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     await settle()
     stdin.write('h')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
@@ -217,26 +344,26 @@ describe('StatusScreen as the hub', () => {
 
   it('closes help, usage, and log with Esc and names the way back', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     for (const [key, title] of [['h', 'conveyor help · [h] or Esc back'], ['u', 'Usage · [u] or Esc back'], ['o', '[o] or Esc back']] as const) {
       await settle()
       stdin.write(key)
       await vi.waitFor(() => expect(lastFrame()).toContain(title), { timeout: 5_000 })
       const lines = lastFrame()?.split('\n') ?? []
-      const footer = lines.findIndex((line) => line.includes('status column'))
+      const footer = lines.findIndex((line) => line.includes('[Esc] back · [q] quit'))
       expect(lines[footer - 1]?.trim()).toBe('')
       await settle()
       stdin.write('\u001B')
-      await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+      await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     }
     const lines = lastFrame()?.split('\n') ?? []
-    expect(lines[lines.findIndex((line) => line.includes('status column')) - 1]?.trim()).toBe('')
+    expect(lines[lines.findIndex((line) => line.includes('[←→] column')) - 1]?.trim()).toBe('')
   })
 
   it('opens the settings with e', async () => {
     const actions: HubAction[] = []
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     await settle()
     stdin.write('e')
     await vi.waitFor(() => expect(actions).toEqual([{ kind: 'settings' }]), { timeout: 5_000 })
@@ -260,7 +387,7 @@ describe('StatusScreen as the hub', () => {
   it('asks for the task number of attach and release', async () => {
     const actions: HubAction[] = []
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('board:'), { timeout: 5_000 })
     await settle()
     stdin.write('a')
     await vi.waitFor(() => expect(lastFrame()).toContain('Answer the questions of the task with issue number'), { timeout: 5_000 })
@@ -296,7 +423,7 @@ describe('conveyor without arguments', () => {
   it('prints a text summary without a terminal', async () => {
     const init = await runCli(['init', '--provider', 'github', '--project', 'acme/app'])
     const result = await runCli([], { cwd: init.context.cwd, home: init.context.home, board: new FakeBoard('me') })
-    expect(result.stdout).toContain('My tasks')
+    expect(result.stdout).toContain('backlog:')
     expect(result.stdout).toContain('none')
   })
 })

@@ -9,6 +9,7 @@ export type Task = {
   title: string
   body: string
   author: string
+  url: string
   state?: TaskState
   form?: TaskForm
   stage?: string
@@ -66,6 +67,7 @@ export interface Board {
   pullRequest(id: string): Promise<PullRequest | undefined>
   mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }>
   closePullRequest(id: string): Promise<void>
+  commentPullRequest(id: string, body: string): Promise<void>
 }
 
 export type TaskLabels = { state?: TaskState; form?: TaskForm }
@@ -101,7 +103,7 @@ export function taskLabels(labels: TaskLabels): string[] {
 }
 
 export function onBoard(task: Task) {
-  return task.form !== undefined || (task.state !== undefined && task.state !== 'backlog')
+  return task.form !== undefined || task.state !== undefined
 }
 
 export function labelsToTask(labels: string[]): Pick<Task, 'state' | 'form' | 'stage' | 'owner' | 'priority'> {

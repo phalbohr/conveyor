@@ -108,6 +108,7 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
 
     it('reports the author of a task', async () => {
       const t = await task({ form: 'plan' })
+      expect((await board.getTask(t.id))?.url).toMatch(new RegExp(`${t.id}$`))
       expect((await board.getTask(t.id))?.author).toBe(await board.user())
     })
 
@@ -155,6 +156,10 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
 
       await eventually(async () => {
         expect((await board.pullRequest(t.id))?.mergeable).toBe('yes')
+      })
+      await board.commentPullRequest(t.id, 'contract comment on the pull request')
+      await eventually(async () => {
+        expect((await board.pullRequest(t.id))?.comments.map((comment) => comment.body)).toContain('contract comment on the pull request')
       })
       expect(opened.headSha).toMatch(/\w{6,}/)
       expect(await board.mergePullRequest(t.id, 'squash', 'f'.repeat(40))).toMatchObject({ ok: false })
