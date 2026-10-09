@@ -3,6 +3,7 @@ import { Box, Text, render, useApp, useInput } from 'ink'
 import { useState } from 'react'
 import type { Catalog } from '../models.js'
 import type { Field, SettingsDocument } from '../settings-editor.js'
+import { clearOnShrink } from './terminal.js'
 
 const WINDOW = 18
 const INHERIT = '(inherit)'
@@ -239,6 +240,8 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
 }
 
 export async function showSettings(doc: SettingsDocument, refreshModels?: () => Promise<Record<string, Catalog>>) {
+  const restore = clearOnShrink()
   const app = render(<SettingsScreen doc={doc} {...(refreshModels ? { refreshModels } : {})} />)
   await app.waitUntilExit()
+  restore()
 }

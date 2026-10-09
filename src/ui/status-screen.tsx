@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
 import { STATUS_COLUMNS, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
+import { clearOnShrink } from './terminal.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 const EVENT_COLORS: Record<RunnerEvent['level'], string> = { info: 'white', warning: 'yellow', error: 'red' }
@@ -177,6 +178,7 @@ export async function showStatus(
   options: { runner?: RunnerControl; notice?: string; refreshMs?: number } = {},
 ): Promise<HubAction> {
   let next: HubAction = { kind: 'quit' }
+  const restore = clearOnShrink()
   const app = render(
     <StatusScreen
       load={load}
@@ -187,5 +189,6 @@ export async function showStatus(
     />,
   )
   await app.waitUntilExit()
+  restore()
   return next
 }

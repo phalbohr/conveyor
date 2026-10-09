@@ -2,6 +2,7 @@ import { Select, TextInput } from '@inkjs/ui'
 import { Box, Text, render, useApp } from 'ink'
 import { useState } from 'react'
 import type { Board, Target } from '../init.js'
+import { clearOnShrink } from './terminal.js'
 
 export type InitAnswers = { target: Target; board?: Board }
 
@@ -87,7 +88,9 @@ export function InitPrompt({ askTarget, detected, onDone }: Props) {
 
 export async function promptInit(props: Omit<Props, 'onDone'>): Promise<InitAnswers | undefined> {
   let answers: InitAnswers | undefined
+  const restore = clearOnShrink()
   const app = render(<InitPrompt {...props} onDone={(result) => (answers = result)} />)
   await app.waitUntilExit()
+  restore()
   return answers
 }
