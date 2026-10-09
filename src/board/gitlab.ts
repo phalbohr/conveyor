@@ -23,6 +23,7 @@ type GraphIssue = {
   iid: string
   title: string
   description: string | null
+  webUrl: string
   author: { username: string }
   state: 'opened' | 'closed'
   createdAt: string
@@ -44,7 +45,7 @@ type MergeRequest = {
 
 type Call = { code: number; stdout: string; stderr: string; status: number }
 
-const ISSUE_FIELDS = 'iid title description author { username } state createdAt blockedByCount labels { nodes { title } } assignees { nodes { username } }'
+const ISSUE_FIELDS = 'iid title description webUrl author { username } state createdAt blockedByCount labels { nodes { title } } assignees { nodes { username } }'
 const BLOCKED_BY = /^Blocked by: (.+)$/m
 const LOCK_PREFIX = 'conveyor-lock/'
 const DEVELOPER = 30
@@ -240,6 +241,12 @@ export class GitLabBoard implements Board {
     return result.code === 0 ? { ok: true } : { ok: false, error: (result.stderr || result.stdout).trim() || `merge failed with HTTP ${result.status}` }
   }
 
+  async commentPullRequest(id: string, body: string) {
+    const pull = await this.pullRequest(id)
+    if (!pull) throw new Error(`task ${id} has no merge request`)
+    await this.json(['-X', 'POST', `${this.api}/merge_requests/${pull.number}/notes`, '-f', `body=${body}`])
+  }
+
   async closePullRequest(id: string) {
     const pull = await this.pullRequest(id)
     if (pull?.state === 'open') await this.json(['-X', 'PUT', `${this.api}/merge_requests/${pull.number}`, '-f', 'state_event=close'])
@@ -259,6 +266,7 @@ export class GitLabBoard implements Board {
       title: issue.title,
       body: (issue.description ?? '').replace(BLOCKED_BY, '').trim(),
       author: issue.author.username,
+      url: issue.webUrl,
       assignees: issue.assignees.nodes.map((node) => node.username),
       openBlockers: (issue.blockedByCount ?? 0) + fallbackBlockers(issue.description).filter((iid) => open.has(iid)).length,
       closed: issue.state === 'closed',

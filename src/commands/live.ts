@@ -62,6 +62,39 @@ export async function attachCommand(context: Context, id: string): Promise<numbe
   return 0
 }
 
+export async function agentCommand(context: Context, id: string, harness: string): Promise<number> {
+  const prepared = prepare(context)
+  if (!prepared) return 1
+  const { config, settings, board } = prepared
+  const task = await board.getTask(id)
+  if (!task) return fail(context, `task ${id} not found`)
+  const trust = new Trust(board)
+  if (!(await trust.trusted(task.author))) return fail(context, `task ${id} was created by @${task.author}, who has no write access to the repository`)
+  const comments = await trust.only(await board.listComments(id))
+  const pad = findWorkpad(comments)
+  const pull = await board.pullRequest(id)
+  const stage = config.stages.find((entry) => entry.harness === harness) ?? { ...stageNamed(config, 'plan'), harness, model: '' }
+  const text = await session(context, settings, config, 'task.md', stage, {
+    project: config.board.project,
+    issue: { id: task.id, title: task.title, body: task.body || '(empty)' },
+    labels: [task.state ? `conveyor::${task.state}` : '', task.form ? `form::${task.form}` : '', task.stage ? `stage::${task.stage}` : ''].filter(Boolean).join(', ') || '(none)',
+    workpad: pad ? pad.text.trim() || '(empty)' : '(none)',
+    comments:
+      comments
+        .filter((comment) => comment.id !== pad?.id)
+        .map((comment) => `@${comment.author} (${comment.createdAt}):\n${commentText(comment).trim()}`)
+        .join('\n\n') || '(none)',
+    pull: pull ? `${pull.url} · ${pull.state} · checks ${pull.checks}` : '(none)',
+  })
+  if (!text.ok) {
+    context.stdout(`The session with ${harness} on task ${id} ended without a comment.\n`)
+    return 0
+  }
+  await board.addComment(id, `Notes from a live session with ${harness}:\n\n${text.value.trim()}`)
+  context.stdout(`Posted the notes of the session on task ${id}.\n`)
+  return 0
+}
+
 async function session(
   context: Context,
   settings: string,
@@ -85,8 +118,8 @@ async function session(
 
     const args =
       stage.harness === 'codex'
-        ? ['-m', stage.model, '-c', `model_reasoning_effort="${stage.effort}"`, '--add-dir', dir, '--', prompt.text]
-        : ['--model', stage.model, '--effort', stage.effort, '--add-dir', dir, '--', prompt.text]
+        ? [...(stage.model ? ['-m', stage.model] : []), '-c', `model_reasoning_effort="${stage.effort}"`, '--add-dir', dir, '--', prompt.text]
+        : [...(stage.model ? ['--model', stage.model] : []), '--effort', stage.effort, '--add-dir', dir, '--', prompt.text]
     await context.interact(stage.harness, args, { cwd: context.cwd, env: { ...childEnv(process.env), CONVEYOR_RESULT: result } })
 
     if (!existsSync(result) || !readFileSync(result, 'utf8').trim()) return { ok: false, error: 'the session ended with no result' }

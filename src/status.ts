@@ -12,6 +12,7 @@ import { QuotaStore, UsageLedger } from './usage.js'
 export type MyTask = {
   id: string
   title: string
+  url: string
   state: NonNullable<Task['state']>
   priority?: number
   stage?: string
@@ -22,6 +23,8 @@ export type MyTask = {
   answered?: boolean
   pullRequest?: string
 }
+
+export type BacklogTask = { id: string; title: string; url: string; form?: NonNullable<Task['form']>; priority?: number }
 
 type Limit = { used: number; limit: number }
 
@@ -34,6 +37,7 @@ export type StatusSnapshot = {
   settingsSync: SettingsSync
   undescribed: string[]
   mine: MyTask[]
+  backlog: BacklogTask[]
   team: { unclaimed: number; claimedByOthers: number }
   limits: {
     running: Limit
@@ -58,7 +62,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
   for (const task of tasks.filter((candidate) => candidate.owner === me && candidate.state)) {
     const comments = await board.listComments(task.id)
     const state = findWorkpad(comments)?.state
-    const entry: MyTask = { id: task.id, title: task.title, state: task.state as MyTask['state'], attempt: state?.attempt ?? 0 }
+    const entry: MyTask = { id: task.id, title: task.title, url: task.url, state: task.state as MyTask['state'], attempt: state?.attempt ?? 0 }
     if (task.priority !== undefined) entry.priority = task.priority
     const stage = state?.stage ?? state?.waiting?.stage
     if (stage) entry.stage = stage
@@ -73,6 +77,10 @@ export async function collectStatus(options: { board: Board; config: Config; set
     mine.push(entry)
   }
   mine.sort((a, b) => Number(a.id) - Number(b.id))
+  const backlog = tasks
+    .filter((task) => !task.owner && (task.state === 'backlog' || (task.state === undefined && task.form !== undefined)))
+    .map((task): BacklogTask => ({ id: task.id, title: task.title, url: task.url, ...(task.form ? { form: task.form } : {}), ...(task.priority !== undefined ? { priority: task.priority } : {}) }))
+    .sort((a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) || Number(a.id) - Number(b.id))
 
   const pid = runningPid(home, project)
   const fetch = Date.now() - lastFetch >= FETCH_EVERY
@@ -89,6 +97,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     settingsSync,
     undescribed: undescribedStages(options.settings, config),
     mine,
+    backlog,
     team: {
       unclaimed: tasks.filter((task) => !task.owner && task.form !== undefined).length,
       claimedByOthers: tasks.filter((task) => task.owner && task.owner !== me).length,

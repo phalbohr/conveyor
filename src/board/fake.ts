@@ -182,6 +182,12 @@ export class FakeBoard implements Board {
     return { ok: true }
   }
 
+  async commentPullRequest(id: string, body: string) {
+    const pull = this.pulls.get(id)
+    if (!pull) throw new Error(`task ${id} has no pull request`)
+    pull.comments.push({ author: this.login, body, createdAt: this.now().toISOString() })
+  }
+
   async closePullRequest(id: string) {
     const pull = this.pulls.get(id)
     if (pull) pull.state = 'closed'
@@ -219,6 +225,7 @@ export class FakeBoard implements Board {
       title: issue.title,
       body: issue.body,
       author: issue.author,
+      url: `https://example.test/issues/${id}`,
       assignees: [...issue.assignees],
       openBlockers: [...issue.blockers].filter((blocker) => !this.issue(blocker).closed).length,
       closed: issue.closed,

@@ -25,6 +25,7 @@ type Issue = {
   id: number
   title: string
   body: string | null
+  html_url: string
   user: { login: string }
   state: 'open' | 'closed'
   labels: { name: string }[]
@@ -208,6 +209,12 @@ export class GitHubBoard implements Board {
     return result.code === 0 ? { ok: true } : { ok: false, error: result.stderr.trim() || `gh pr merge exited with code ${result.code}` }
   }
 
+  async commentPullRequest(id: string, body: string) {
+    const pull = await this.pullRequest(id)
+    if (!pull) throw new Error(`task ${id} has no pull request`)
+    await this.gh(['pr', 'comment', pull.number, '-R', this.project, '--body', body])
+  }
+
   async closePullRequest(id: string) {
     const pull = await this.pullRequest(id)
     if (pull?.state === 'open') await this.gh(['pr', 'close', pull.number, '-R', this.project])
@@ -297,6 +304,7 @@ function toTask(issue: Issue): Task {
     title: issue.title,
     body: issue.body ?? '',
     author: issue.user.login,
+    url: issue.html_url,
     assignees: issue.assignees.map(({ login }) => login),
     openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
     closed: issue.state === 'closed',

@@ -1,9 +1,10 @@
 import { writeFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
-import type { Interact } from '../src/cli.js'
+import type { Context, Interact } from '../src/cli.js'
 import { renderWorkpad } from '../src/engine/workpad.js'
 import { runCli } from './helpers.js'
+import { agentCommand } from '../src/commands/live.js'
 
 type Session = { command: string; args: string[]; env: NodeJS.ProcessEnv }
 
@@ -94,6 +95,35 @@ describe('conveyor new', () => {
     const { interact } = agent('---\ntitle: T\nform: idea\n---\nBody\n')
     const result = await runCli(['new', '--json'], { ...(await project()), board, interact })
     expect(JSON.parse(result.stdout)).toEqual({ id: '1', title: 'T', form: 'idea' })
+  })
+})
+
+describe('agent session on a task', () => {
+  it('gives the agent the task, workpad, and comments and posts its notes', async () => {
+    const board = new FakeBoard('me')
+    const task = await board.createTask('Search', 'Find tasks by text', { state: 'backlog', form: 'idea' })
+    await board.addComment(task.id, 'Should it search comments too?')
+    const paths = await project()
+    const { interact, sessions } = agent('Search titles and bodies only.\n')
+    let output = ''
+    const context: Context = {
+      ...paths,
+      stdout: (text) => (output += text),
+      stderr: (text) => (output += text),
+      interactive: true,
+      interact,
+      run: async () => ({ code: 0, stdout: '', stderr: '' }),
+      boardFor: () => board,
+    }
+
+    expect(await agentCommand(context, task.id, 'codex')).toBe(0)
+
+    expect(sessions[0]?.command).toBe('codex')
+    expect(sessions[0]?.args.at(-1)).toContain('Find tasks by text')
+    expect(sessions[0]?.args.at(-1)).toContain('Should it search comments too?')
+    expect(sessions[0]?.args.at(-1)).toContain('form::idea')
+    expect((await board.listComments(task.id)).at(-1)?.body).toContain('Search titles and bodies only.')
+    expect(output).toContain('Posted the notes')
   })
 })
 

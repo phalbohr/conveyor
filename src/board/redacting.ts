@@ -99,6 +99,10 @@ export class RedactingBoard implements Board {
     return this.board.mergePullRequest(id, method, sha)
   }
 
+  commentPullRequest(id: string, body: string) {
+    return this.board.commentPullRequest(id, this.clean(body))
+  }
+
   closePullRequest(id: string) {
     return this.board.closePullRequest(id)
   }

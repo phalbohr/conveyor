@@ -6,7 +6,9 @@ import { SettingsDocument } from '../settings-editor.js'
 import { collectStatus } from '../status.js'
 import { showSettings } from '../ui/settings-screen.js'
 import { showStatus } from '../ui/status-screen.js'
-import { attachCommand, newCommand } from './live.js'
+import type { TaskControl } from '../ui/task-lines.js'
+import { commentText, findWorkpad } from '../engine/workpad.js'
+import { agentCommand, attachCommand, newCommand } from './live.js'
 import { modelsFile } from './models.js'
 import { releaseCommand } from './run.js'
 
@@ -17,6 +19,39 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     if (!current.ok) throw new Error(current.errors.join('; '))
     return collectStatus({ board: setup.board, config: current.config, settings: setup.settings, home: context.home })
   }
+  const board = setup.board
+  const control: TaskControl = {
+    harnesses: ['claude', 'codex'],
+    async detail(id) {
+      const task = await board.getTask(id)
+      if (!task) throw new Error(`task ${id} not found`)
+      const comments = await board.listComments(id)
+      const pad = findWorkpad(comments)
+      const pull = await board.pullRequest(id)
+      return {
+        task,
+        ...(pad ? { workpad: { text: pad.text, ...(pad.state.stage ? { stage: pad.state.stage } : {}) } } : {}),
+        comments: comments.filter((comment) => comment.id !== pad?.id).map((comment) => ({ ...comment, body: commentText(comment) })),
+        ...(pull ? { pull } : {}),
+      }
+    },
+    async comment(id, target, body) {
+      if (target === 'pull') await board.commentPullRequest(id, body)
+      else await board.addComment(id, body)
+    },
+    async toggleIdea(id) {
+      const task = await board.getTask(id)
+      if (!task) throw new Error(`task ${id} not found`)
+      if (task.form && task.form !== 'idea') return `#${id} has form::${task.form}; change it on the board.`
+      await board.setForm(id, task.form ? undefined : 'idea')
+      if (!task.state) await board.setState(id, 'backlog')
+      return task.form ? `Removed form::idea from #${id}.` : `Set form::idea on #${id}: the conveyor may take it.`
+    },
+    async open(url) {
+      const opened = await context.run(process.platform === 'darwin' ? 'open' : 'xdg-open', [url])
+      if (opened.code !== 0) throw new Error(`could not open ${url}`)
+    },
+  }
   let notice: string | undefined
   if (options.start) {
     const started = await runner.start()
@@ -24,7 +59,7 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
   }
 
   for (;;) {
-    const action = await showStatus(load, { runner, ...(notice ? { notice } : {}) })
+    const action = await showStatus(load, { runner, control, ...(notice ? { notice } : {}) })
     notice = undefined
     if (action.kind === 'quit') {
       if (runner.running) context.stdout('Stopping the conveyor: running stages are aborted, tasks resume on the next start.\n')
@@ -40,6 +75,7 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     if (action.kind === 'new') await newCommand(captured, false)
     if (action.kind === 'attach') await attachCommand(captured, action.id)
     if (action.kind === 'release') await releaseCommand(captured, action.id, false)
+    if (action.kind === 'agent') await agentCommand(captured, action.id, action.harness)
     notice = output.trim() || undefined
   }
 }
