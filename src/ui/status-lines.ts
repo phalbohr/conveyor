@@ -121,7 +121,7 @@ export function helpLines(): Line[] {
     { text: '  <number>                  the issue number on the board: issues/51 → `conveyor attach 51`' },
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },
-    { text: '  this screen               c start/stop the conveyor · n new · a attach · l release · s settings · r refresh · h help · q quit' },
+    { text: '  this screen               s start/stop the conveyor · ←→ Enter status columns · u usage · o log · n new · a attach · l release · e settings · r refresh · h help · q quit' },
     { text: '  settings                  `conveyor settings`: every row shows what it does; ←→ switch options; s saves after validation' },
     { text: '  scripting                 `conveyor config list|get|set`, `conveyor config stage add|remove|move`' },
     { text: '  agent help                `conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)' },
