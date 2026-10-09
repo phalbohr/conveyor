@@ -335,7 +335,7 @@ describe('StatusScreen as the hub', () => {
     }
     const lines = lastFrame()?.split('\n') ?? []
     const row = lines.findIndex((line) => line.startsWith('  this screen'))
-    expect(lines[row]?.indexOf('s start/stop')).toBe(28)
+    expect(lines[row]?.indexOf('b board in the browser')).toBe(28)
     expect(lines[row + 1]?.slice(0, 28).trim()).toBe('')
     expect(lines[row + 1]?.trim().length).toBeGreaterThan(0)
   })
