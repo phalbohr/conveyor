@@ -3,7 +3,7 @@ import { undescribedNotice } from '../stage-catalog.js'
 import { boardCheckLines, needsAttention, type BoardCheck } from '../board-check.js'
 import type { StatusSnapshot } from '../status.js'
 
-export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean }[]; cells?: [string, string] }
+export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean }[]; cells?: [string, string]; cellWidth?: number; selected?: boolean }
 export const CELL_WIDTH = 28
 
 const row = (left: string, right: string): Line => ({ text: `  ${left.padEnd(CELL_WIDTH - 2)}${right}`, cells: [`  ${left}`, right] })
@@ -67,9 +67,12 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   if (view?.open) {
     const tasks = columnTasks(status, view.column)
     if (tasks.length === 0) lines.push({ text: `  no tasks in ${STATUS_COLUMNS[view.column]}`, tone: 'muted' })
+    const width = Math.max(...tasks.map((task) => task.id.length)) + 4
     tasks.forEach((task, index) => {
-      const text = `${view.focus === 'tasks' && view.task === index ? '› ' : '  '}#${task.id} ${task.title}${task.detail ? ` — ${task.detail}` : ''}`
-      lines.push({ text, ...(view.focus === 'tasks' && view.task === index ? { segments: [{ text, selected: true }] } : {}), ...(task.tone ? { tone: task.tone } : {}) })
+      const selected = view.focus === 'tasks' && view.task === index
+      const left = `${selected ? '› ' : '  '}#${task.id}`
+      const right = `${task.title}${task.detail ? ` — ${task.detail}` : ''}`
+      lines.push({ text: `${left.padEnd(width)}${right}`, cells: [left, right], cellWidth: width, ...(selected ? { selected } : {}), ...(task.tone ? { tone: task.tone } : {}) })
     })
   }
   const blocked = [
