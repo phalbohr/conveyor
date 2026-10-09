@@ -55,6 +55,8 @@ Common split: strong models for `story`, `plan`, and `review`; a fast model for 
 
 ## 5. What each stage does — `stages/<name>.md`
 
+Large stories can merge in parts: the default `stages/plan.md` lets the plan stage split the work into ordered parts (`parts` in its result), one pull request each, merged one after another. Mention this when the user describes large stories; to turn it off, remove that line from `stages/plan.md`.
+
 Go through every stage in the chain. For each, read its file and tell the user its state: described, a stub, or missing (`conveyor config list` marks stages without a description with ⚠). Offer:
 
 - **Keep** the current description;

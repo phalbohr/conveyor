@@ -248,6 +248,16 @@ A comment without the marker after an agent question is the answer. The task goe
 
 GitHub Projects: with `board.github_project: <number>` the CLI adds every task to the project and mirrors its state to the single-select field `Conveyor` (created automatically with one option per state). The standard `Status` field stays untouched. Choose `Conveyor` as the column field of a board view.
 
+## Parts
+
+The stage result has `parts`: the plan stage returns the ordered titles of the parts when the work needs several pull requests that merge one after another, otherwise null. The workpad keeps `parts` and the index `part` of the current one.
+
+- The stages after `plan` work on the current part; the prompt lists all parts, marks the merged ones, and names the current one.
+- The pull request title is `<task title> (part k/n: <part title>)`; the card has the label `part::k/n`.
+- After part k merges and its post-merge stages run, the conveyor resets the task branch to the updated base branch, moves the task back to the first stage after `plan` for part k+1, and leaves it in `conveyor::in-progress`. Every part has its own review and approvals.
+- A rerun of `plan` (for example `/fix_from: plan`) keeps the merged parts and replaces the remaining ones with the parts it returns.
+- After the last part the task is done and the `part::` label is removed.
+
 ## Task claim
 
 1. The CLI pushes a new lock branch `conveyor-lock/<issue>`. The server rejects the push if the branch exists. This operation is atomic.

@@ -26,6 +26,7 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
     .map((task) => {
       const details: string[] = []
       if (task.stage) details.push(`stage::${task.stage}`)
+      if (task.part) details.push(`part ${task.part}`)
       if (task.state === 'queued') details.push('answered, waits for a free slot')
       if (task.attempt > 0) details.push(`attempt ${task.attempt + 1}`)
       if (task.retryAt) details.push(`retry ${time(task.retryAt)}`)
@@ -131,6 +132,7 @@ export function helpLines(): Line[] {
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),
     row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h agent · i form::idea on/off (backlog) · Esc back'),
+    row('part::2/3', 'the plan split the story into parts, one pull request each; the story is done after the last part merges'),
     row('an opened task', 'p switches between the issue and its pull request · c comments where you are · ↑↓ scroll'),
     { text: '' },
     { text: 'Your actions', tone: 'title' },

@@ -22,6 +22,7 @@ export type MyTask = {
   waitingSince?: string
   answered?: boolean
   pullRequest?: string
+  part?: string
 }
 
 export type BacklogTask = { id: string; title: string; url: string; form?: NonNullable<Task['form']>; priority?: number }
@@ -66,6 +67,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     if (task.priority !== undefined) entry.priority = task.priority
     const stage = state?.stage ?? state?.waiting?.stage
     if (stage) entry.stage = stage
+    if (state?.parts) entry.part = `${(state.part ?? 0) + 1}/${state.parts.length}`
     if (state?.retryAt) entry.retryAt = state.retryAt
     if (state?.lastError) entry.lastError = state.lastError
     if (state?.waiting) entry.waitingSince = state.waiting.since

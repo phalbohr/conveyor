@@ -98,6 +98,7 @@ type StageContext = {
   review?: string | undefined
   reviewMode?: 'fix' | 'rework' | undefined
   merge?: string | undefined
+  parts?: { list: string[]; current: number } | undefined
 }
 
 const PICKUP: Record<Config['pickup_from'], TaskForm[]> = {
@@ -368,7 +369,12 @@ export class Engine {
       delete state.review
       delete state.reviewMode
       const task = (await board.getTask(id)) ?? initial
-      await board.openPullRequest(id, task.title, `Conveyor task #${id}.\n\n${chain.summary}`)
+      const part = state.parts ? { index: (state.part ?? 0) + 1, total: state.parts.length, title: state.parts[state.part ?? 0] ?? '' } : undefined
+      await board.openPullRequest(
+        id,
+        part ? `${task.title} (part ${part.index}/${part.total}: ${part.title})` : task.title,
+        `Conveyor task #${id}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
+      )
       if (chain.merge === 'review') {
         delete state.stage
         state.waiting = { kind: 'review', since: new Date().toISOString() }
@@ -404,10 +410,23 @@ export class Engine {
       return
     }
 
+    if (state.parts && (state.part ?? 0) < state.parts.length - 1) {
+      for (const key of ['landing', 'mergeError', 'landAttempts', 'review', 'reviewMode', 'lastError'] as const) delete state[key]
+      state.attempt = 0
+      state.part = (state.part ?? 0) + 1
+      state.stage = names[names.indexOf('plan') + 1] ?? 'merge'
+      await workspaces.reset(id)
+      await board.setPart(id, `${state.part + 1}/${state.parts.length}`)
+      await run.save()
+      this.log(`task ${id}: part ${state.part} of ${state.parts.length} merged, part ${state.part + 1} starts`)
+      return
+    }
+
     for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError'] as const) delete state[key]
     state.attempt = 0
     await board.setState(id, 'done')
     await board.setStage(id, undefined)
+    if (state.parts) await board.setPart(id, undefined)
     await run.save()
     if (config.close_on_done) await board.closeTask(id)
     await board.release(id)
@@ -456,6 +475,7 @@ export class Engine {
           review: state.review,
           reviewMode: state.reviewMode,
           merge: options.merge,
+          parts: state.parts && (config.stages.findIndex((entry) => entry.name === stage.name) > config.stages.findIndex((entry) => entry.name === 'plan') || (stage.name === 'plan' && (state.part ?? 0) > 0)) ? { list: state.parts, current: state.part ?? 0 } : undefined,
         })
       } finally {
         clearInterval(heartbeat)
@@ -482,6 +502,7 @@ export class Engine {
       }
       if (result.outcome === 'done' && gate?.mode === 'interactive' && options.approvalStage !== stage.name) result = { ...result, outcome: 'approval' }
       if (result.outcome === 'approval' && gate?.mode === 'autonomous') result = { ...result, outcome: 'done' }
+      if (stage.name === 'plan' && result.outcome === 'done') await this.takeParts(run, result.parts)
       if (result.artifact && result.outcome !== 'failed') {
         const kind = GATES[stage.name] || ['idea', 'story'].includes(result.artifact.kind) ? stage.name : result.artifact.kind
         await run.artifacts.store(task, kind, result.artifact.content, comments)
@@ -700,6 +721,19 @@ export class Engine {
     return { kind: pull?.state === 'open' && approvers.length >= config.review.approvals ? 'merge' : 'wait', pull, approvers, feedback }
   }
 
+  private async takeParts(run: TaskRun, parts: string[] | undefined) {
+    const { state } = run
+    const merged = state.parts?.slice(0, state.part ?? 0) ?? []
+    if (parts) {
+      state.parts = [...merged, ...parts]
+      state.part = merged.length
+    } else if (merged.length === 0) {
+      delete state.parts
+      delete state.part
+    }
+    await this.options.board.setPart(run.id, state.parts ? `${(state.part ?? 0) + 1}/${state.parts.length}` : undefined)
+  }
+
   private async reviewAgain(id: string, sha: string) {
     const { board } = this.options
     const { pad } = await this.workpad(id)
@@ -771,6 +805,7 @@ export class Engine {
       ...(context.review ? { review: context.review, reviewMode: context.reviewMode ?? 'rework' } : {}),
       ...(context.merge ? { merge: context.merge } : {}),
       ...(stage.name === 'merge' && config.transitions.merge === 'smart' ? { mergeCriteria: this.read('smart', 'merge.md') } : {}),
+      ...(context.parts ? { parts: context.parts } : {}),
     })
 
     const controller = new AbortController()

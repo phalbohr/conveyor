@@ -4,6 +4,7 @@ import {
   labelsToTask,
   onBoard,
   OWNER_LABEL,
+  PART_LABEL,
   PRIORITY_LABEL,
   STAGE_LABEL,
   STATE_LABEL,
@@ -36,6 +37,7 @@ export class FakeBoard implements Board {
   private readonly pulls = new Map<string, PullRequest>()
   readonly merges: { id: string; method: MergeMethod }[] = []
   readonly outsiders = new Set<string>()
+  readonly pullTitles: string[] = []
   readonly labels = new Set<string>()
   mergeError: string | undefined
   private nextId = 1
@@ -96,6 +98,10 @@ export class FakeBoard implements Board {
     this.replaceLabel(id, STAGE_LABEL, stage ? STAGE_LABEL + stage : undefined)
   }
 
+  async setPart(id: string, part: string | undefined) {
+    this.replaceLabel(id, PART_LABEL, part ? PART_LABEL + part : undefined)
+  }
+
   async setOwner(id: string, owner: string | undefined) {
     this.replaceLabel(id, OWNER_LABEL, owner ? OWNER_LABEL + owner : undefined)
   }
@@ -149,7 +155,7 @@ export class FakeBoard implements Board {
     this.replaceLabel(id, PRIORITY_LABEL, PRIORITY_LABEL + priority)
   }
 
-  async openPullRequest(id: string) {
+  async openPullRequest(id: string, title: string) {
     const existing = this.pulls.get(id)
     if (existing?.state === 'open') return { ...existing }
     const pull: PullRequest = {
@@ -164,6 +170,7 @@ export class FakeBoard implements Board {
       comments: [],
     }
     this.pulls.set(id, pull)
+    this.pullTitles.push(title)
     return { ...pull }
   }
 
@@ -201,6 +208,10 @@ export class FakeBoard implements Board {
 
   assign(id: string, ...logins: string[]) {
     this.issue(id).assignees = logins
+  }
+
+  labelsOf(id: string) {
+    return [...this.issue(id).labels]
   }
 
   addLabel(id: string, label: string) {
