@@ -173,6 +173,10 @@ export class Runner {
     await this.loop
   }
 
+  note(text: string) {
+    this.emit('info', text)
+  }
+
   private emit(level: RunnerEvent['level'], text: string) {
     const event = { time: new Date().toISOString(), level, text: redactSecrets(text, this.setup.secrets()) }
     this.events.push(event)

@@ -22,7 +22,11 @@ export async function boardUpdateCommand(context: Context, json: boolean): Promi
   const before = await checkBoard(board, config)
   await board.prepare(config.stages.map((stage) => stage.name))
   const after = await checkBoard(board, config)
-  const added = [...before.missing.filter((label) => !after.missing.includes(label)), ...(before.field === 'missing' && after.field !== 'missing' ? ['the Conveyor field'] : [])]
+  const added = [
+    ...before.missing.filter((label) => !after.missing.includes(label)),
+    ...(before.field === 'missing' && after.field !== 'missing' ? ['the Conveyor field'] : []),
+    ...(before.field && before.field !== 'missing' ? before.field.missingOptions.filter((option) => !(after.field && after.field !== 'missing' && after.field.missingOptions.includes(option))).map((option) => `the Conveyor option ${option}`) : []),
+  ]
   if (json) {
     context.stdout(`${JSON.stringify({ added, remaining: after })}\n`)
     return 0

@@ -26,7 +26,7 @@ export type HubAction =
   | { kind: 'harness'; id: string }
 
 type Props = {
-  load: () => Promise<StatusSnapshot>
+  load: (force?: boolean) => Promise<StatusSnapshot>
   refreshMs: number
   runner?: RunnerControl
   control?: TaskControl
@@ -53,8 +53,8 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const [opened, setOpened] = useState<Opened>()
   const [, setTick] = useState(0)
 
-  const refresh = useCallback(() => {
-    load()
+  const refresh = useCallback((force?: boolean) => {
+    load(force)
       .then((snapshot) => {
         setStatus(snapshot)
         setError(undefined)
@@ -126,7 +126,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (key === 'o') toggle('log')
       if (key === 'k') toggle('board')
       if (key === 'r') {
-        refresh()
+        refresh(true)
         if (panel === 'task' && opened) openTask(opened.id, opened.target)
       }
       if (current && control) {
@@ -353,7 +353,7 @@ function logLines(events: RunnerEvent[], project?: string): Line[] {
 }
 
 export async function showStatus(
-  load: () => Promise<StatusSnapshot>,
+  load: (force?: boolean) => Promise<StatusSnapshot>,
   options: { runner?: RunnerControl; control?: TaskControl; notice?: string; refreshMs?: number } = {},
 ): Promise<HubAction> {
   let next: HubAction = { kind: 'quit' }

@@ -101,7 +101,7 @@ export function boardLines(status: StatusSnapshot): Line[] {
     { text: 'The conveyor compares the board with the labels and fields this version uses. It never changes or deletes what exists.', tone: 'muted' },
     { text: '' },
     ...(status.board ? (lines.length ? lines.map((text): Line => ({ text: `  ${text}` })) : [{ text: '  The board has everything this version uses.', tone: 'ok' as const }]) : [{ text: '  Not checked yet; press r.', tone: 'muted' as const }]),
-    ...(status.board && (status.board.missing.length || status.board.field === 'missing') ? [{ text: '' }, { text: 'Enter adds the missing labels and the Conveyor field.', tone: 'title' as const }] : []),
+    ...(status.board && (status.board.missing.length || status.board.field) ? [{ text: '' }, { text: 'Enter adds the missing labels, the Conveyor field, and its missing options; existing ones and card values stay.', tone: 'title' as const }] : []),
   ]
 }
 
@@ -168,7 +168,7 @@ export function helpLines(): Line[] {
     row('<number>', 'the issue number on the board: issues/51 → `conveyor attach 51`'),
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },
-    row('this screen', 'b board in the browser · k board check (add what this version needs) · s start/stop the conveyor · u usage · o log · n new · a attach · l release · e settings · r refresh · h or ? help · q quit'),
+    row('this screen', 'b board in the browser · k board check (add what this version needs) · s start/stop the conveyor · u usage · o log · n new · a attach · l release · e settings · r reread the board now · h or ? help · q quit'),
     row('settings', '`e` here or `conveyor settings`: the help of the current row is shown under the list; ←→ switch options; s saves after validation'),
     row('scripting', '`conveyor config list|get|set`, `conveyor config stage add|remove|move`'),
     row('agent help', '`conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)'),

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Run } from '../cli.js'
 import {
   boardLabels,
@@ -88,7 +91,38 @@ export class GitHubBoard implements Board {
       const result = await this.call(['-X', 'POST', `${this.repo}/labels`, '-f', `name=${label.name}`, '-f', `color=${label.color}`])
       if (result.status !== 422) this.parse(result)
     }
-    if (this.options.projectNumber) await this.projectMirror(this.options.projectNumber)
+    if (!this.options.projectNumber) return
+    const mirror = await this.projectMirror(this.options.projectNumber, true)
+    await this.addMissingOptions(mirror.fieldId)
+  }
+
+  private async addMissingOptions(fieldId: string) {
+    type Option = { id: string; name: string; color: string; description: string }
+    const found = await this.graphql<{ node: { options: Option[] } }>(
+      'query($id: ID!) { node(id: $id) { ... on ProjectV2SingleSelectField { options { id name color description } } } }',
+      { id: fieldId },
+    )
+    const options = found.node.options
+    const missing = TASK_STATES.filter((state) => !options.some((option) => option.name === state))
+    if (missing.length === 0) return
+    await this.graphql(
+      'mutation($input: UpdateProjectV2FieldInput!) { updateProjectV2Field(input: $input) { projectV2Field { ... on ProjectV2SingleSelectField { id } } } }',
+      { input: { fieldId, singleSelectOptions: [...options, ...missing.map((name) => ({ name, color: 'GRAY', description: '' }))] } },
+    )
+    this.mirror = undefined
+  }
+
+  private async graphql<T = unknown>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const dir = mkdtempSync(join(tmpdir(), 'conveyor-graphql-'))
+    try {
+      const body = join(dir, 'body.json')
+      writeFileSync(body, JSON.stringify({ query, variables }))
+      const response = JSON.parse(await this.gh(['api', 'graphql', '--input', body])) as { data?: T; errors?: { message: string }[] }
+      if (!response.data || response.errors?.length) throw new Error(`GitHub GraphQL failed: ${response.errors?.map((error) => error.message).join('; ') ?? 'no data'}`)
+      return response.data
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   }
 
   async inspect(): Promise<BoardInspection> {
@@ -265,13 +299,14 @@ export class GitHubBoard implements Board {
     }
   }
 
-  private async projectMirror(number: number): Promise<ProjectMirror> {
+  private async projectMirror(number: number, create = false): Promise<ProjectMirror> {
     if (this.mirror) return this.mirror
     const owner = this.owner()
     const project = JSON.parse(await this.gh(['project', 'view', String(number), '--owner', owner, '--format', 'json'])) as { id: string }
     const fields = async () =>
       (JSON.parse(await this.gh(['project', 'field-list', String(number), '--owner', owner, '--format', 'json'])) as { fields: ProjectField[] }).fields
     let field = (await fields()).find((candidate) => candidate.name === PROJECT_FIELD)
+    if (!field && !create) throw new Error(`the project has no ${PROJECT_FIELD} field; run \`conveyor board update\``)
     if (!field) {
       await this.gh([
         'project', 'field-create', String(number), '--owner', owner,
