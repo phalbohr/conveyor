@@ -210,6 +210,20 @@ describe('StatusScreen as a control panel', () => {
     await vi.waitFor(() => expect(lastFrame()).toContain('› #8 Search'), { timeout: 5_000 })
   })
 
+  it('keeps the task number in its own column and wraps the title and labels inside the second one', async () => {
+    const long = { ...snapshot, backlog: [{ id: '123', title: 'Tournament rule system enforcement with inline rule creation and validation of every match result', url: 'https://example.test/issues/123', form: 'story' as const }] }
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => long} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write(DOWN)
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #123'), { timeout: 5_000 })
+    const lines = lastFrame()?.split('\n') ?? []
+    const row = lines.findIndex((line) => line.startsWith('› #123'))
+    expect(lines[row]?.indexOf('Tournament')).toBe(7)
+    expect(lines[row + 1]?.slice(0, 7).trim()).toBe('')
+    expect(lines[row + 1]).toContain('form::story')
+  })
+
   it('comments, opens the browser, and toggles form::idea on a backlog task', async () => {
     const { value, calls } = control()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)

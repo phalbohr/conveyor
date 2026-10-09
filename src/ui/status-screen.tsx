@@ -238,11 +238,15 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       {page.lines.map((line, index) =>
         line.cells ? (
           <Box key={index}>
-            <Box flexShrink={0} width={CELL_WIDTH}>
-              <Text>{line.cells[0]}</Text>
+            <Box flexShrink={0} width={line.cellWidth ?? CELL_WIDTH}>
+              <Text inverse={line.selected ?? false} {...(line.tone ? { color: COLORS[line.tone] } : {})}>
+                {line.cells[0]}
+              </Text>
             </Box>
             <Box flexGrow={1} flexShrink={1}>
-              <Text wrap="wrap">{line.cells[1]}</Text>
+              <Text wrap="wrap" inverse={line.selected ?? false} {...(line.tone ? { color: COLORS[line.tone] } : {})}>
+                {line.cells[1]}
+              </Text>
             </Box>
           </Box>
         ) : (
@@ -319,7 +323,7 @@ function heightOf(text: string, columns: number) {
 }
 
 function lineHeight(line: Line, columns: number) {
-  return line.cells ? heightOf(line.cells[1] || ' ', columns - CELL_WIDTH) : heightOf(line.text || ' ', columns)
+  return line.cells ? heightOf(line.cells[1] || ' ', columns - (line.cellWidth ?? CELL_WIDTH)) : heightOf(line.text || ' ', columns)
 }
 
 function viewport(lines: Line[], scroll: number, room: number, columns: number): { lines: Line[]; more?: string } {
