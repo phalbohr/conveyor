@@ -73,6 +73,8 @@ describe('SettingsScreen', () => {
     expect(help).toBeGreaterThan(lines.indexOf(row))
     expect(lines[help - 1]?.trim()).toBe('')
     expect(lines.length).toBeLessThanOrEqual(24)
+    const footer = lines.findIndex((line) => line.includes('↑↓ move'))
+    expect(lines[footer - 1]?.trim()).toBe('')
   })
 
   it('cycles through inherit for stage values', async () => {
