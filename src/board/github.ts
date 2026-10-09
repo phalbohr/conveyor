@@ -1,6 +1,7 @@
 import type { Run } from '../cli.js'
 import {
   boardLabels,
+  CONVEYOR_PREFIXES,
   FORM_LABEL,
   labelsToTask,
   onBoard,
@@ -12,6 +13,7 @@ import {
   TASK_STATES,
   taskLabels,
   type Board,
+  type BoardInspection,
   type Comment,
   type MergeMethod,
   type PullRequest,
@@ -87,6 +89,21 @@ export class GitHubBoard implements Board {
       if (result.status !== 422) this.parse(result)
     }
     if (this.options.projectNumber) await this.projectMirror(this.options.projectNumber)
+  }
+
+  async inspect(): Promise<BoardInspection> {
+    const labels = (await this.api<{ name: string }[][]>(['--paginate', '--slurp', `${this.repo}/labels?per_page=100`])).flat().map((label) => label.name)
+    const pages = await this.api<Issue[][]>(['--paginate', '--slurp', `${this.repo}/issues?state=open&per_page=100`])
+    const issues = pages
+      .flat()
+      .filter((issue) => !issue.pull_request)
+      .map((issue) => ({ id: String(issue.number), title: issue.title, labels: issue.labels.map(({ name }) => name) }))
+      .filter((issue) => issue.labels.some((label) => CONVEYOR_PREFIXES.some((prefix) => label.startsWith(prefix))))
+    const number = this.options.projectNumber
+    if (!number) return { labels, issues }
+    const fields = JSON.parse(await this.gh(['project', 'field-list', String(number), '--owner', this.owner(), '--format', 'json'])) as { fields: ProjectField[] }
+    const field = fields.fields.find((candidate) => candidate.name === PROJECT_FIELD)
+    return { labels, issues, field: field ? { options: (field.options ?? []).map((option) => option.name) } : 'missing' }
   }
 
   async boardUrl() {
@@ -317,6 +334,7 @@ function toTask(issue: Issue): Task {
     body: issue.body ?? '',
     author: issue.user.login,
     url: issue.html_url,
+    labels: issue.labels.map(({ name }) => name),
     assignees: issue.assignees.map(({ login }) => login),
     openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
     closed: issue.state === 'closed',

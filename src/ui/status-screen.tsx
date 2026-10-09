@@ -3,7 +3,7 @@ import { Box, Text, render, useApp, useInput, useWindowSize } from 'ink'
 import { useCallback, useEffect, useState } from 'react'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
-import { BACKLOG, CELL_WIDTH, STATUS_COLUMNS, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
+import { BACKLOG, CELL_WIDTH, STATUS_COLUMNS, boardLines, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
 import { taskLines, type Target, type TaskControl, type TaskDetail } from './task-lines.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
@@ -23,7 +23,7 @@ export type HubAction =
   | { kind: 'new' }
   | { kind: 'attach'; id: string }
   | { kind: 'release'; id: string }
-  | { kind: 'agent'; id: string }
+  | { kind: 'harness'; id: string }
 
 type Props = {
   load: () => Promise<StatusSnapshot>
@@ -34,7 +34,7 @@ type Props = {
   onAction?: (action: HubAction) => void
 }
 
-type Panel = 'status' | 'help' | 'usage' | 'log' | 'task'
+type Panel = 'status' | 'help' | 'usage' | 'log' | 'task' | 'board'
 type Input = { kind: 'attach' | 'release' } | { kind: 'comment'; id: string; target: Target }
 type Opened = { id: string; target: Target; detail?: TaskDetail }
 
@@ -124,6 +124,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (key === '?' || (key === 'h' && panel === 'help')) toggle('help')
       if (key === 'u') toggle('usage')
       if (key === 'o') toggle('log')
+      if (key === 'k') toggle('board')
       if (key === 'r') {
         refresh()
         if (panel === 'task' && opened) openTask(opened.id, opened.target)
@@ -131,7 +132,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (current && control) {
         if (key === 'c') setInput({ kind: 'comment', id: current.id, target: current.target })
         if (key === 'b' && url) void control.open(url).catch(fail)
-        if (key === 'h') act({ kind: 'agent', id: current.id })
+        if (key === 'h') act({ kind: 'harness', id: current.id })
       }
       if (panel === 'task') {
         if (special.upArrow) setScroll((value) => Math.max(0, value - 1))
@@ -140,6 +141,17 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
           setOpened({ ...opened, target: opened.target === 'pull' ? 'issue' : 'pull' })
           setScroll(0)
         }
+        return
+      }
+      if (panel === 'board' && special.return && control) {
+        setMessage({ text: 'Adding the missing labels and fields…' })
+        void control
+          .updateBoard()
+          .then((text) => {
+            setMessage({ text })
+            refresh()
+          })
+          .catch(fail)
         return
       }
       if (panel !== 'status') {
@@ -207,6 +219,8 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         ? usageLines(status)
         : panel === 'log'
           ? logLines(events, status?.project)
+          : panel === 'board' && status
+            ? boardLines(status)
           : panel === 'task'
             ? opened?.detail
               ? taskLines(opened.detail, opened.target)
@@ -289,13 +303,14 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
 function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefined, opened: Opened | undefined, updated: Date | undefined) {
   const time = updated ? ` · updated ${updated.toLocaleTimeString()}` : ''
   if (panel === 'task') {
-    return `[↑↓] scroll · [c] comment · [b] browser · [h] agent${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
+    return `[↑↓] scroll · [c] comment · [b] browser · [h] harness${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
   }
+  if (panel === 'board') return `[Enter] add what is missing · [↑↓] scroll · [Esc] back · [q] quit`
   if (panel !== 'status') return `[↑↓] scroll · [Esc] back · [q] quit`
   if (view.focus === 'tasks') {
-    return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] agent${view.column === BACKLOG ? ' · [i] form::idea on/off' : ''} · [Esc] columns · [?] help · [q] quit${time}`
+    return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness${view.column === BACKLOG ? ' · [i] form::idea on/off' : ''} · [Esc] columns · [?] help · [q] quit${time}`
   }
-  return `${runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
+  return `${runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [k] board check · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
 }
 
 function heightOf(text: string, columns: number) {

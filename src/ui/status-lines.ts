@@ -1,5 +1,6 @@
 import { syncNotice } from '../settings-sync.js'
 import { undescribedNotice } from '../stage-catalog.js'
+import { boardCheckLines, needsAttention, type BoardCheck } from '../board-check.js'
 import type { StatusSnapshot } from '../status.js'
 
 export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean }[]; cells?: [string, string] }
@@ -45,6 +46,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
     { text: `conveyor · ${status.project} (${status.provider}) · @${status.me} · ${runner}`, tone: 'title' },
     ...(status.settingsSync.state === 'behind' ? syncNotice(status.settingsSync).split('\n').map((text): Line => ({ text, tone: 'warning' })) : []),
     ...undescribedNotice(status.undescribed).map((text): Line => ({ text, tone: 'warning' })),
+    ...(status.board && needsAttention(status.board) ? [{ text: `the board differs from what this version uses: ${boardSummary(status.board)} · [k] board check`, tone: 'warning' as const }] : []),
   ]
   const forms = [status.backlog.filter((task) => !task.form), ...(['idea', 'story', 'plan'] as const).map((form) => status.backlog.filter((task) => task.form === form))]
   const counts = [limits.running, limits.awaitingMe, limits.awaitingReview]
@@ -80,6 +82,27 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
 
   lines.push({ text: '' }, { text: `Team: ${status.team.unclaimed} unclaimed · ${status.team.claimedByOthers} claimed by others`, tone: 'muted' })
   return lines
+}
+
+function boardSummary(check: BoardCheck) {
+  return [
+    check.missing.length ? `${check.missing.length} labels missing` : '',
+    check.field === 'missing' ? 'no Conveyor field' : check.field ? `${check.field.missingOptions.length} Conveyor options missing` : '',
+    check.outdated.length ? `${check.outdated.length} tasks with old labels` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+export function boardLines(status: StatusSnapshot): Line[] {
+  const lines = status.board ? boardCheckLines(status.board) : []
+  return [
+    { text: 'Board check · [k] or Esc back', tone: 'title' },
+    { text: 'The conveyor compares the board with the labels and fields this version uses. It never changes or deletes what exists.', tone: 'muted' },
+    { text: '' },
+    ...(status.board ? (lines.length ? lines.map((text): Line => ({ text: `  ${text}` })) : [{ text: '  The board has everything this version uses.', tone: 'ok' as const }]) : [{ text: '  Not checked yet; press r.', tone: 'muted' as const }]),
+    ...(status.board && (status.board.missing.length || status.board.field === 'missing') ? [{ text: '' }, { text: 'Enter adds the missing labels and the Conveyor field.', tone: 'title' as const }] : []),
+  ]
 }
 
 export function usageLines(status: StatusSnapshot): Line[] {
@@ -131,7 +154,7 @@ export function helpLines(): Line[] {
     row('in progress 1/3', 'my tasks in this column against my limit; needs input and review the same'),
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),
-    row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h agent · i form::idea on/off (backlog) · Esc back'),
+    row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h harness · i form::idea on/off (backlog) · Esc back'),
     row('part::2/3', 'the plan split the story into parts, one pull request each; the story is done after the last part merges'),
     row('an opened task', 'p switches between the issue and its pull request · c comments where you are · ↑↓ scroll'),
     { text: '' },
@@ -145,7 +168,7 @@ export function helpLines(): Line[] {
     row('<number>', 'the issue number on the board: issues/51 → `conveyor attach 51`'),
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },
-    row('this screen', 'b board in the browser · s start/stop the conveyor · u usage · o log · n new · a attach · l release · e settings · r refresh · h or ? help · q quit'),
+    row('this screen', 'b board in the browser · k board check (add what this version needs) · s start/stop the conveyor · u usage · o log · n new · a attach · l release · e settings · r refresh · h or ? help · q quit'),
     row('settings', '`e` here or `conveyor settings`: the help of the current row is shown under the list; ←→ switch options; s saves after validation'),
     row('scripting', '`conveyor config list|get|set`, `conveyor config stage add|remove|move`'),
     row('agent help', '`conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)'),

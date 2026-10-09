@@ -19,6 +19,10 @@ export class RedactingBoard implements Board {
     return this.board.prepare(stages)
   }
 
+  inspect() {
+    return this.board.inspect()
+  }
+
   boardUrl() {
     return this.board.boardUrl()
   }

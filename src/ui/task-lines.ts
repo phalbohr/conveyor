@@ -16,6 +16,7 @@ export type TaskControl = {
   toggleIdea(id: string): Promise<string>
   open(url: string): Promise<void>
   openBoard(): Promise<void>
+  updateBoard(): Promise<string>
 }
 
 const time = (iso: string) => new Date(iso).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })

@@ -10,6 +10,7 @@ export type Task = {
   body: string
   author: string
   url: string
+  labels: string[]
   state?: TaskState
   form?: TaskForm
   stage?: string
@@ -46,6 +47,7 @@ export type MergeMethod = 'merge' | 'squash' | 'rebase'
 export interface Board {
   user(): Promise<string>
   boardUrl(): Promise<string>
+  inspect(): Promise<BoardInspection>
   prepare(stages: string[]): Promise<void>
   canWrite(user: string): Promise<boolean>
   createTask(title: string, body: string, labels?: TaskLabels): Promise<Task>
@@ -73,6 +75,8 @@ export interface Board {
 }
 
 export type TaskLabels = { state?: TaskState; form?: TaskForm }
+export type BoardInspection = { labels: string[]; field?: { options: string[] } | 'missing'; issues: { id: string; title: string; labels: string[] }[] }
+export const CONVEYOR_PREFIXES = ['conveyor::', 'form::', 'stage::']
 
 export const STATE_COLORS: Record<TaskState, string> = {
   backlog: 'ededed',
