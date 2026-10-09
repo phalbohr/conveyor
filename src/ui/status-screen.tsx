@@ -7,8 +7,7 @@ import { STATUS_COLUMNS, helpLines, statusLines, usageLines, type Line, type Sta
 import { clearOnShrink } from './terminal.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
-const EVENT_COLORS: Record<RunnerEvent['level'], string> = { info: 'white', warning: 'yellow', error: 'red' }
-const LOG_LINES = 8
+const LOG_LINES = 30
 
 export type RunnerControl = {
   readonly running: boolean
@@ -38,8 +37,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   const [status, setStatus] = useState<StatusSnapshot>()
   const [error, setError] = useState<string>()
   const [updated, setUpdated] = useState<Date>()
-  const [help, setHelp] = useState(false)
-  const [usage, setUsage] = useState(false)
+  const [panel, setPanel] = useState<'status' | 'help' | 'usage' | 'log'>('status')
   const [ask, setAsk] = useState<'attach' | 'release'>()
   const [message, setMessage] = useState<{ text: string; error?: boolean } | undefined>(notice ? { text: notice } : undefined)
   const [confirmQuit, setConfirmQuit] = useState(false)
@@ -85,19 +83,15 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
         setView((current) => ({ ...current, column: (current.column + (key.rightArrow ? 1 : -1) + STATUS_COLUMNS.length) % STATUS_COLUMNS.length }))
       }
       if (key.return) setView((current) => ({ ...current, open: !current.open }))
-      if (input === 'h' || input === '?') {
-        setUsage(false)
-        setHelp((value) => !value)
-      }
-      if (input === 'u') {
-        setHelp(false)
-        setUsage((value) => !value)
-      }
-      if (input === 's') act({ kind: 'settings' })
+      const toggle = (next: typeof panel) => setPanel((current) => (current === next ? 'status' : next))
+      if (input === 'h' || input === '?') toggle('help')
+      if (input === 'u') toggle('usage')
+      if (input === 'o') toggle('log')
+      if (input === 'e') act({ kind: 'settings' })
       if (input === 'n') act({ kind: 'new' })
       if (input === 'a') setAsk('attach')
       if (input === 'l') setAsk('release')
-      if (input === 'c' && runner) {
+      if (input === 's' && runner) {
         if (runner.running) {
           setMessage({ text: 'Stopping the conveyor…' })
           void runner.stop().then(() => {
@@ -126,8 +120,8 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   const events = runner?.events.slice(-LOG_LINES) ?? []
   return (
     <Box flexDirection="column">
-      {!help && !status && !error && <Text color="gray">Loading the board…</Text>}
-      {(help ? helpLines() : usage && status ? usageLines(status) : status ? statusLines(status, runner?.running ? 'running here' : undefined, view) : []).map((line, index) => (
+      {panel === 'status' && !status && !error && <Text color="gray">Loading the board…</Text>}
+      {(panel === 'help' ? helpLines() : panel === 'usage' && status ? usageLines(status) : panel === 'log' ? logLines(events, status?.project) : status ? statusLines(status, runner?.running ? 'running here' : undefined, view) : []).map((line, index) => (
         <Text key={index} {...(line.tone ? { color: COLORS[line.tone] } : {})} bold={line.tone === 'title'}>
           {line.segments
             ? line.segments.map((segment, part) => (
@@ -139,18 +133,6 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
         </Text>
       ))}
       {error && <Text color="red">Board error: {error}</Text>}
-      {!help && !usage && events.length > 0 && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text color="cyan" bold>
-            Log
-          </Text>
-          {events.map((event, index) => (
-            <Text key={index} color={EVENT_COLORS[event.level]}>
-              {new Date(event.time).toLocaleTimeString()} {event.text.split('\n')[0]}
-            </Text>
-          ))}
-        </Box>
-      )}
       {ask && (
         <Box flexDirection="column" marginTop={1}>
           <Text color="cyan">{ask === 'attach' ? 'Answer the questions of the task with issue number:' : 'Release the claim of the task with issue number:'}</Text>
@@ -166,11 +148,23 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
       )}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
       <Text color="gray">
-        {runner ? `[c] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] status column · [Enter] its tasks · [u] usage · [n] new · [a] attach · [l] release · [s] settings · [r] refresh · [h] help · [q] quit
+        {runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] status column · [Enter] its tasks · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit
         {updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}
       </Text>
     </Box>
   )
+}
+
+function logLines(events: RunnerEvent[], project?: string): Line[] {
+  const file = project ? `~/.conveyor/logs/${project.replaceAll('/', '-')}.log` : '~/.conveyor/logs/'
+  return [
+    { text: `Log · last ${LOG_LINES} events · full log ${file} · [o] back`, tone: 'title' },
+    ...(events.length === 0 ? [{ text: '  no events yet: start the conveyor with s', tone: 'muted' as const }] : []),
+    ...events.map((event): Line => ({
+      text: `${new Date(event.time).toLocaleTimeString()} ${event.text.split('\n')[0]}`,
+      ...(event.level === 'error' ? { tone: 'error' as const } : event.level === 'warning' ? { tone: 'warning' as const } : {}),
+    })),
+  ]
 }
 
 export async function showStatus(

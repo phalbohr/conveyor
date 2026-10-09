@@ -162,18 +162,35 @@ describe('StatusScreen as the hub', () => {
     await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
   })
 
-  it('starts and stops the conveyor with c and shows its log', async () => {
+  it('starts and stops the conveyor with s and shows its log on o', async () => {
     const runner = fakeRunner()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} runner={runner} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('[c] start conveyor'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('[s] start conveyor'), { timeout: 5_000 })
     await settle()
-    stdin.write('c')
+    stdin.write('s')
+    await vi.waitFor(() => expect(lastFrame()).toContain('running here'), { timeout: 5_000 })
+    expect(lastFrame()).toContain('[s] stop conveyor')
+    expect(lastFrame()).not.toContain('claimed task 7: Login')
+    await settle()
+    stdin.write('o')
     await vi.waitFor(() => expect(lastFrame()).toContain('claimed task 7: Login'), { timeout: 5_000 })
-    expect(lastFrame()).toContain('running here')
-    expect(lastFrame()).toContain('[c] stop conveyor')
+    expect(lastFrame()).toContain('full log ~/.conveyor/logs/acme-app.log')
+    expect(lastFrame()).not.toContain('my status:')
     await settle()
-    stdin.write('c')
+    stdin.write('o')
+    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('s')
     await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })
+  })
+
+  it('opens the settings with e', async () => {
+    const actions: HubAction[] = []
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('e')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'settings' }]), { timeout: 5_000 })
   })
 
   it('asks before quitting while the conveyor runs', async () => {
