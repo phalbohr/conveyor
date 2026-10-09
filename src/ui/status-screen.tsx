@@ -1,10 +1,9 @@
 import { TextInput } from '@inkjs/ui'
-import { Box, Text, render, useApp, useInput } from 'ink'
+import { Box, Text, render, useApp, useInput, useWindowSize } from 'ink'
 import { useCallback, useEffect, useState } from 'react'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
 import { STATUS_COLUMNS, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
-import { clearOnShrink } from './terminal.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 const LOG_LINES = 30
@@ -38,6 +37,8 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   const [error, setError] = useState<string>()
   const [updated, setUpdated] = useState<Date>()
   const [panel, setPanel] = useState<'status' | 'help' | 'usage' | 'log'>('status')
+  const [scroll, setScroll] = useState(0)
+  const { columns, rows } = useWindowSize()
   const [ask, setAsk] = useState<'attach' | 'release'>()
   const [message, setMessage] = useState<{ text: string; error?: boolean } | undefined>(notice ? { text: notice } : undefined)
   const [confirmQuit, setConfirmQuit] = useState(false)
@@ -83,7 +84,12 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
         setView((current) => ({ ...current, column: (current.column + (key.rightArrow ? 1 : -1) + STATUS_COLUMNS.length) % STATUS_COLUMNS.length }))
       }
       if (key.return) setView((current) => ({ ...current, open: !current.open }))
-      const toggle = (next: typeof panel) => setPanel((current) => (current === next ? 'status' : next))
+      const toggle = (next: typeof panel) => {
+        setScroll(0)
+        setPanel((current) => (current === next ? 'status' : next))
+      }
+      if (key.upArrow) setScroll((value) => Math.max(0, value - 1))
+      if (key.downArrow) setScroll((value) => value + 1)
       if (input === 'h' || input === '?') toggle('help')
       if (input === 'u') toggle('usage')
       if (input === 'o') toggle('log')
@@ -118,10 +124,14 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
   )
 
   const events = runner?.events.slice(-LOG_LINES) ?? []
+  const lines = panel === 'help' ? helpLines() : panel === 'usage' && status ? usageLines(status) : panel === 'log' ? logLines(events, status?.project) : status ? statusLines(status, runner?.running ? 'running here' : undefined, view) : []
+  const footer = `${runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] status column · [Enter] its tasks · [↑↓] scroll · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}`
+  const room = Math.max(3, rows - heightOf(footer, columns) - heightOf(message?.text ?? '', columns) - (ask ? 4 : 0) - (error ? 1 : 0) - 1)
+  const page = viewport(lines, scroll, room, columns)
   return (
     <Box flexDirection="column">
       {panel === 'status' && !status && !error && <Text color="gray">Loading the board…</Text>}
-      {(panel === 'help' ? helpLines() : panel === 'usage' && status ? usageLines(status) : panel === 'log' ? logLines(events, status?.project) : status ? statusLines(status, runner?.running ? 'running here' : undefined, view) : []).map((line, index) => (
+      {page.lines.map((line, index) => (
         <Text key={index} {...(line.tone ? { color: COLORS[line.tone] } : {})} bold={line.tone === 'title'}>
           {line.segments
             ? line.segments.map((segment, part) => (
@@ -132,6 +142,7 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
             : line.text || ' '}
         </Text>
       ))}
+      {page.more && <Text color="gray">{page.more}</Text>}
       {error && <Text color="red">Board error: {error}</Text>}
       {ask && (
         <Box flexDirection="column" marginTop={1}>
@@ -147,12 +158,32 @@ export function StatusScreen({ load, refreshMs, runner, notice, onAction }: Prop
         </Box>
       )}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
-      <Text color="gray">
-        {runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] status column · [Enter] its tasks · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit
-        {updated ? ` · updated ${updated.toLocaleTimeString()}` : ''}
-      </Text>
+      <Text color="gray">{footer}</Text>
     </Box>
   )
+}
+
+function heightOf(text: string, columns: number) {
+  if (!text) return 0
+  return text.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / Math.max(1, columns))), 0)
+}
+
+function viewport(lines: Line[], scroll: number, room: number, columns: number): { lines: Line[]; more?: string } {
+  const total = lines.reduce((sum, line) => sum + heightOf(line.text || ' ', columns), 0)
+  if (total <= room) return { lines }
+  let last = lines.length
+  let tail = 0
+  while (last > 0 && tail + heightOf(lines[last - 1]?.text || ' ', columns) <= room - 1) tail += heightOf(lines[--last]?.text || ' ', columns)
+  const start = Math.min(scroll, last)
+  const shown: Line[] = []
+  let used = 0
+  for (const line of lines.slice(start)) {
+    const height = heightOf(line.text || ' ', columns)
+    if (used + height > room - 1) break
+    shown.push(line)
+    used += height
+  }
+  return { lines: shown, more: `lines ${start + 1}–${start + shown.length} of ${lines.length} · ↑↓ scroll` }
 }
 
 function logLines(events: RunnerEvent[], project?: string): Line[] {
@@ -172,7 +203,6 @@ export async function showStatus(
   options: { runner?: RunnerControl; notice?: string; refreshMs?: number } = {},
 ): Promise<HubAction> {
   let next: HubAction = { kind: 'quit' }
-  const restore = clearOnShrink()
   const app = render(
     <StatusScreen
       load={load}
@@ -181,8 +211,8 @@ export async function showStatus(
       {...(options.notice ? { notice: options.notice } : {})}
       onAction={(action) => (next = action)}
     />,
+    { alternateScreen: true },
   )
   await app.waitUntilExit()
-  restore()
   return next
 }
