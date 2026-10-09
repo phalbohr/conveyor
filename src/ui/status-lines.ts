@@ -117,7 +117,7 @@ export function helpLines(): Line[] {
     { text: 'Your actions', tone: 'title' },
     row('answer a question', 'reply in the issue, or `conveyor attach <number>` for a live session'),
     row('new task', '`conveyor new` (live session), or an issue with conveyor::backlog and a form::idea|story|plan label'),
-    row('merge a reviewed task', '`/merge` or Approve   (on GitLab: Approve the MR, or `/merge` on the issue)'),
+    row('approve a reviewed task', '`/approve` or an Approve review on the issue or the pull request; the conveyor merges after `review.approvals` people approved'),
     row('small fixes', '`/fix <notes>`, or `/fix_from: <stage> <notes>` to start later'),
     row('start over', '`/rework <notes>`'),
     row('hand a task over', '`conveyor release <number>`'),

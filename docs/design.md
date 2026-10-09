@@ -364,7 +364,7 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 | a comment starting with `/rework` | rework: close the pull request, reset the branch, restart after `plan` |
 | a "Request changes" review or a comment starting with `/fix` | fix on the existing branch from the `plan` stage; the pull request stays open |
 | a comment `/fix_from: <stage>` | fix on the existing branch from the named stage (`plan` … `merge`) |
-| enough distinct approvers: "Approve" reviews plus authors of comments starting with `/merge` | landing |
+| enough distinct approvers: "Approve" reviews plus authors of comments starting with `/approve` | landing |
 
 - The text after a command and the review comments become the feedback for the stages. Fix and rework keep the plan artifact; fix also keeps the workpad.
 - Precedence: `/rework` > `/fix_from` > `/fix` > approvals.

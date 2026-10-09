@@ -59,7 +59,7 @@ const TEAM: Spec[] = [
     options: ['human', 'ai', 'smart'],
     help: 'who decides about the merge',
     optionHelp: {
-      human: 'a human reviews the pull request and writes /merge or approves',
+      human: 'a human reviews the pull request and writes /approve or approves it',
       ai: 'the conveyor merges when the merge stage is done and checks pass',
       smart: 'the merge stage decides by smart/merge.md: merge or ask a human',
     },

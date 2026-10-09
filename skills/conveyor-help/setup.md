@@ -67,7 +67,7 @@ A description can use `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.pla
 
 | `transitions.merge` | What happens after the `merge` stage |
 |---|---|
-| `human` | The pull request waits in `conveyor::review`; it merges after `/merge` or Approve from `review.approvals` distinct people (with `2`, one `/merge` is not enough). |
+| `human` | The pull request waits in `conveyor::review`; it merges after `/approve` or an Approve review from `review.approvals` distinct people (with `2`, one `/approve` is not enough). |
 | `smart` | The merge stage decides by `smart/merge.md` (offer to review it): risky changes go to review as with `human`, the rest merges. |
 | `ai` | The conveyor merges without a human, after blockers are closed and CI is green. |
 
