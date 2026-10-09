@@ -65,7 +65,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
 export function usageLines(status: StatusSnapshot): Line[] {
   const { limits } = status
   const lines: Line[] = [
-    { text: 'Usage', tone: 'title' },
+    { text: 'Usage · [u] or Esc back', tone: 'title' },
     { text: `tokens today ${number(limits.dailyTokens.used)}${limits.dailyTokens.limit ? ` / ${number(limits.dailyTokens.limit)} (limits.daily_tokens)` : ' (no daily limit)'}` },
     { text: '' },
     { text: 'Subscription windows', tone: 'title' },
@@ -86,7 +86,7 @@ export function usageLines(status: StatusSnapshot): Line[] {
     ].filter(Boolean)
     lines.push({ text: `${harness}: ${windows.join(' · ')} · seen ${time(quota.observedAt)}`, ...(reserveReached(quota) ? { tone: 'warning' as const } : {}) })
   }
-  lines.push({ text: '' }, { text: 'A reached reserve or daily limit stops new tasks and stages of that harness until the window resets. [u] back', tone: 'muted' })
+  lines.push({ text: '' }, { text: 'A reached reserve or daily limit stops new tasks and stages of that harness until the window resets.', tone: 'muted' })
   return lines
 }
 
@@ -99,7 +99,7 @@ function reserveReached(quota: StatusSnapshot['limits']['subscription'][string])
 
 export function helpLines(): Line[] {
   return [
-    { text: 'conveyor help', tone: 'title' },
+    { text: 'conveyor help · [h] or Esc back', tone: 'title' },
     { text: 'The board holds every task. `conveyor run` takes tasks within your limits and runs their stages; you decide at the gates.' },
     { text: '' },
     { text: 'Flow', tone: 'title' },

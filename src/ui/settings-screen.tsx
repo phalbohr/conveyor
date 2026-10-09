@@ -206,7 +206,7 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
   const current = fields[cursor]
   const footer = '↑↓ move · ←→ change option · Enter edit · m refresh models · a add stage · x remove stage · [ ] move stage · s save · q quit'
   const problemText = problems.length > 0 ? ['Not valid yet, cannot be saved:', ...problems].join('\n') : ''
-  const fixed = 1 + 1 + heightOf(current?.help ?? '', columns) + heightOf(problemText, columns) + heightOf(message?.text ?? '', columns) + heightOf(footer, columns)
+  const fixed = 1 + 2 + heightOf(current?.help ?? '', columns) + heightOf(problemText, columns) + heightOf(message?.text ?? '', columns) + heightOf(footer, columns)
   const { start, count } = fit(fields, cursor, Math.max(3, rows - fixed - 1))
   const visible = fields.slice(start, start + count)
   return (
@@ -232,6 +232,7 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
       </Text>
       {problemText && <Text color="yellow">{problemText}</Text>}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
+      <Text> </Text>
       <Text color="gray">{footer}</Text>
     </Box>
   )

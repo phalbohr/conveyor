@@ -193,6 +193,19 @@ describe('StatusScreen as the hub', () => {
     await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })
   })
 
+  it('closes help, usage, and log with Esc and names the way back', async () => {
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    for (const [key, title] of [['h', 'conveyor help · [h] or Esc back'], ['u', 'Usage · [u] or Esc back'], ['o', '[o] or Esc back']] as const) {
+      await settle()
+      stdin.write(key)
+      await vi.waitFor(() => expect(lastFrame()).toContain(title), { timeout: 5_000 })
+      await settle()
+      stdin.write('\u001B')
+      await vi.waitFor(() => expect(lastFrame()).toContain('my status:'), { timeout: 5_000 })
+    }
+  })
+
   it('opens the settings with e', async () => {
     const actions: HubAction[] = []
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
