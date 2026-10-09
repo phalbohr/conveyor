@@ -60,7 +60,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 |---|---|
 | see my tasks, limits, subscription windows | `conveyor` (control screen; `h` help, `u` usage): each of my tasks with its state, current stage, retries, and errors; on the board the `stage::<name>` label shows the same |
 | start working the board | `s` on the control screen (`o` shows the log), or `conveyor run` (opens the control screen already running; without a terminal it prints the log). Stopping (`s` again, `q`, or Ctrl+C) aborts running stages; tasks resume on the next start. Log file: `~/.conveyor/logs/<project>.log` |
-| use everything from one place | `conveyor`: `s` start/stop, `o` log, `u` usage, `n` new, `a` attach, `l` release, `e` settings |
+| use everything from one place | `conveyor` (full-screen; `↑` `↓` scroll help, usage, and log): `s` start/stop, `o` log, `u` usage, `n` new, `a` attach, `l` release, `e` settings |
 | add a task | `conveyor new` (the agent shapes an idea, a story, or a story with a plan; with a prepared story, ask it for the plan and the task starts with implementation), or an issue with `conveyor::backlog` and `form::idea`, `story`, or `plan` (a draft without a form is ignored) |
 | answer a question | reply in the issue, or `conveyor attach <number>` |
 | merge a reviewed task | `/merge` on the issue or pull request, or Approve. GitLab: Approve the MR or `/merge` on the issue (`/merge` in an MR is a GitLab quick action) |

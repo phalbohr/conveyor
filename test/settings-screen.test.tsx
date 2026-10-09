@@ -59,19 +59,20 @@ describe('SettingsScreen', () => {
     await until(() => expect(readFileSync(join(dir, 'config.yaml'), 'utf8')).toContain('merge: smart'))
   })
 
-  it('wraps a long help inside its own column', async () => {
+  it('shows the help of the current option under the list and fits the window', async () => {
     const { rendered } = setup()
     await until(() => expect(rendered.lastFrame()).toContain('conveyor settings'))
-    for (let step = 0; step < 40 && !rendered.lastFrame()?.includes('Heartbeat timeout'); step++) {
+    for (let step = 0; step < 40 && !rendered.lastFrame()?.includes('› Heartbeat timeout'); step++) {
       rendered.stdin.write(DOWN)
       await settle()
     }
     const lines = rendered.lastFrame()?.split('\n') ?? []
-    const start = lines.findIndex((line) => line.includes('Heartbeat timeout'))
-    const column = lines[start]?.indexOf('a running task') ?? -1
-    expect(column).toBeGreaterThan(30)
-    expect(lines[start + 1]?.slice(0, column).trim()).toBe('')
-    expect(lines[start + 1]?.trim().length).toBeGreaterThan(0)
+    const row = lines.find((line) => line.includes('› Heartbeat timeout')) ?? ''
+    expect(row).not.toContain('a running task')
+    const help = lines.findIndex((line) => line.includes('a running task writes a heartbeat'))
+    expect(help).toBeGreaterThan(lines.indexOf(row))
+    expect(lines[help - 1]?.trim()).toBe('')
+    expect(lines.length).toBeLessThanOrEqual(24)
   })
 
   it('cycles through inherit for stage values', async () => {

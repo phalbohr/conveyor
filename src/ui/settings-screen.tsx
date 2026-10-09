@@ -1,11 +1,9 @@
 import { Select, TextInput } from '@inkjs/ui'
-import { Box, Text, render, useApp, useInput } from 'ink'
+import { Box, Text, render, useApp, useInput, useWindowSize } from 'ink'
 import { useState } from 'react'
 import type { Catalog } from '../models.js'
 import type { Field, SettingsDocument } from '../settings-editor.js'
-import { clearOnShrink } from './terminal.js'
 
-const WINDOW = 18
 const INHERIT = '(inherit)'
 const OTHER = 'other…'
 
@@ -31,6 +29,7 @@ type Props = { doc: SettingsDocument; refreshModels?: () => Promise<Record<strin
 
 export function SettingsScreen({ doc, refreshModels }: Props) {
   const { exit } = useApp()
+  const { columns, rows } = useWindowSize()
   const [fields, setFields] = useState(() => doc.fields())
   const [problems, setProblems] = useState(() => doc.problems())
   const [cursor, setCursor] = useState(0)
@@ -203,9 +202,13 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
     )
   }
 
-  const start = Math.max(0, Math.min(cursor - Math.floor(WINDOW / 2), fields.length - WINDOW))
-  const visible = fields.slice(start, start + WINDOW)
   const width = Math.max(16, ...fields.map((field) => shown(field).length + 1))
+  const current = fields[cursor]
+  const footer = '↑↓ move · ←→ change option · Enter edit · m refresh models · a add stage · x remove stage · [ ] move stage · s save · q quit'
+  const problemText = problems.length > 0 ? ['Not valid yet, cannot be saved:', ...problems].join('\n') : ''
+  const fixed = 1 + 1 + heightOf(current?.help ?? '', columns) + heightOf(problemText, columns) + heightOf(message?.text ?? '', columns) + heightOf(footer, columns)
+  const { start, count } = fit(fields, cursor, Math.max(3, rows - fixed - 1))
+  const visible = fields.slice(start, start + count)
   return (
     <Box flexDirection="column">
       <Text color="cyan" bold>
@@ -217,31 +220,39 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
         return (
           <Box key={field.key} flexDirection="column">
             {header && <Text color="gray">{field.group}</Text>}
-            <Box>
-              <Box flexShrink={0} width={33 + width}>
-                <Text {...(index === cursor ? { color: 'cyan' } : {})}>
-                  {index === cursor ? '›' : ' '} {field.label.padEnd(30)} {shown(field).padEnd(width)}
-                </Text>
-              </Box>
-              <Box flexGrow={1} flexShrink={1}>
-                <Text color="gray" wrap="wrap">
-                  {field.help}
-                </Text>
-              </Box>
-            </Box>
+            <Text wrap="truncate" {...(index === cursor ? { color: 'cyan' } : {})}>
+              {index === cursor ? '›' : ' '} {field.label.padEnd(30)} {shown(field).padEnd(width)}
+            </Text>
           </Box>
         )
       })}
-      {problems.length > 0 && <Text color="yellow">{['Not valid yet, cannot be saved:', ...problems].join('\n')}</Text>}
+      <Text> </Text>
+      <Text color="gray" wrap="wrap">
+        {current?.help ?? ''}
+      </Text>
+      {problemText && <Text color="yellow">{problemText}</Text>}
       {message && <Text color={message.error ? 'red' : 'green'}>{message.text}</Text>}
-      <Text color="gray">↑↓ move · ←→ change option · Enter edit · m refresh models · a add stage · x remove stage · [ ] move stage · s save · q quit</Text>
+      <Text color="gray">{footer}</Text>
     </Box>
   )
 }
 
+function heightOf(text: string, columns: number) {
+  if (!text) return 0
+  return text.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / Math.max(1, columns))), 0)
+}
+
+function fit(fields: Field[], cursor: number, room: number) {
+  let count = Math.min(fields.length, room)
+  for (;;) {
+    const start = Math.max(0, Math.min(cursor - Math.floor(count / 2), fields.length - count))
+    const headers = fields.slice(start, start + count).filter((field, offset) => start + offset === 0 || fields[start + offset - 1]?.group !== field.group).length
+    if (count + headers <= room || count <= 1) return { start, count }
+    count--
+  }
+}
+
 export async function showSettings(doc: SettingsDocument, refreshModels?: () => Promise<Record<string, Catalog>>) {
-  const restore = clearOnShrink()
-  const app = render(<SettingsScreen doc={doc} {...(refreshModels ? { refreshModels } : {})} />)
+  const app = render(<SettingsScreen doc={doc} {...(refreshModels ? { refreshModels } : {})} />, { alternateScreen: true })
   await app.waitUntilExit()
-  restore()
 }

@@ -96,12 +96,21 @@ describe('StatusScreen', () => {
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2), { timeout: 5_000 })
   })
 
-  it('toggles the help with h', async () => {
+  it('toggles the help with h and scrolls it within the window', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('h')
-    await vi.waitFor(() => expect(lastFrame()).toContain('/fix_from: <stage>'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
+    expect(lastFrame()).toContain('↑↓ scroll')
+    expect((lastFrame() ?? '').split('\n').length).toBeLessThanOrEqual(24)
+    for (let step = 0; step < 40 && !lastFrame()?.includes('/fix_from: <stage>'); step++) {
+      stdin.write('\u001B[B')
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    }
+    expect(lastFrame()).toContain('/fix_from: <stage>')
+    expect(lastFrame()).not.toContain('conveyor help')
+    expect((lastFrame() ?? '').split('\n').length).toBeLessThanOrEqual(24)
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('h')
     await vi.waitFor(() => expect(lastFrame()).toContain('#3 needs-input'), { timeout: 5_000 })
