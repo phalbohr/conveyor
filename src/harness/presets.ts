@@ -4,14 +4,16 @@ export const PRESETS: Record<string, CommandDefinition> = {
   opencode: {
     command: 'opencode',
     args: ['run', '--auto', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
-    env: {},
+    env: { OPENCODE_DB: '{temp}/opencode.db' },
     models: { args: ['models'] },
+    interactive: ['--model', '{model}', '--prompt', '{prompt}'],
   },
   kilocode: {
     command: 'kilo',
     args: ['run', '--auto', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
     env: {},
     models: { args: ['models'] },
+    interactive: ['--model', '{model}', '--prompt', '{prompt}'],
   },
   pi: {
     command: 'pi',

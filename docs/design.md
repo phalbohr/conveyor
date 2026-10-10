@@ -53,7 +53,8 @@ Commands:
 
 ## Live sessions
 
-- `conveyor new` and `conveyor attach <issue>` start a normal interactive session of the harness in the terminal. `new` uses the harness, model, and effort of the `story` stage; `attach` uses those of the waiting stage.
+- `conveyor new`, `conveyor attach <issue>`, the task harness session (`h` on a task), and the help session (`a` on the help screen) start a normal interactive session of a harness in the terminal. All of them use the personal `live: {harness, model, effort}` from `local.yaml`; a missing value comes from `defaults`.
+- `claude` and `codex` start with `--model` and the effort; a command harness starts with its `interactive` args (placeholders `{prompt}`, `{model}`, `{effort}`, `{workspace}`). The `opencode` and `kilocode` presets have `interactive: [--model, "{model}", --prompt, "{prompt}"]`; a harness without `interactive` cannot run live sessions, and the CLI says so. A session that exits with a non-zero code reports the code and points to `live.harness` and `live.model`.
 - The session instructions are strict templates in `live/new.md` and `live/attach.md` (package defaults if missing). The agent writes its result to a temporary file; the CLI reads it after the session ends and writes to the board.
 - `new`: the result has frontmatter `title` and `form` (`idea`, `story`, or `plan`) and the task text. The CLI creates the task with `conveyor::backlog` and that `form::` label.
 - `attach`: the result is the decision of the human. The CLI posts it as a normal comment without the agent marker, so the next `run` cycle resumes the stage.
@@ -427,7 +428,9 @@ Other harnesses run through a generic command adapter. Built-in presets:
 | `agent-zero` | `a0 headless -p {prompt} --output jsonl --workspace {workspace}` | model set in the Agent Zero instance; host in `AGENT_ZERO_HOST` |
 
 - `harnesses` in `config.yaml` defines new harnesses or overrides presets (`command`, `args`, `env`); `harnesses` in `local.yaml` overrides personal values such as the endpoint or the key. `env` merges, `command` and `args` replace.
-- Placeholders in `args` and `env`: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`.
+- Placeholders in `args` and `env`: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{temp}` (a temporary directory of the run, deleted after it).
+- The `opencode` preset sets `OPENCODE_DB: {temp}/opencode.db`: OpenCode keeps one SQLite database per user, and parallel runs on it fail with "database is locked". Each stage gets its own database; live sessions keep the user's own.
+- Live sessions use `interactive` instead of `args` and skip `env` values with `{result}` or `{temp}`.
 - Result contract: the CLI appends the result schema to the prompt and asks the agent to write the result JSON to the file in `CONVEYOR_RESULT`. No result file means a failed stage.
 - Every output line counts as a progress event for stall detection. Token usage and subscription windows are not available; self-hosted models use the daily token limit of their router.
 - The presets come from the tools' documentation and are not yet verified with real runs.

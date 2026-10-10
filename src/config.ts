@@ -61,6 +61,7 @@ const harnessOverride = z.strictObject({
   env: z.record(z.string(), z.string()).optional(),
   models: z.strictObject({ command: name.optional(), args: z.array(z.string()) }).optional(),
   efforts: z.array(name).optional(),
+  interactive: z.array(z.string()).optional(),
 })
 
 const BUILT_IN_HARNESSES = ['claude', 'codex']
@@ -140,6 +141,7 @@ const localSchema = z.strictObject({
   pickup: z.strictObject({ assignee: name.default('me'), include_unassigned: z.boolean().default(true) }).prefault({}),
   workspace: z.strictObject({ root: name.default('~/.conveyor/workspaces/{project}') }).prefault({}),
   language: z.strictObject({ chat: name.optional() }).prefault({}),
+  live: stageSettings.prefault({}),
   harnesses: z.record(harness, harnessOverride).default({}),
 })
 
@@ -165,14 +167,16 @@ export type HarnessDefinition = {
   env: Record<string, string>
   models?: { command?: string; args: string[] }
   efforts?: string[]
+  interactive?: string[]
 }
 
 export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' | 'language' | 'harnesses'> &
-  Omit<Local, 'artifacts' | 'language' | 'harnesses'> & {
+  Omit<Local, 'artifacts' | 'language' | 'harnesses' | 'live'> & {
     harnesses: Record<string, HarnessDefinition>
     language: { docs: string; chat?: string }
     artifacts: Record<ArtifactKind, Artifact>
     triage: StageSettings
+    live: StageSettings
     stages: Stage[]
   }
 
@@ -198,17 +202,17 @@ export function loadConfig(settingsDir: string): LoadResult {
   const harnesses = resolveHarnesses(team, local, errors)
   const stages = resolveStages(team, errors)
   const triageHarness = team.triage.harness ?? team.defaults.harness
-  for (const [path, used] of [['defaults.harness', team.defaults.harness], ['triage.harness', triageHarness], ...stages.map((stage) => [`stages.${stage.name}.harness`, stage.harness])]) {
+  for (const [path, used] of [['defaults.harness', team.defaults.harness], ['triage.harness', triageHarness], ['live.harness', local.live.harness], ...stages.map((stage) => [`stages.${stage.name}.harness`, stage.harness])]) {
     if (used && !BUILT_IN_HARNESSES.includes(used) && !harnesses[used]) errors.push(`${CONFIG_FILE}: ${path}: unknown harness ${used}`)
   }
   if (errors.length > 0) return { ok: false, errors }
 
   const { artifacts: _teamArtifacts, defaults, triage, stages: _stages, language: teamLanguage, harnesses: _teamHarnesses, ...teamRest } = team
-  const { artifacts: _localArtifacts, language: localLanguage, harnesses: _localHarnesses, ...localRest } = local
+  const { artifacts: _localArtifacts, language: localLanguage, harnesses: _localHarnesses, live, ...localRest } = local
   const language = { docs: teamLanguage.docs, ...(localLanguage.chat ? { chat: localLanguage.chat } : {}) }
   return {
     ok: true,
-    config: { ...teamRest, ...localRest, language, harnesses, artifacts, triage: withDefaults(triage, defaults), stages },
+    config: { ...teamRest, ...localRest, language, harnesses, artifacts, triage: withDefaults(triage, defaults), live: withDefaults(live, defaults), stages },
   }
 }
 
@@ -258,12 +262,14 @@ function resolveHarnesses(team: Team, local: Local, errors: string[]): Record<st
       }
       const models = override.models ?? base?.models
       const efforts = override.efforts ?? base?.efforts
+      const interactive = override.interactive ?? base?.interactive
       harnesses[harnessName] = {
         command,
         args: override.args ?? base?.args ?? ['{prompt}'],
         env: { ...base?.env, ...override.env },
         ...(models ? { models } : {}),
         ...(efforts ? { efforts } : {}),
+        ...(interactive ? { interactive } : {}),
       }
     }
   }

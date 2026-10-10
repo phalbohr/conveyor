@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
 import { z } from 'zod'
 import type { Context } from '../cli.js'
-import type { Config, Stage } from '../config.js'
+import type { Config } from '../config.js'
 import { Artifacts } from '../engine/artifacts.js'
 import { readFormat, renderInstructions } from '../engine/stage-file.js'
 import { Trust } from '../engine/trust.js'
@@ -22,8 +22,7 @@ export async function newCommand(context: Context, json: boolean): Promise<numbe
   const prepared = prepare(context)
   if (!prepared) return 1
   const { config, settings, board } = prepared
-  const stage = stageNamed(config, 'story')
-  const text = await session(context, settings, config, 'new.md', stage, { project: config.board.project })
+  const text = await session(context, settings, config, 'new.md', { project: config.board.project })
   if (!text.ok) return fail(context, text.error)
 
   const parsed = parseNewTask(text.value)
@@ -46,11 +45,11 @@ export async function attachCommand(context: Context, id: string): Promise<numbe
   const comments = await trust.only(await board.listComments(id))
   const waiting = findWorkpad(comments)?.state.waiting
   const request = comments.find((comment) => comment.id === waiting?.commentId)
-  const stage = stageNamed(config, waiting?.stage ?? 'story')
+  const stage = waiting?.stage ?? 'story'
   const artifacts = new Artifacts(board, unavailableWorkspaces, config, context.home).read(task, comments, context.cwd)
-  const text = await session(context, settings, config, 'attach.md', stage, {
+  const text = await session(context, settings, config, 'attach.md', {
     issue: { id: task.id, title: task.title, body: task.body },
-    stage: stage.name,
+    stage,
     request: request ? commentText(request) : '(no request found)',
     artifacts: Object.entries(artifacts)
       .map(([kind, content]) => `## Artifact: ${kind}\n\n${content.trim()}`)
@@ -59,7 +58,7 @@ export async function attachCommand(context: Context, id: string): Promise<numbe
   if (!text.ok) return fail(context, text.error)
 
   await board.addComment(id, `Answer from a live session:\n\n${text.value.trim()}`)
-  context.stdout(`Posted the answer to task ${id}. The next conveyor cycle continues the ${stage.name} stage.\n`)
+  context.stdout(`Posted the answer to task ${id}. The next conveyor cycle continues the ${stage} stage.\n`)
   return 0
 }
 
@@ -74,8 +73,7 @@ export async function harnessCommand(context: Context, id: string): Promise<numb
   const comments = await trust.only(await board.listComments(id))
   const pad = findWorkpad(comments)
   const pull = await board.pullRequest(id)
-  const stage = stageNamed(config, 'story')
-  const text = await session(context, settings, config, 'task.md', stage, {
+  const text = await session(context, settings, config, 'task.md', {
     project: config.board.project,
     issue: { id: task.id, title: task.title, body: task.body || '(empty)' },
     labels: [task.state ? `conveyor::${task.state}` : '', task.form ? `form::${task.form}` : '', task.stage ? `stage::${task.stage}` : ''].filter(Boolean).join(', ') || '(none)',
@@ -88,7 +86,7 @@ export async function harnessCommand(context: Context, id: string): Promise<numb
     pull: pull ? `${pull.url} · ${pull.state} · checks ${pull.checks}` : '(none)',
   })
   if (!text.ok) {
-    context.stdout(`The session on task ${id} ended without a comment.\n`)
+    context.stdout(`The session on task ${id} ended without a comment: ${text.error}.\n`)
     return 0
   }
   await board.addComment(id, `Notes from a live session:\n\n${text.value.trim()}`)
@@ -99,18 +97,17 @@ export async function harnessCommand(context: Context, id: string): Promise<numb
 export async function helpSessionCommand(context: Context): Promise<number> {
   const prepared = prepare(context)
   if (!prepared) return 1
-  const stage = stageNamed(prepared.config, 'story')
-  const folder = stage.harness === 'claude' ? '.claude' : '.agents'
+  const { config } = prepared
+  const folder = config.live.harness === 'claude' ? '.claude' : '.agents'
   const installed = [context.cwd, context.home].some((base) => existsSync(join(base, folder, 'skills', 'conveyor-help', 'SKILL.md')))
   if (!installed) skillInstall({ ...context, stdout: () => undefined }, {}, false)
   const prompt = 'Use the conveyor-help skill. Help me with the conveyor of this project: answer my questions about the workflow, the board, and the settings, or walk me through the setup.'
-  const args =
-    stage.harness === 'codex'
-      ? [...(stage.model ? ['-m', stage.model] : []), '-c', `model_reasoning_effort="${stage.effort}"`, '--', prompt]
-      : [...(stage.model ? ['--model', stage.model] : []), '--effort', stage.effort, '--', prompt]
-  await context.interact(stage.harness, args, { cwd: context.cwd, env: childEnv(process.env) })
-  context.stdout(installed ? 'The help session ended.\n' : 'Installed the conveyor-help skill in your home directory; the help session ended.\n')
-  return 0
+  const command = liveCommand(context, config, prompt)
+  if (!command.ok) return fail(context, command.error)
+  const code = await context.interact(command.command, command.args, { cwd: context.cwd, env: { ...childEnv(process.env), ...command.env } })
+  const ended = code === 0 ? 'the help session ended.' : `the help session ended with exit code ${code} (${command.command} with model ${config.live.model}; check live.harness and live.model in the settings).`
+  context.stdout(installed ? `${ended[0]?.toUpperCase()}${ended.slice(1)}\n` : `Installed the conveyor-help skill in your home directory; ${ended}\n`)
+  return code === 0 ? 0 : 1
 }
 
 async function session(
@@ -118,7 +115,6 @@ async function session(
   settings: string,
   config: Config,
   template: string,
-  stage: Stage,
   variables: Record<string, unknown>,
 ): Promise<{ ok: true; value: string } | { ok: false; error: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'conveyor-live-'))
@@ -134,13 +130,13 @@ async function session(
     })
     if (!prompt.ok) return { ok: false, error: `live/${template}: ${prompt.error}` }
 
-    const args =
-      stage.harness === 'codex'
-        ? [...(stage.model ? ['-m', stage.model] : []), '-c', `model_reasoning_effort="${stage.effort}"`, '--add-dir', dir, '--', prompt.text]
-        : [...(stage.model ? ['--model', stage.model] : []), '--effort', stage.effort, '--add-dir', dir, '--', prompt.text]
-    await context.interact(stage.harness, args, { cwd: context.cwd, env: { ...childEnv(process.env), CONVEYOR_RESULT: result } })
+    const command = liveCommand(context, config, prompt.text, dir)
+    if (!command.ok) return command
+    const code = await context.interact(command.command, command.args, { cwd: context.cwd, env: { ...childEnv(process.env), ...command.env, CONVEYOR_RESULT: result } })
 
-    if (!existsSync(result) || !readFileSync(result, 'utf8').trim()) return { ok: false, error: 'the session ended with no result' }
+    if (!existsSync(result) || !readFileSync(result, 'utf8').trim()) {
+      return { ok: false, error: code === 0 ? 'the session ended with no result' : `${command.command} exited with code ${code}; check live.harness and live.model in the settings` }
+    }
     return { ok: true, value: readFileSync(result, 'utf8') }
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -155,8 +151,32 @@ function parseNewTask(text: string): { ok: true; title: string; form: 'idea' | '
   return { ok: true, ...parsed.data, body: text.slice(match[0].length).trim() }
 }
 
-function stageNamed(config: Config, name: string): Stage {
-  return config.stages.find((stage) => stage.name === name) ?? (config.stages[0] as Stage)
+function liveCommand(
+  context: Context,
+  config: Config,
+  prompt: string,
+  dir?: string,
+): { ok: true; command: string; args: string[]; env: Record<string, string> } | { ok: false; error: string } {
+  const { harness, model, effort } = config.live
+  const extra = dir ? ['--add-dir', dir] : []
+  if (harness === 'codex') return { ok: true, command: 'codex', args: ['-m', model, '-c', `model_reasoning_effort="${effort}"`, ...extra, '--', prompt], env: {} }
+  if (harness === 'claude') return { ok: true, command: 'claude', args: ['--model', model, '--effort', effort, ...extra, '--', prompt], env: {} }
+  const definition = config.harnesses[harness]
+  if (!definition?.interactive) {
+    return { ok: false, error: `${harness} has no interactive mode for live sessions: set live.harness to claude, codex, opencode, or kilocode in local.yaml, or add harnesses.${harness}.interactive` }
+  }
+  const values: Record<string, string> = { prompt, model, effort, workspace: context.cwd }
+  const fill = (text: string) => text.replace(/\{(prompt|model|effort|workspace)\}/g, (_, key: string) => values[key] ?? '')
+  return {
+    ok: true,
+    command: definition.command,
+    args: definition.interactive.map(fill),
+    env: Object.fromEntries(
+      Object.entries(definition.env)
+        .filter(([, value]) => !/\{(result|temp)\}/.test(value))
+        .map(([key, value]) => [key, fill(value)]),
+    ),
+  }
 }
 
 function fail(context: Context, error: string) {
