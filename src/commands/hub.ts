@@ -60,12 +60,14 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
       if (!current.ok) throw new Error(current.errors.join('; '))
       const before = await checkBoard(board, current.config)
       await board.prepare(current.config.stages.map((stage) => stage.name))
+      const synced = await board.syncMirror(await board.listTasks())
       forgetBoardCheck()
       const added = [
         ...before.missing,
         ...(before.field === 'missing' ? ['the Conveyor field'] : before.field ? before.field.missingOptions.map((option) => `the Conveyor option ${option}`) : []),
       ]
-      return added.length ? `Added ${added.join(', ')}.` : 'Nothing to add; the rest needs your hand on the board.'
+      const moved = synced ? ` Moved ${synced} cards to the column of their conveyor:: label.` : ''
+      return `${added.length ? `Added ${added.join(', ')}.` : 'Nothing to add.'}${moved}`
     },
   }
   let notice: string | undefined

@@ -21,6 +21,7 @@ export async function boardUpdateCommand(context: Context, json: boolean): Promi
   const { board, config } = prepared
   const before = await checkBoard(board, config)
   await board.prepare(config.stages.map((stage) => stage.name))
+  const synced = await board.syncMirror(await board.listTasks())
   const after = await checkBoard(board, config)
   const added = [
     ...before.missing.filter((label) => !after.missing.includes(label)),
@@ -28,10 +29,11 @@ export async function boardUpdateCommand(context: Context, json: boolean): Promi
     ...(before.field && before.field !== 'missing' ? before.field.missingOptions.filter((option) => !(after.field && after.field !== 'missing' && after.field.missingOptions.includes(option))).map((option) => `the Conveyor option ${option}`) : []),
   ]
   if (json) {
-    context.stdout(`${JSON.stringify({ added, remaining: after })}\n`)
+    context.stdout(`${JSON.stringify({ added, synced, remaining: after })}\n`)
     return 0
   }
   context.stdout(added.length ? `Added: ${added.join(', ')}\n` : 'Nothing to add.\n')
+  if (synced) context.stdout(`Moved ${synced} cards to the column of their conveyor:: label.\n`)
   const remaining = boardCheckLines({ ...after, missing: [] })
   if (remaining.length) context.stdout(`Left for you:\n${remaining.join('\n')}\n`)
   return 0

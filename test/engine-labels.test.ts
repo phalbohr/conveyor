@@ -93,6 +93,18 @@ describe('board labels', () => {
     expect(await board.getTask('1')).toMatchObject({ state: 'needs-input', stage: 'polish' })
   })
 
+  it('syncs the project columns with the labels on every cycle', async () => {
+    const { board, cycle } = setup()
+    let synced: string[] = []
+    board.syncMirror = async (tasks) => {
+      synced = tasks.map((task) => `${task.id}:${task.state}`)
+      return tasks.length
+    }
+    await board.createTask('Draft', 'notes', { state: 'backlog' })
+    await cycle()
+    expect(synced).toEqual(['1:backlog'])
+  })
+
   it('prepares labels for every configured stage', async () => {
     const board = new FakeBoard('me')
     await board.prepare(['story', 'plan', 'implement', 'polish', 'merge'])

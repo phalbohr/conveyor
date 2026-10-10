@@ -89,6 +89,10 @@ export class GitLabBoard implements Board {
     return { labels, issues }
   }
 
+  async syncMirror() {
+    return 0
+  }
+
   async boardUrl() {
     return `${(await this.json<{ web_url: string }>([this.api])).web_url}/-/boards`
   }

@@ -150,7 +150,12 @@ export class Engine {
     let awaitingReview = 0
     const now = Date.now()
 
-    for (const listed of await board.listTasks()) {
+    const listedTasks = await board.listTasks()
+    await board
+      .syncMirror(listedTasks)
+      .then((synced) => synced && this.log(`board: moved ${synced} cards to the column of their conveyor:: label`))
+      .catch((error: unknown) => this.log(`board: the project columns were not synced: ${(error as Error).message}`))
+    for (const listed of listedTasks) {
       if (this.running.has(listed.id)) continue
       if (!(await this.trust.trusted(listed.author))) {
         if (!this.untrusted.has(listed.id)) this.log(`task ${listed.id}: skipped: its author @${listed.author} has no write access to the repository`)

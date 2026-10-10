@@ -1,5 +1,5 @@
 import { redactSecrets } from '../engine/redact.js'
-import type { Board, MergeMethod, TaskForm, TaskLabels, TaskState } from './board.js'
+import type { Board, MergeMethod, Task, TaskForm, TaskLabels, TaskState } from './board.js'
 
 export class RedactingBoard implements Board {
   constructor(
@@ -21,6 +21,10 @@ export class RedactingBoard implements Board {
 
   inspect() {
     return this.board.inspect()
+  }
+
+  syncMirror(tasks: Task[]) {
+    return this.board.syncMirror(tasks)
   }
 
   boardUrl() {

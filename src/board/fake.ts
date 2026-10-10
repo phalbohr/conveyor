@@ -64,6 +64,10 @@ export class FakeBoard implements Board {
     return { labels: [...new Set([...this.labels, ...[...this.issues.values()].flatMap((issue) => issue.labels)])], issues }
   }
 
+  async syncMirror() {
+    return 0
+  }
+
   async boardUrl() {
     return 'https://example.test/board'
   }

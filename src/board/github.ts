@@ -283,6 +283,23 @@ export class GitHubBoard implements Board {
     if (pull?.state === 'open') await this.gh(['pr', 'close', pull.number, '-R', this.project])
   }
 
+  async syncMirror(tasks: Task[]) {
+    const number = this.options.projectNumber
+    if (!number) return 0
+    const mirror = await this.projectMirror(number)
+    const listed = JSON.parse(await this.gh(['project', 'item-list', String(number), '--owner', this.owner(), '--format', 'json', '--limit', '10000'])) as {
+      items: { content?: { number?: number; repository?: string }; conveyor?: string }[]
+    }
+    const current = new Map(listed.items.filter((item) => item.content?.repository === this.project).map((item) => [String(item.content?.number), item.conveyor]))
+    let synced = 0
+    for (const task of tasks) {
+      if (!task.state || task.closed || current.get(task.id) === task.state || !mirror.options.has(task.state)) continue
+      await this.mirrorState(task.id, task.state)
+      synced++
+    }
+    return synced
+  }
+
   private async mirrorState(id: string, state: TaskState) {
     const number = this.options.projectNumber
     if (!number) return
