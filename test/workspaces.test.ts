@@ -26,7 +26,7 @@ function repository() {
 }
 
 function workspaces(project: string, hooks: Partial<ReturnType<ConstructorParameters<typeof GitWorkspaces>[0]['hooks']>> = {}) {
-  return new GitWorkspaces({ repo: project, root: join(tempDir('conveyor-ws-'), 'workspaces'), hooks: () => ({ timeout: 5_000, ...hooks }) })
+  return new GitWorkspaces({ repo: project, root: join(tempDir('conveyor-ws-'), 'workspaces'), base: async () => 'main', hooks: () => ({ timeout: 5_000, ...hooks }) })
 }
 
 describe('GitWorkspaces', () => {
@@ -56,6 +56,24 @@ describe('GitWorkspaces', () => {
     expect(readFileSync(join(workspace.path, 'work.txt'), 'utf8')).toBe('previous owner\n')
   })
 
+  it('starts and resets task branches from the base branch', async () => {
+    const { project, seed } = repository()
+    git(seed, 'switch', '-c', 'develop')
+    writeFileSync(join(seed, 'develop.txt'), 'develop\n')
+    git(seed, 'add', '.')
+    git(seed, 'commit', '-m', 'develop')
+    git(seed, 'push', 'origin', 'develop')
+    const manager = new GitWorkspaces({ repo: project, root: join(tempDir(), 'ws'), base: async () => 'develop', hooks: () => ({ timeout: 5_000 }) })
+
+    const workspace = await manager.prepare('8')
+    expect(existsSync(join(workspace.path, 'develop.txt'))).toBe(true)
+    writeFileSync(join(workspace.path, 'work.txt'), 'work\n')
+    await manager.commitAll('8', 'work')
+    await manager.reset('8')
+    expect(existsSync(join(workspace.path, 'work.txt'))).toBe(false)
+    expect(existsSync(join(workspace.path, 'develop.txt'))).toBe(true)
+  })
+
   it('runs after_create once in a new workspace', async () => {
     const { project } = repository()
     const manager = workspaces(project, { after_create: 'echo created >> hook.log' })
@@ -82,7 +100,7 @@ describe('GitWorkspaces', () => {
   it('uses the current hooks on every call', async () => {
     const { project } = repository()
     let script = 'echo first >> hook.log'
-    const manager = new GitWorkspaces({ repo: project, root: join(tempDir(), 'ws'), hooks: () => ({ timeout: 5_000, before_run: script }) })
+    const manager = new GitWorkspaces({ repo: project, root: join(tempDir(), 'ws'), base: async () => 'main', hooks: () => ({ timeout: 5_000, before_run: script }) })
     const { path } = await manager.prepare('1')
     await manager.runHook('before_run', path)
     script = 'echo second >> hook.log'

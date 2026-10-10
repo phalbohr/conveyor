@@ -47,6 +47,7 @@ export type MergeMethod = 'merge' | 'squash' | 'rebase'
 export interface Board {
   user(): Promise<string>
   boardUrl(): Promise<string>
+  baseBranch(): Promise<string>
   inspect(): Promise<BoardInspection>
   syncMirror(tasks: Task[]): Promise<number>
   linkedProjects(): Promise<LinkedProject[]>

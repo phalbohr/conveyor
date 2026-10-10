@@ -89,6 +89,7 @@ export class Runner {
     const workspaces = new GitWorkspaces({
       repo: context.cwd,
       root: expandPath(config.workspace.root, { home: context.home, project }),
+      base: () => board.baseBranch(),
       hooks: () => {
         const current = loadConfig(settings)
         if (current.ok) hooks = current.config.hooks
@@ -116,7 +117,7 @@ export class Runner {
 
     let noticed = ''
     const checkSync = async () => {
-      const sync = await checkSettingsSync(settings, { fetch: true })
+      const sync = await checkSettingsSync(settings, { fetch: true, base: await board.baseBranch().catch(() => undefined) })
       if (sync.state !== 'behind' || sync.commits.join() === noticed) return
       noticed = sync.commits.join()
       this.emit('warning', syncNotice(sync))

@@ -14,9 +14,9 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 | 4 | `story` stage (for `form::idea`): idea → user story in `formats/story.md` | agent | in-progress + `stage::story` |
 | 5 | Gate idea → story: questions or approval in issue comments, depending on `transitions.idea_to_story` | human or agent | `conveyor::needs-input` while waiting, then `queued` or in-progress |
 | 6 | `plan` stage (for `form::idea` and `form::story`) and gate story → plan | agent, human | in-progress / needs-input + `stage::plan` |
-| 7 | `implement`, `review`, and custom stages before `merge`, each in the task worktree on branch `conveyor/<number>`; the conveyor commits and pushes after every stage | agents | in-progress + `stage::<name>` |
+| 7 | `implement`, `review`, and custom stages before `merge`, each in the task worktree on branch `conveyor/<number>` (one branch and one worktree per task, started from the base branch); the conveyor commits and pushes after every stage | agents | in-progress + `stage::<name>` |
 | 8 | `merge` stage prepares the branch; the conveyor opens a pull/merge request | agent, conveyor | — |
-| 9 | Merge gate by `transitions.merge`: `human` → review; `ai` → merge; `smart` → the merge stage decides by `smart/merge.md`. With `review.approvals: 2`, two different people must approve or write `/approve` | human or agent | `conveyor::review` while waiting |
+| 9 | Merge gate by `transitions.merge`: `human` → review; `ai` → merge without review, `review.approvals` is not used; `smart` → the merge stage decides by `smart/merge.md`. With `review.approvals: 2`, two different people must approve or write `/approve` | human or agent | `conveyor::review` while waiting |
 | 10 | Review: `/approve` or an Approve review → merge once `review.approvals` people approved; `/fix`, `/fix_from:`, `/rework` → back to work. An approval counts only for the head commit under review; a push by someone else asks for a new approval | human | review / in-progress |
 | 11 | Landing: waits for blockers and CI, merges under the lock `conveyor-lock/merge` | conveyor | — |
 | 12 | Post-merge stages with `when: success`, `failure`, or `always` (for example `fix-ci`) | agents | in-progress |
@@ -74,7 +74,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 
 | File | Controls |
 |---|---|
-| `config.yaml` (team) | board, `pickup_from`, `transitions`, `stages`, `defaults`, `triage`, `harnesses`, `artifacts`, `hooks`, `timeouts`, `retry`, `merge_method`, `close_on_done`, `review.approvals`, `language.docs` |
+| `config.yaml` (team) | board (`board.base_branch`), `pickup_from`, `transitions`, `stages`, `defaults`, `triage`, `harnesses`, `artifacts`, `hooks`, `timeouts`, `retry`, `merge_method`, `close_on_done`, `review.approvals`, `language.docs` |
 | `local.yaml` (personal) | `limits` (running, awaiting_me, awaiting_review, daily_tokens, subscription reserves), `poll_interval`, `pickup`, `workspace.root`, `language.chat`, personal `harnesses` overrides, private `artifacts` |
 | `stages/<name>.md` | what a stage does: Liquid template with `issue`, `stage`, `attempt`, `artifacts`, `review`, `language`, `formats`; frontmatter `skills: [a, b]` attaches skills (claude stages) |
 | `smart/<gate>.md` | when a smart gate asks a human (`idea-story`, `story-plan`, `merge`) |
@@ -113,6 +113,8 @@ harnesses:
 **A second reviewer on another harness:** `conveyor config stage add review-2`, `conveyor config set stages.review-2.harness codex`, write `stages/review-2.md`.
 
 **Repair broken CI after merge:** `conveyor config stage add fix-ci --after-merge --when failure`, write `stages/fix-ci.md`.
+
+**Work on `develop` instead of the default branch:** `conveyor config set board.base_branch develop`. Task branches `conveyor/<number>` then start from `origin/develop`, rework and the next part reset to it, and pull requests merge into it. The conveyor pushes only to `conveyor/<number>` and merges through pull requests, so a `develop` that accepts changes only through pull requests works. Branch protection still applies: when it requires approvals that the token cannot bypass, keep `transitions.merge: human`; with `ai` the merge fails and the task goes to needs-input. An empty value returns to the default branch of the repository.
 
 **Let the agents merge simple changes:** `conveyor config set transitions.merge smart` and list the risky cases in `smart/merge.md`.
 

@@ -88,6 +88,7 @@ const TEAM: Spec[] = [
   { key: 'retry.max_attempts', label: 'Attempts before a human', kind: 'number', fallback: '5', help: 'failed attempts of a stage before it asks a human' },
   { key: 'retry.max_backoff', label: 'Longest retry pause', kind: 'text', fallback: '5m', help: 'pauses between attempts double up to this' },
   { key: 'board.github_project', label: 'GitHub project number', kind: 'number', help: 'GitHub only: the project whose Conveyor field shows the task state as columns' },
+  { key: 'board.base_branch', label: 'Base branch', kind: 'text', help: 'task branches start here and pull requests merge here; empty = the default branch of the repository' },
 ]
 
 const PERSONAL: Spec[] = [

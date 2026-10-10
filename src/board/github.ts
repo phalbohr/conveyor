@@ -60,7 +60,7 @@ type GitHubPull = {
 type ProjectField = { id: string; name: string; type: string; options?: { id: string; name: string }[] }
 type ProjectMirror = { projectId: string; fieldId: string; options: Map<string, string> }
 
-export type GitHubBoardOptions = { projectNumber?: number; warn?: (message: string) => void }
+export type GitHubBoardOptions = { projectNumber?: number; baseBranch?: string; warn?: (message: string) => void }
 
 const PROJECT_FIELD = 'Conveyor'
 const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,statusCheckRollup,reviews,comments'
@@ -225,7 +225,7 @@ export class GitHubBoard implements Board {
   }
 
   async claim(id: string) {
-    const head = await this.api<{ object: { sha: string } }>([`${this.repo}/git/ref/heads/${await this.branch()}`])
+    const head = await this.api<{ object: { sha: string } }>([`${this.repo}/git/ref/heads/${await this.baseBranch()}`])
     const result = await this.call(['-X', 'POST', `${this.repo}/git/refs`, '-f', `ref=refs/heads/${LOCK_PREFIX}${id}`, '-f', `sha=${head.object.sha}`])
     if (result.status === 422) return false
     this.parse(result)
@@ -244,7 +244,7 @@ export class GitHubBoard implements Board {
   async openPullRequest(id: string, title: string, body: string) {
     const existing = await this.pullRequest(id)
     if (existing?.state === 'open') return existing
-    const base = await this.branch()
+    const base = await this.baseBranch()
     await this.gh(['pr', 'create', '-R', this.project, '--head', `conveyor/${id}`, '--base', base, '--title', title, '--body', body])
     const opened = await this.pullRequest(id)
     if (!opened) throw new Error(`pull request for task ${id} not found after creation`)
@@ -356,8 +356,8 @@ export class GitHubBoard implements Board {
     return this.project.split('/')[0] ?? this.project
   }
 
-  private async branch() {
-    this.defaultBranch ??= (await this.api<{ default_branch: string }>([this.repo])).default_branch
+  async baseBranch() {
+    this.defaultBranch ??= this.options.baseBranch ?? (await this.api<{ default_branch: string }>([this.repo])).default_branch
     return this.defaultBranch
   }
 

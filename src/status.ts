@@ -94,7 +94,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
   const pid = runningPid(home, project)
   const fetch = Date.now() - lastFetch >= FETCH_EVERY
   if (fetch) lastFetch = Date.now()
-  const settingsSync = await checkSettingsSync(options.settings, { fetch })
+  const settingsSync = await checkSettingsSync(options.settings, { fetch, base: await board.baseBranch().catch(() => undefined) })
   if (fetch) boardCheck = await checkBoard(board, config).catch(() => boardCheck)
   const { subscription } = config.limits
   const readings = new QuotaStore(quotaFile(home, project)).all()
