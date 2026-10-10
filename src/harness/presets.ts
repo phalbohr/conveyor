@@ -11,7 +11,7 @@ export const PRESETS: Record<string, CommandDefinition> = {
   kilocode: {
     command: 'kilo',
     args: ['run', '--auto', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
-    env: {},
+    env: { KILO_DB: '{temp}/kilo.db' },
     models: { args: ['models'] },
     interactive: ['--model', '{model}', '--prompt', '{prompt}'],
   },

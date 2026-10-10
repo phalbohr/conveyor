@@ -126,7 +126,7 @@ harnesses:
     env: {LLM_BASE_URL: "http://localhost:4000", LLM_API_KEY: "sk-local"}
 ```
 
-Placeholders: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{temp}` (a temporary directory of the run; the `opencode` preset keeps its database there, so parallel stages do not lock each other). `interactive` sets the args of live sessions. The agent writes its result as JSON to the file in `CONVEYOR_RESULT`; the conveyor adds the schema to the prompt.
+Placeholders: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{temp}` (a temporary directory of the run; the `opencode` and `kilocode` presets keep their databases there, so parallel stages do not lock each other). `interactive` sets the args of live sessions. The agent writes its result as JSON to the file in `CONVEYOR_RESULT`; the conveyor adds the schema to the prompt.
 
 Codex stages also accept `sandbox: workspace-write | full-access` (default `workspace-write`) and `network: true | false` (default `false`).
 
