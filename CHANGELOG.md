@@ -13,6 +13,7 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- Workpad state stays readable when a harness error contains color codes or other control characters; before, such an error broke the hidden state and the task restarted at the wrong stage.
 - OpenCode and Kilo stages run in parallel: each run gets its own database (`OPENCODE_DB`, `KILO_DB`), new placeholder `{temp}`. A failed model listing is no longer cached, so `run` warns about an unknown model again; harness errors in the log have no color codes.
 - Live sessions (`new`, `attach`, `h`, help `a`) use the personal `live: {harness, model, effort}` from `local.yaml`; `opencode` and `kilocode` start in their interactive mode; a failed session shows its exit code.
 - `board.base_branch`: the branch that task branches start from and pull requests merge into (default: the default branch of the repository). The conveyor pushes only to `conveyor/<issue>` branches, so a base branch open only to pull requests works.

@@ -81,6 +81,7 @@ export function findWorkpad(comments: Comment[]): Workpad | undefined {
 }
 
 export function renderWorkpad(state: WorkpadState, text: string) {
+  state = JSON.parse(JSON.stringify(state, (_, value: unknown) => (typeof value === 'string' ? plain(value) : value))) as WorkpadState
   const stage = state.stage ? `Stage: \`${state.stage}\`${state.attempt ? ` · failed attempts: ${state.attempt}` : ''}\n\n` : ''
   const error = state.lastError ? `Last error: ${state.lastError.replaceAll('\n', ' ')}\n\n` : ''
   return `${AGENT_MARKER}:workpad ${JSON.stringify(state).replaceAll('>', '\\u003e')} -->\n### Conveyor workpad\n\n${stage}${error}${text}`
@@ -90,6 +91,10 @@ export function repliesSince(comments: Comment[], commentId: string | undefined)
   const index = comments.findIndex((comment) => comment.id === commentId)
   if (index < 0) return []
   return comments.slice(index + 1).filter((comment) => !isAgentComment(comment))
+}
+
+function plain(text: string) {
+  return text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
 }
 
 function parseJson(text: string): unknown {
