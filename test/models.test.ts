@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Run } from '../src/cli.js'
 import { loadConfig } from '../src/config.js'
-import { CLAUDE_EFFORTS, ModelCache, discoverModels, effortsFor, isModelError, modelKnown } from '../src/models.js'
+import { CLAUDE_EFFORTS, ModelCache, catalogsFor, discoverModels, effortsFor, isModelError, modelKnown } from '../src/models.js'
 import { FakeBoard } from '../src/board/fake.js'
 import { CLAUDE_MODELS, runCli, tempDir } from './helpers.js'
 
@@ -115,6 +115,14 @@ describe('model helpers', () => {
     const file = join(tempDir(), 'models.json')
     new ModelCache(file).set('codex', catalog)
     expect(new ModelCache(file).get('codex')).toEqual(catalog)
+  })
+
+  it('asks again after a failed listing instead of using the cached failure', async () => {
+    const cache = new ModelCache(join(tempDir(), 'models.json'))
+    cache.set('opencode', { models: [], fetchedAt: '2026-10-06T00:00:00.000Z', error: 'opencode exited with code 127' })
+    const catalogs = await catalogsFor(['opencode'], config(), { run: responder({ 'opencode models': 'litellm/local-model\n' }) }, cache, false)
+    expect(catalogs.opencode?.models.map((model) => model.id)).toEqual(['litellm/local-model'])
+    expect(cache.get('opencode')?.error).toBeUndefined()
   })
 })
 

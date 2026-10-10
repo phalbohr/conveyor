@@ -92,8 +92,9 @@ export async function catalogsFor(harnesses: string[], config: Config, probes: P
   const catalogs: Record<string, Catalog> = {}
   for (const harness of harnesses) {
     const cached = cache.get(harness)
-    const catalog = !refresh && cached ? cached : await discoverModels(harness, config, probes)
-    if (!cached || refresh) cache.set(harness, catalog)
+    const usable = !refresh && cached && !cached.error ? cached : undefined
+    const catalog = usable ?? (await discoverModels(harness, config, probes))
+    if (!usable) cache.set(harness, catalog)
     catalogs[harness] = catalog
   }
   return catalogs

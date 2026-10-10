@@ -97,6 +97,7 @@ The task is not taken? Check that the issue has a `form::` label that `pickup_fr
 | how a harness is started, its endpoint | `config.yaml`, `local.yaml` | `harnesses` |
 | where idea, story, and plan are stored | `config.yaml`, `local.yaml` | `artifacts` (`board`, `repo`, `path`) |
 | the documentation language / my chat language | `config.yaml` / `local.yaml` | `language.docs` / `language.chat` |
+| the harness and model of my live sessions (`new`, `attach`, `h` on a task, `a` in help) | `local.yaml` | `live.harness`, `live.model`, `live.effort` (empty: `defaults`) |
 | approvals needed for merge, merge method, closing done issues | `config.yaml` | `review.approvals`, `merge_method`, `close_on_done` |
 | timeouts and retries | `config.yaml` | `timeouts`, `retry` |
 | workspace setup scripts | `config.yaml` | `hooks` |
@@ -125,7 +126,7 @@ harnesses:
     env: {LLM_BASE_URL: "http://localhost:4000", LLM_API_KEY: "sk-local"}
 ```
 
-Placeholders: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`. The agent writes its result as JSON to the file in `CONVEYOR_RESULT`; the conveyor adds the schema to the prompt.
+Placeholders: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{temp}` (a temporary directory of the run; the `opencode` preset keeps its database there, so parallel stages do not lock each other). `interactive` sets the args of live sessions. The agent writes its result as JSON to the file in `CONVEYOR_RESULT`; the conveyor adds the schema to the prompt.
 
 Codex stages also accept `sandbox: workspace-write | full-access` (default `workspace-write`) and `network: true | false` (default `false`).
 

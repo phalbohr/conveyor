@@ -14,7 +14,7 @@ import { ModelCache, catalogsFor, modelKnown } from './models.js'
 import { expandPath } from './paths.js'
 import { checkSettingsSync, syncNotice } from './settings-sync.js'
 import { undescribedNotice, undescribedStages } from './stage-catalog.js'
-import { boardCheckLines, checkBoard } from './board-check.js'
+import { boardCheckLines, checkBoard, needsAttention } from './board-check.js'
 import { redactSecrets } from './engine/redact.js'
 import { QuotaStore, UsageLedger } from './usage.js'
 import { GitWorkspaces } from './workspaces.js'
@@ -69,11 +69,15 @@ export class Runner {
         this.emit('warning', `Stage ${stage.name} uses model ${stage.model}, which ${stage.harness} does not list. Check \`conveyor models ${stage.harness}\`.`)
       }
     }
+    if (!modelKnown(catalogs[config.live.harness], config.live.model)) {
+      this.emit('warning', `Live sessions use model ${config.live.model}, which ${config.live.harness} does not list. Check \`conveyor models ${config.live.harness}\`.`)
+    }
 
     await checkBoard(board, config)
       .then((check) => {
         const lines = boardCheckLines(check)
-        if (lines.length) this.emit('warning', `the board differs from what this version uses; nothing was changed. Run \`conveyor board update\` or press k on the control screen to add what is missing:\n${lines.join('\n')}`)
+        if (lines.length && !needsAttention(check)) this.emit('info', lines.join('\n'))
+        else if (lines.length) this.emit('warning', `the board differs from what this version uses; nothing was changed. Run \`conveyor board update\` or press k on the control screen to add what is missing:\n${lines.join('\n')}`)
       })
       .catch((error: unknown) => this.emit('warning', `the board check failed: ${(error as Error).message}`))
 

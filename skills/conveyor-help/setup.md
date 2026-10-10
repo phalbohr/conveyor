@@ -109,6 +109,7 @@ Personal and never committed:
 - `limits.daily_tokens`: no new tasks after this many tokens a day (0 = off);
 - `limits.subscription.five_hour_reserve`, `seven_day_reserve`: percent of the subscription windows kept for your own work (claude and codex report their windows; command harnesses do not);
 - `language.chat`: the language of `conveyor new` and `conveyor attach`;
+- `live.harness`, `live.model`, `live.effort`: the harness and model of my live sessions (`new`, `attach`, `h` on a task, `a` in help); empty takes `defaults`. Offer a strong interactive model here; `claude`, `codex`, `opencode`, and `kilocode` support live sessions;
 - `poll_interval`, `pickup.include_unassigned`.
 
 ## 10. The board view

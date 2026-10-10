@@ -38,16 +38,18 @@ describe('conveyor new', () => {
     expect(result.stdout).toContain('Created task 1')
     expect(await board.getTask('1')).toMatchObject({ title: 'Export to CSV', body: 'As a user, I want to export reports.', state: 'backlog', form: 'story' })
     expect(sessions[0]?.command).toBe('claude')
-    expect(sessions[0]?.args.join(' ')).toContain('--model opus')
+    expect(sessions[0]?.args.join(' ')).toContain('--model sonnet')
     expect(sessions[0]?.args.at(-1)).toContain(sessions[0]?.env.CONVEYOR_RESULT)
   })
 
-  it('uses the harness and model of the story stage and strips board credentials', async () => {
+  it('uses the live harness and model from local.yaml and strips board credentials', async () => {
     const board = new FakeBoard('me')
     const { interact, sessions } = agent('---\ntitle: T\nform: idea\n---\nAn idea.\n')
+    const paths = await project()
+    writeFileSync(`${paths.cwd}/.conveyor/local.yaml`, 'live: {harness: codex, model: gpt-6-luna, effort: high}\n')
     process.env.GH_TOKEN = 'secret'
     try {
-      await runCli(['new'], { ...(await project('stages:\n  story: {harness: codex, model: gpt-6-luna, effort: high}\n')), board, interact })
+      await runCli(['new'], { ...paths, board, interact })
     } finally {
       delete process.env.GH_TOKEN
     }
@@ -142,6 +144,42 @@ describe('help session', () => {
     expect(sessions[0]?.command).toBe('claude')
     expect(sessions[0]?.args.at(-1)).toContain('Use the conveyor-help skill')
     expect(output).toContain('Installed the conveyor-help skill')
+  })
+
+  it('starts opencode in its interactive mode with the live model', async () => {
+    const paths = await project()
+    writeFileSync(`${paths.cwd}/.conveyor/local.yaml`, 'live: {harness: opencode, model: litellm/local-model}\n')
+    const { interact, sessions } = agent()
+    const context: Context = { ...paths, stdout: () => undefined, stderr: () => undefined, interactive: true, interact, run: async () => ({ code: 0, stdout: '', stderr: '' }) }
+
+    expect(await helpSessionCommand(context)).toBe(0)
+
+    expect(sessions[0]?.command).toBe('opencode')
+    expect(sessions[0]?.args.slice(0, 3)).toEqual(['--model', 'litellm/local-model', '--prompt'])
+    expect(sessions[0]?.args.at(-1)).toContain('Use the conveyor-help skill')
+    expect(existsSync(join(paths.home, '.agents', 'skills', 'conveyor-help', 'SKILL.md'))).toBe(true)
+  })
+
+  it('reports the exit code of a failed session', async () => {
+    const paths = await project()
+    let output = ''
+    const context: Context = { ...paths, stdout: (text) => (output += text), stderr: (text) => (output += text), interactive: true, interact: async () => 2, run: async () => ({ code: 0, stdout: '', stderr: '' }) }
+
+    expect(await helpSessionCommand(context)).toBe(1)
+    expect(output).toContain('exit code 2')
+    expect(output).toContain('live.model')
+  })
+
+  it('refuses a harness without an interactive mode', async () => {
+    const paths = await project()
+    writeFileSync(`${paths.cwd}/.conveyor/local.yaml`, 'live: {harness: pi, model: some-model}\n')
+    const { interact, sessions } = agent()
+    let output = ''
+    const context: Context = { ...paths, stdout: (text) => (output += text), stderr: (text) => (output += text), interactive: true, interact, run: async () => ({ code: 0, stdout: '', stderr: '' }) }
+
+    expect(await helpSessionCommand(context)).toBe(1)
+    expect(sessions).toHaveLength(0)
+    expect(output).toContain('pi has no interactive mode')
   })
 })
 

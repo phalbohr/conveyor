@@ -1,5 +1,5 @@
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CommandHarness } from '../src/harness/command.js'
 import { tempDir } from './helpers.js'
@@ -60,16 +60,17 @@ describe('CommandHarness', () => {
   it('fills placeholders in environment values', async () => {
     const { command, recorded } = agent(WRITE_RESULT)
     const options = run()
-    await new CommandHarness({ command, args: ['{prompt}'], env: { LLM_MODEL: '{model}', OPENHANDS_WORK_DIR: '{workspace}' } }).runStage(options)
+    await new CommandHarness({ command, args: ['{prompt}'], env: { LLM_MODEL: '{model}', OPENHANDS_WORK_DIR: '{workspace}', OPENCODE_DB: '{temp}/opencode.db' } }).runStage(options)
     const { env } = recorded()
     expect(env.LLM_MODEL).toBe('qwen3-coder')
     expect(env.OPENHANDS_WORK_DIR).toBe(options.cwd)
+    expect(env.OPENCODE_DB).toBe(join(dirname(env.CONVEYOR_RESULT ?? ''), 'opencode.db'))
   })
 
   it('fails when the agent writes no result', async () => {
-    const { command } = agent(`console.error('model endpoint unreachable'); process.exit(2)`)
+    const { command } = agent(`console.error('\\x1b[91mError: \\x1b[0mmodel endpoint unreachable'); process.exit(2)`)
     const output = await new CommandHarness({ command, args: ['{prompt}'], env: {} }).runStage(run())
-    expect(output.result).toMatchObject({ outcome: 'failed', summary: expect.stringContaining('model endpoint unreachable') })
+    expect(output.result).toMatchObject({ outcome: 'failed', summary: expect.stringContaining('Error: model endpoint unreachable') })
   })
 
   it('stops on abort', async () => {

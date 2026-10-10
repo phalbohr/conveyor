@@ -11,7 +11,7 @@ export function modelsFile(home: string, project: string) {
 }
 
 export function harnessesInUse(config: Config) {
-  return [...new Set([config.triage.harness, ...config.stages.map((stage) => stage.harness)])]
+  return [...new Set([config.triage.harness, config.live.harness, ...config.stages.map((stage) => stage.harness)])]
 }
 
 export async function modelsCommand(context: Context, harness: string | undefined, options: { refresh?: boolean }, json: boolean): Promise<number> {

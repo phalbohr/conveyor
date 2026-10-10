@@ -107,6 +107,7 @@ const PERSONAL: Spec[] = [
 const PREFIX_HELP: Record<string, string> = {
   defaults: 'used by stages and triage without their own value',
   triage: 'agent that orders new tasks and sets blockers',
+  live: 'my live sessions: help (a), task harness (h), new, attach; empty = defaults',
 }
 
 const STAGE_HELP: Record<string, string> = {
@@ -202,6 +203,11 @@ export class SettingsDocument {
       fields.push({ key: `stage-files.${entry.name}`, group: 'Stage files', label: entry.name, kind: 'select', options: ['on', 'off'], value: entry.enabled ? 'on' : 'off', help: entry.described || entry.reserved ? help : `⚠ ${help}` })
     }
     fields.push(...PERSONAL.map((spec) => this.field('Personal', 'local', spec)))
+    const live = PREFIX_HELP.live ?? ''
+    fields.push(
+      this.field('Personal', 'local', { key: 'live.harness', label: 'Live session harness', kind: 'select', options: harnesses, help: live }),
+      ...this.modelFields('live', 'Live session ', config?.live.harness ?? 'claude', config?.live.model ?? '', { model: live, effort: live }).map((spec) => this.field('Personal', 'local', spec)),
+    )
     return fields
   }
 
@@ -217,8 +223,8 @@ export class SettingsDocument {
     if (!field) throw new Error(`unknown field ${key}`)
     const doc = this.docs[field.group === 'Personal' ? 'local' : 'config']
     const path = key.split('.')
-    if (path.at(-1) === 'harness' && value) this.retarget(path.slice(0, -1), value)
-    if (value === '' && (field.group === 'Stages' || key.startsWith('triage.'))) {
+    if (path.at(-1) === 'harness' && value) this.retarget(path.slice(0, -1), value, doc)
+    if (value === '' && (field.group === 'Stages' || key.startsWith('triage.') || key.startsWith('live.'))) {
       if (doc.hasIn(path)) doc.deleteIn(path)
     } else {
       doc.setIn(path, field.kind === 'number' ? Number(value) : field.kind === 'boolean' ? value === 'true' : value)
@@ -318,8 +324,7 @@ export class SettingsDocument {
     ]
   }
 
-  private retarget(prefix: string[], harness: string) {
-    const doc = this.docs.config
+  private retarget(prefix: string[], harness: string, doc: Document) {
     const drop = (key: string) => doc.hasIn([...prefix, key]) && doc.deleteIn([...prefix, key])
     if (harness !== 'claude') drop('permission_mode')
     if (harness !== 'codex') {
@@ -327,7 +332,7 @@ export class SettingsDocument {
       drop('network')
     }
     const own = (key: string) => doc.getIn([...prefix, key]) as string | undefined
-    const inherited = (key: string) => (prefix[0] === 'defaults' ? undefined : (doc.getIn(['defaults', key]) as string | undefined))
+    const inherited = (key: string) => (prefix[0] === 'defaults' ? undefined : (this.docs.config.getIn(['defaults', key]) as string | undefined))
     const catalog = this.catalogs[harness]
     const model = own('model') ?? inherited('model')
     if (catalog?.models.length && !(model && modelKnown(catalog, model))) doc.setIn([...prefix, 'model'], catalog.models[0]?.id)
@@ -357,8 +362,8 @@ export class SettingsDocument {
       const value = stage?.[STAGE_KEYS[key] ?? key]
       return value === undefined ? undefined : String(value)
     }
-    if (scope === 'triage' && name) {
-      const value = (this.config?.triage as Record<string, unknown> | undefined)?.[name]
+    if ((scope === 'triage' || scope === 'live') && name) {
+      const value = (this.config?.[scope] as Record<string, unknown> | undefined)?.[name]
       return value === undefined ? undefined : String(value)
     }
     return undefined
