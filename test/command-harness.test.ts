@@ -73,6 +73,16 @@ describe('CommandHarness', () => {
     expect(output.result).toMatchObject({ outcome: 'failed', summary: expect.stringContaining('Error: model endpoint unreachable') })
   })
 
+  it('names the exit code and reports a result file that is not JSON', async () => {
+    const { command } = agent(`process.exit(3)`)
+    const missing = await new CommandHarness({ command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(missing.result.summary).toMatch(/^no result file \(.+ exited with code 3\)/)
+
+    const broken = agent(`fs.writeFileSync(process.env.CONVEYOR_RESULT, 'Here is the plan')`)
+    const output = await new CommandHarness({ command: broken.command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(output.result).toMatchObject({ outcome: 'failed', summary: 'the agent wrote a result file that is not JSON: Here is the plan' })
+  })
+
   it('stops on abort', async () => {
     const { command } = agent(`setInterval(() => console.log('still working'), 100)`)
     const controller = new AbortController()

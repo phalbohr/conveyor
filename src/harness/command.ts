@@ -42,9 +42,12 @@ export class CommandHarness implements Harness {
       if (exit.aborted) return { result: failed('stage aborted'), usage: NO_USAGE }
       if (!existsSync(result)) {
         const reason = exit.error ?? (exit.stderr.trim() || tail.join('\n') || `${this.definition.command} exited with code ${exit.code}`)
-        return { result: failed(`no result file: ${reason.replace(/\x1b\[[0-9;]*m/g, '').slice(-2000)}`), usage: NO_USAGE }
+        return { result: failed(`no result file (${this.definition.command} exited with code ${exit.code}): ${reason.replace(/\x1b\[[0-9;]*m/g, '').slice(-2000)}`), usage: NO_USAGE }
       }
-      return { result: parseResult(parseJson(readFileSync(result, 'utf8'))), usage: NO_USAGE }
+      const text = readFileSync(result, 'utf8')
+      const value = parseJson(text)
+      if (value === undefined) return { result: failed(`the agent wrote a result file that is not JSON: ${text.trim().slice(0, 300) || '(empty)'}`), usage: NO_USAGE }
+      return { result: parseResult(value), usage: NO_USAGE }
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
