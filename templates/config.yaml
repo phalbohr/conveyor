@@ -37,12 +37,12 @@ retry:
 harnesses:
   opencode:
     command: opencode
-    args: [run, --auto, -m, "{model}", --dir, "{workspace}", "{prompt}"]
+    args: [run, --auto, --format, json, -m, "{model}", --dir, "{workspace}", "{prompt}"]
     env: {}
     models: {args: [models]}
   kilocode:
     command: kilo
-    args: [run, --auto, -m, "{model}", --dir, "{workspace}", "{prompt}"]
+    args: [run, --auto, --format, json, -m, "{model}", --dir, "{workspace}", "{prompt}"]
     env: {}
     models: {args: [models]}
   pi:
