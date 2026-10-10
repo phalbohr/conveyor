@@ -13,6 +13,9 @@ import { manualRelease } from '../engine/release.js'
 import { parseStageFile } from '../engine/stage-file.js'
 import { findSettings } from '../settings.js'
 import { resolveSkills } from '../skills.js'
+import { resetTask, type ResetForm } from '../engine/reset.js'
+import { runningPid } from '../lock.js'
+import { taskWorkspaces } from '../runner.js'
 import { type Workspaces } from '../workspaces.js'
 
 type Prepared = { settings: string; config: Config; board: Board; secrets: () => string[] }
@@ -76,6 +79,23 @@ export async function releaseCommand(context: Context, id: string, force: boolea
   }
   context.stdout(`Released task ${id}.\n`)
   return 0
+}
+
+export async function resetCommand(context: Context, id: string, form: ResetForm | undefined): Promise<number> {
+  const prepared = prepare(context)
+  if (!prepared) return 1
+  const pid = runningPid(context.home, prepared.config.board.project)
+  if (pid) {
+    context.stderr(`The conveyor runs (pid ${pid}); stop it first, or press x on the task in its control screen.\n`)
+    return 1
+  }
+  try {
+    context.stdout(`${await resetTask(prepared.board, taskWorkspaces(context, prepared.settings, prepared.config, prepared.board), id, form)}\n`)
+    return 0
+  } catch (error) {
+    context.stderr(`${(error as Error).message}\n`)
+    return 1
+  }
 }
 
 export function prepare(context: Context): Prepared | undefined {

@@ -37,6 +37,7 @@ Commands:
 | `conveyor new` | live dialog in the terminal; result is a new task on the board |
 | `conveyor attach <issue>` | answer the questions of a `needs-input` task in the terminal |
 | `conveyor release <issue>` | release the task claim manually |
+| `conveyor reset <issue> [--form]` | start a task over: stop it, close its PR/MR, delete its branch and workspace, clear the workpad, return it to Backlog with a form |
 
 ## Language and formats
 
@@ -288,6 +289,7 @@ Release deletes the lock branch, removes `claimed-by::<user>`, and posts a comme
 - `timeouts.waiting` accepts calendar days (`4d`) or working days (`2wd`, Monday to Friday; holidays are not counted).
 - Automatic releases skip tasks with private artifacts. Manual release of such a task by a non-owner requires `--force`, because the next owner cannot read the private artifacts.
 - `conveyor release <issue>` on a task that runs on this workstation stops the harness first.
+- Reset (`x` on the control screen, `conveyor reset <issue>`): the engine holds the task (aborts its stage and skips it in cycles), then the CLI closes the open PR/MR, removes the workspace, deletes `conveyor/<issue>`, writes an empty workpad, removes `stage::` and `part::`, sets `conveyor::backlog` with the chosen form, and releases the claim. The workpad records `form` when the conveyor takes a task; it is the default form of a reset. Only the owner resets; `conveyor reset` refuses while a conveyor runs for the board, because that process may run the stage. Merged parts stay merged.
 
 ## Candidate order
 

@@ -24,6 +24,7 @@ export type WorkpadState = {
   headSha?: string
   parts?: string[]
   part?: number
+  form?: 'idea' | 'story' | 'plan'
 }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
@@ -51,6 +52,7 @@ const stateSchema = z.object({
   headSha: z.string().optional(),
   parts: z.array(z.string()).optional(),
   part: z.int().nonnegative().optional(),
+  form: z.enum(['idea', 'story', 'plan']).optional(),
 })
 
 const AGENT_MARKER = '<!-- conveyor'

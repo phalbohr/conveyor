@@ -120,6 +120,7 @@ export class Engine {
   private readonly running = new Map<string, Running>()
   private readonly activities = new Map<string, Activity>()
   private readonly halt = new AbortController()
+  private readonly held = new Set<string>()
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
   private triageRetryAt = 0
@@ -162,7 +163,7 @@ export class Engine {
       .then((synced) => synced && this.log(`board: moved ${synced} cards to the column of their conveyor:: label`))
       .catch((error: unknown) => this.log(`board: the project columns were not synced: ${(error as Error).message}`))
     for (const listed of listedTasks) {
-      if (this.running.has(listed.id)) continue
+      if (this.running.has(listed.id) || this.held.has(listed.id)) continue
       if (!(await this.trust.trusted(listed.author))) {
         if (!this.untrusted.has(listed.id)) this.log(`task ${listed.id}: skipped: its author @${listed.author} has no write access to the repository`)
         this.untrusted.add(listed.id)
@@ -254,6 +255,18 @@ export class Engine {
 
   activity(): Record<string, Activity> {
     return Object.fromEntries(this.activities)
+  }
+
+  async hold<T>(id: string, work: () => Promise<T>): Promise<T> {
+    this.held.add(id)
+    try {
+      const running = this.running.get(id)
+      running?.controller.abort()
+      await running?.promise
+      return await work()
+    } finally {
+      this.held.delete(id)
+    }
   }
 
   async release(id: string, reason: string) {
@@ -349,7 +362,10 @@ export class Engine {
     }
 
     await board.setState(id, 'in-progress')
-    if (initial.form) await board.setForm(id, undefined)
+    if (initial.form) {
+      state.form = initial.form
+      await board.setForm(id, undefined)
+    }
     await run.save()
     run.workspace = (await workspaces.prepare(id)).path
 

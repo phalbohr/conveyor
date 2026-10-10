@@ -6,10 +6,11 @@ import { harnessesInUse, modelsFile } from './commands/models.js'
 import { checkStages, cleanupWorkspaces, quotaFile, usageFile } from './commands/run.js'
 import { loadConfig, type Config } from './config.js'
 import { Engine, type Activity } from './engine/engine.js'
+import { resetTask, type ResetForm } from './engine/reset.js'
 import { ClaudeHarness } from './harness/claude.js'
 import { CodexHarness } from './harness/codex.js'
 import { CommandHarness } from './harness/command.js'
-import { acquireRunLock } from './lock.js'
+import { acquireRunLock, runningPid } from './lock.js'
 import { ModelCache, catalogsFor, modelKnown } from './models.js'
 import { expandPath } from './paths.js'
 import { checkSettingsSync, syncNotice } from './settings-sync.js'
@@ -27,6 +28,20 @@ const LOG_LIMIT = 10 * 1024 * 1024
 
 export function logFile(home: string, project: string) {
   return join(home, '.conveyor', 'logs', `${project.replaceAll('/', '-')}.log`)
+}
+
+export function taskWorkspaces(context: Context, settings: string, config: Config, board: Board) {
+  let hooks = config.hooks
+  return new GitWorkspaces({
+    repo: context.cwd,
+    root: expandPath(config.workspace.root, { home: context.home, project: config.board.project }),
+    base: () => board.baseBranch(),
+    hooks: () => {
+      const current = loadConfig(settings)
+      if (current.ok) hooks = current.config.hooks
+      return hooks
+    },
+  })
 }
 
 export class Runner {
@@ -90,17 +105,7 @@ export class Runner {
       return { ok: false, error }
     }
 
-    let hooks = config.hooks
-    const workspaces = new GitWorkspaces({
-      repo: context.cwd,
-      root: expandPath(config.workspace.root, { home: context.home, project }),
-      base: () => board.baseBranch(),
-      hooks: () => {
-        const current = loadConfig(settings)
-        if (current.ok) hooks = current.config.hooks
-        return hooks
-      },
-    })
+    const workspaces = taskWorkspaces(context, settings, config, board)
     const log = (text: string) => this.emit('info', text)
     const engine = (this.engine = new Engine({
       board,
@@ -184,6 +189,16 @@ export class Runner {
 
   activity(): Record<string, Activity> {
     return this.engine?.activity() ?? {}
+  }
+
+  async reset(id: string, form?: ResetForm) {
+    const { settings, config, board } = this.setup
+    const pid = this.loop ? undefined : runningPid(this.context.home, config.board.project)
+    if (pid) throw new Error(`the conveyor runs in another terminal (pid ${pid}); stop it there first, then reset #${id}`)
+    const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form)
+    const summary = await (this.loop && this.engine ? this.engine.hold(id, work) : work())
+    this.emit('info', `task ${id}: ${summary}`)
+    return summary
   }
 
   note(text: string) {

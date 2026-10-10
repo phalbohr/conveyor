@@ -38,7 +38,9 @@ type Props = {
 }
 
 type Panel = 'status' | 'help' | 'usage' | 'log' | 'task' | 'board'
-type Input = { kind: 'attach' | 'release' } | { kind: 'comment'; id: string; target: Target }
+type Input = { kind: 'attach' | 'release' } | { kind: 'comment'; id: string; target: Target } | { kind: 'reset'; id: string }
+
+const RESET_FORMS: Record<string, 'idea' | 'story' | 'plan' | 'none'> = { i: 'idea', s: 'story', p: 'plan', d: 'none' }
 type Opened = { id: string; target: Target; detail?: TaskDetail }
 
 export function StatusScreen({ load, refreshMs, runner, control, notice, onAction }: Props) {
@@ -146,6 +148,10 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         if (key === 'c') setInput({ kind: 'comment', id: current.id, target: current.target })
         if (key === 'b' && url) void control.open(url).catch(fail)
         if (key === 'h') act({ kind: 'harness', id: current.id })
+        if (key === 'x') {
+          if (panel === 'status' && view.column === BACKLOG) setMessage({ text: 'x resets my tasks in progress, needs input, or review.', error: true })
+          else setInput({ kind: 'reset', id: current.id })
+        }
       }
       if (panel === 'task') {
         if (special.upArrow) setScroll((value) => Math.max(0, value - 1))
@@ -218,8 +224,22 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   )
 
   useInput(
-    (_key, special) => {
+    (key, special) => {
       if (special.escape) setInput(undefined)
+      const form = RESET_FORMS[key]
+      if (input?.kind === 'reset' && form && control) {
+        const { id } = input
+        setInput(undefined)
+        setMessage({ text: `Resetting #${id}: stopping its stage, closing its pull request, deleting its branch and workspace…` })
+        void control
+          .reset(id, form)
+          .then((text) => {
+            setMessage({ text })
+            setPanel('status')
+            refresh(true)
+          })
+          .catch(fail)
+      }
     },
     { isActive: input !== undefined },
   )
@@ -289,6 +309,12 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
           />
         </Box>
       )}
+      {input?.kind === 'reset' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="yellow">{`Reset #${input.id}: stop its stage, close its pull request, delete the branch conveyor/${input.id} and its workspace, clear the workpad, and return it to Backlog.`}</Text>
+          <Text color="cyan">Start again as: [i] idea · [s] story · [p] plan · [d] draft without a form · [Esc] cancel</Text>
+        </Box>
+      )}
       {input?.kind === 'comment' && control && (
         <Box flexDirection="column" marginTop={1}>
           <Text color="cyan">{`Comment on #${input.id}${input.target === 'pull' ? ' (pull request)' : ''} · Enter posts · Esc cancels`}</Text>
@@ -320,13 +346,13 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
 function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefined, opened: Opened | undefined, updated: Date | undefined) {
   const time = updated ? ` · updated ${updated.toLocaleTimeString()}` : ''
   if (panel === 'task') {
-    return `[↑↓] scroll · [c] comment · [b] browser · [h] harness${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
+    return `[↑↓] scroll · [c] comment · [b] browser · [h] harness · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
   }
   if (panel === 'board') return `[Enter] add what is missing · [↑↓] scroll · [Esc] back · [q] quit`
   if (panel === 'help') return `[a] ask the conveyor-help skill in a live session · [↑↓] scroll · [Esc] back · [q] quit`
   if (panel !== 'status') return `[↑↓] scroll · [Esc] back · [q] quit`
   if (view.focus === 'tasks') {
-    return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness${view.column === BACKLOG ? ' · [i] form::idea on/off' : ''} · [Esc] columns · [?] help · [q] quit${time}`
+    return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness${view.column === BACKLOG ? ' · [i] form::idea on/off' : ' · [x] reset'} · [Esc] columns · [?] help · [q] quit${time}`
   }
   return `${runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [k] board check · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
 }

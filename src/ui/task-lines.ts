@@ -17,6 +17,7 @@ export type TaskControl = {
   open(url: string): Promise<void>
   openBoard(): Promise<void>
   updateBoard(): Promise<string>
+  reset(id: string, form: 'idea' | 'story' | 'plan' | 'none'): Promise<string>
 }
 
 const time = (iso: string) => new Date(iso).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })

@@ -210,6 +210,34 @@ describe('Engine activity and stop', () => {
     expect(engine.activity()).toEqual({})
   })
 
+  it('remembers the form it took a task with', async () => {
+    const { board, engine, workpad, started } = setup({ script: never })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await engine.tick()
+    await started(['1:implement'])
+    expect(await workpad()).toContain('"form":"plan"')
+    engine.abort()
+    await engine.idle()
+  })
+
+  it('holds a task: aborts its stage and keeps it out of the cycles until the work is done', async () => {
+    const { board, engine, runs, started } = setup({ script: never })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await engine.tick()
+    await started(['1:implement'])
+
+    const result = await engine.hold('1', async () => {
+      expect(engine.activity()).toEqual({})
+      await engine.tick()
+      return 'done'
+    })
+
+    expect(result).toBe('done')
+    expect(runs()).toEqual(['1:implement'])
+    engine.abort()
+    await engine.idle()
+  })
+
   it('claims no new tasks after abort', async () => {
     const { board, engine, runs } = setup({ script: never })
     await board.createTask('Login', 'p', { form: 'plan' })

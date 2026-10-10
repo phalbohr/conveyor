@@ -183,6 +183,10 @@ describe('StatusScreen as a control panel', () => {
         return `Removed form::idea from #${id}.`
       },
       open: async (url) => void calls.push(`open ${url}`),
+      reset: async (id, form) => {
+        calls.push(`reset ${id} ${form}`)
+        return `Reset #${id}.`
+      },
     }
     return { value, calls }
   }
@@ -208,6 +212,26 @@ describe('StatusScreen as a control panel', () => {
     await settle()
     stdin.write(ESC)
     await vi.waitFor(() => expect(lastFrame()).toContain('› #8 Search'), { timeout: 5_000 })
+  })
+
+  it('resets a task in progress after the form is chosen', async () => {
+    const { value, calls } = control()
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write(RIGHT)
+    await settle()
+    stdin.write(DOWN)
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #4 Login'), { timeout: 5_000 })
+    expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[x] reset')
+    await settle()
+    stdin.write('x')
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('Reset #4: stop its stage'), { timeout: 5_000 })
+    expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[s] story')
+    await settle()
+    stdin.write('s')
+    await vi.waitFor(() => expect(calls).toContain('reset 4 story'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('Reset #4.'), { timeout: 5_000 })
   })
 
   it('keeps the task number in its own column and wraps the title and labels inside the second one', async () => {
