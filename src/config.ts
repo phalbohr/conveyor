@@ -66,7 +66,12 @@ const harnessOverride = z.strictObject({
 const BUILT_IN_HARNESSES = ['claude', 'codex']
 
 const teamSchema = z.strictObject({
-  board: z.strictObject({ provider: z.enum(['github', 'gitlab']), project: name, github_project: count.optional() }),
+  board: z.strictObject({
+    provider: z.enum(['github', 'gitlab']),
+    project: name,
+    github_project: count.optional(),
+    base_branch: z.string().regex(/^[\w.][\w./-]*$/, 'a branch name: letters, digits, ".", "_", "-", "/"').optional(),
+  }),
   artifacts: z
     .strictObject({ idea: teamArtifact.prefault({}), story: teamArtifact.prefault({}), plan: teamArtifact.prefault({}) })
     .prefault({}),

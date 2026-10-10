@@ -65,7 +65,7 @@ export class GitLabBoard implements Board {
   constructor(
     private readonly project: string,
     private readonly run: Run,
-    private readonly options: { retryDelay?: number } = {},
+    private readonly options: { retryDelay?: number; baseBranch?: string } = {},
   ) {
     this.api = `projects/${encodeURIComponent(project)}`
   }
@@ -210,7 +210,7 @@ export class GitLabBoard implements Board {
   }
 
   async claim(id: string) {
-    const result = await this.call(['-X', 'POST', `${this.api}/repository/branches`, '-f', `branch=${LOCK_PREFIX}${id}`, '-f', `ref=${await this.branch()}`])
+    const result = await this.call(['-X', 'POST', `${this.api}/repository/branches`, '-f', `branch=${LOCK_PREFIX}${id}`, '-f', `ref=${await this.baseBranch()}`])
     if (result.status === 400 && /already exists/i.test(result.stderr + result.stdout)) return false
     if (result.code !== 0) this.fail(result, 'claim')
     return true
@@ -224,7 +224,7 @@ export class GitLabBoard implements Board {
   async openPullRequest(id: string, title: string, body: string) {
     const existing = await this.pullRequest(id)
     if (existing?.state === 'open') return existing
-    await this.json(['-X', 'POST', `${this.api}/merge_requests`, '-f', `source_branch=conveyor/${id}`, '-f', `target_branch=${await this.branch()}`, '-f', `title=${title}`, '-f', `description=${body}`])
+    await this.json(['-X', 'POST', `${this.api}/merge_requests`, '-f', `source_branch=conveyor/${id}`, '-f', `target_branch=${await this.baseBranch()}`, '-f', `title=${title}`, '-f', `description=${body}`])
     const opened = await this.pullRequest(id)
     if (!opened) throw new Error(`merge request for task ${id} not found after creation`)
     return opened
@@ -320,8 +320,8 @@ export class GitLabBoard implements Board {
     ])
   }
 
-  private async branch() {
-    this.defaultBranch ??= (await this.json<{ default_branch: string }>([this.api])).default_branch
+  async baseBranch() {
+    this.defaultBranch ??= this.options.baseBranch ?? (await this.json<{ default_branch: string }>([this.api])).default_branch
     return this.defaultBranch
   }
 

@@ -68,6 +68,12 @@ export class FakeBoard implements Board {
   readonly projects: LinkedProject[] = []
   readonly createdProjects: string[] = []
 
+  base = 'main'
+
+  async baseBranch() {
+    return this.base
+  }
+
   async linkedProjects() {
     return [...this.projects]
   }

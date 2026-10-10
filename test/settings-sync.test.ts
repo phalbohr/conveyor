@@ -41,7 +41,7 @@ describe('checkSettingsSync', () => {
     const { alice, bob, commit } = team()
     commit(alice, '.conveyor/config.yaml', 'board: {provider: github, project: acme/app}\npickup_from: story\n', 'Take stories')
 
-    const sync = await checkSettingsSync(join(bob, '.conveyor'), { fetch: true })
+    const sync = await checkSettingsSync(join(bob, '.conveyor'), { fetch: true, base: 'main' })
 
     expect(sync).toMatchObject({ state: 'behind', base: 'origin/main' })
     expect(sync.state === 'behind' && sync.commits[0]).toContain('Take stories')
@@ -53,17 +53,17 @@ describe('checkSettingsSync', () => {
     git(bob, 'pull', '--quiet')
     commit(alice, 'README.md', 'changed\n', 'Docs')
 
-    expect(await checkSettingsSync(join(bob, '.conveyor'), { fetch: true })).toEqual({ state: 'current' })
+    expect(await checkSettingsSync(join(bob, '.conveyor'), { fetch: true, base: 'main' })).toEqual({ state: 'current' })
   })
 
   it('ignores my own uncommitted and unpushed changes', async () => {
     const { bob } = team()
     writeFileSync(join(bob, '.conveyor', 'config.yaml'), 'board: {provider: github, project: acme/app}\npickup_from: idea\n')
-    expect(await checkSettingsSync(join(bob, '.conveyor'), { fetch: true })).toEqual({ state: 'current' })
+    expect(await checkSettingsSync(join(bob, '.conveyor'), { fetch: true, base: 'main' })).toEqual({ state: 'current' })
   })
 
   it('skips settings outside git', async () => {
-    expect(await checkSettingsSync(tempDir(), { fetch: true })).toMatchObject({ state: 'unknown' })
+    expect(await checkSettingsSync(tempDir(), { fetch: true, base: 'main' })).toMatchObject({ state: 'unknown' })
   })
 })
 

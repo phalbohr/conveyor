@@ -48,7 +48,7 @@ Commands:
 ## Team settings sync
 
 - Team settings travel through git like code. Each workstation runs with the settings of its working copy.
-- Every `run` cycle fetches `origin` and lists commits on the main branch (`origin/HEAD`, else `origin/main`) that touch the settings directory and are missing from `HEAD`. A non-empty list gives one warning per new list in the log and a warning line on the status screen (which fetches at most every 5 minutes). The conveyor never pulls on its own.
+- Every `run` cycle fetches `origin` and lists commits on the base branch (`origin/<board.base_branch>`, else the default branch of the repository) that touch the settings directory and are missing from `HEAD`. A non-empty list gives one warning per new list in the log and a warning line on the status screen (which fetches at most every 5 minutes). The conveyor never pulls on its own.
 - Settings outside git, or without `origin`, skip the check.
 
 ## Live sessions
@@ -330,6 +330,7 @@ If the board read fails, running stages continue; the next cycle tries again.
 ## Workspaces and hooks
 
 - Each task has one git worktree under `workspace.root`, on the branch `conveyor/<issue>`. Stages of the task run in it.
+- The base branch is `board.base_branch`, else the default branch of the repository from the board API. It is the one source for the start of a task branch (`origin/<base>`, or the existing `origin/conveyor/<issue>`), the reset on rework and between parts, the target of pull/merge requests, the start of lock branches, and the settings sync check. The conveyor pushes only `conveyor/<issue>` and lock branches; the base branch changes only through merged pull/merge requests.
 - Hooks run in the workspace with `hooks.timeout`:
 
 | Hook | When | On failure |
@@ -404,7 +405,7 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 ## Rework
 
 - Trigger: the PR/MR review has "changes requested", or a human sets `conveyor::rework`.
-- The task restarts: the CLI closes the PR/MR, resets the branch `conveyor/<issue>` to the main branch, and clears the workpad.
+- The task restarts: the CLI closes the PR/MR, resets the branch `conveyor/<issue>` to the base branch, and clears the workpad.
 - Execution starts again at the first stage after `plan`. The template variable `review` holds the review feedback.
 - A stage may return `needs_input` if the plan must change.
 

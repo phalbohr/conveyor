@@ -65,13 +65,15 @@ Go through every stage in the chain. For each, read its file and tell the user i
 
 A description can use `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.plan }}`, `{{ stage }}`, `{{ attempt }}`, `{{ review }}`, `{{ language.docs }}`, `{{ formats.story }}`, and a frontmatter `skills: [name]` (claude stages only). An unknown variable stops the stage, so use only these, and wrap an artifact that may be missing: `{% if artifacts.plan %}{{ artifacts.plan }}{% endif %}`.
 
-## 6. Merge — `transitions.merge`, `merge_method`, `review.approvals`, `close_on_done`
+## 6. Merge — `board.base_branch`, `transitions.merge`, `merge_method`, `review.approvals`, `close_on_done`
+
+`board.base_branch`: the branch that every task branch `conveyor/<number>` starts from and every pull request merges into; empty means the default branch of the repository. Ask which branch the team merges features into (for example `develop`), then `conveyor config set board.base_branch <branch>`. The conveyor never pushes to it directly, so a base branch open only to pull requests works.
 
 | `transitions.merge` | What happens after the `merge` stage |
 |---|---|
 | `human` | The pull request waits in `conveyor::review`; it merges after `/approve` or an Approve review from `review.approvals` distinct people (with `2`, one `/approve` is not enough). |
 | `smart` | The merge stage decides by `smart/merge.md` (offer to review it): risky changes go to review as with `human`, the rest merges. |
-| `ai` | The conveyor merges without a human, after blockers are closed and CI is green. |
+| `ai` | The conveyor merges without a human, after blockers are closed and CI is green. `review.approvals` is not used. If branch protection on the base branch requires approvals the token cannot bypass, the merge fails and the task goes to needs-input; choose `human` there. |
 
 `merge_method`: `merge` (merge commit), `squash` (one commit per task), or `rebase`. Ask about `review.approvals` only for `human` and `smart`. Branch protection on the board still applies on top.
 

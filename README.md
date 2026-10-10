@@ -89,6 +89,7 @@ The task is not taken? Check that the issue has a `form::` label that `pickup_fr
 | I want to change … | File | Key |
 |---|---|---|
 | the board and its GitHub project | `config.yaml` | `board.project`, `board.github_project` |
+| the branch that task branches start from and pull requests merge into | `config.yaml` | `board.base_branch` (empty: the default branch of the repository) |
 | from which state the conveyor takes tasks | `config.yaml` | `pickup_from` (`idea`, `story`, `plan`) |
 | where human decisions happen | `config.yaml` | `transitions` (`interactive`, `autonomous`, `smart`; merge: `human`, `ai`, `smart`) |
 | the stages, their order, harness, model, effort | `config.yaml` | `stages`, `defaults`, `triage` |
@@ -180,7 +181,7 @@ On GitLab Free, issue links are not available; the conveyor keeps blockers in a 
 
 The conveyor runs agents with your permissions and merges with your token. Before you use it on a real repository:
 
-- Protect the default branch: require pull requests and status checks, and dismiss stale approvals.
+- Protect the base branch (`board.base_branch`, else the default branch): require pull requests and status checks, and dismiss stale approvals. The conveyor pushes only to its own branches `conveyor/<issue>` and merges through pull requests, so a base branch that accepts changes only through pull requests works. When the protection requires approvals that your token cannot bypass, use `transitions.merge: human`: with `ai` the merge fails and the task goes to Needs input.
 - Limit the agents with `permission_mode` (claude stages) and `sandbox`/`network` (codex stages), or run the conveyor in a container or under a separate user with a token for that board only.
 - Review changes to `.conveyor/` like code: `hooks` and harness commands run on every workstation.
 

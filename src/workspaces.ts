@@ -22,7 +22,7 @@ export interface Workspaces {
 export const taskBranch = (taskId: string) => `conveyor/${taskId}`
 
 export class GitWorkspaces implements Workspaces {
-  constructor(private readonly options: { repo: string; root: string; hooks: () => Hooks }) {}
+  constructor(private readonly options: { repo: string; root: string; base: () => Promise<string>; hooks: () => Hooks }) {}
 
   async prepare(taskId: string) {
     const path = this.path(taskId)
@@ -106,8 +106,7 @@ export class GitWorkspaces implements Workspaces {
   }
 
   private async baseRef() {
-    const head = await this.tryGit(this.options.repo, 'symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD')
-    return head ?? 'HEAD'
+    return `refs/remotes/origin/${await this.options.base()}`
   }
 
   private async hook(name: HookName, path: string) {
