@@ -178,11 +178,11 @@ describe('codex subscription windows', () => {
     expect(argv).not.toContain('--ephemeral')
   })
 
-  it('probes with the default model', async () => {
+  it('probes with the cheapest model', async () => {
     const s = stub('codex-done.jsonl')
     await new CodexHarness({ command: s.command, env: { ...process.env, CODEX_HOME: tempDir() } }).probeQuota(tempDir())
     const { argv } = JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[] }
-    expect(argv).not.toContain('-m')
+    expect(argv.join(' ')).toContain('-m gpt-6-luna')
   })
 })
 
