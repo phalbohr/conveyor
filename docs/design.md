@@ -429,7 +429,7 @@ Other harnesses run through a generic command adapter. Built-in presets:
 
 - `harnesses` in `config.yaml` defines new harnesses or overrides presets (`command`, `args`, `env`); `harnesses` in `local.yaml` overrides personal values such as the endpoint or the key. `env` merges, `command` and `args` replace.
 - Placeholders in `args` and `env`: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{temp}` (a temporary directory of the run, deleted after it).
-- The `opencode` preset sets `OPENCODE_DB: {temp}/opencode.db`: OpenCode keeps one SQLite database per user, and parallel runs on it fail with "database is locked". Each stage gets its own database; live sessions keep the user's own.
+- The `opencode` preset sets `OPENCODE_DB: {temp}/opencode.db` and the `kilocode` preset `KILO_DB: {temp}/kilo.db`: both keep one SQLite database per user, and parallel runs on it fail with "database is locked". Each stage gets its own database; live sessions keep the user's own.
 - Live sessions use `interactive` instead of `args` and skip `env` values with `{result}` or `{temp}`.
 - Result contract: the CLI appends the result schema to the prompt and asks the agent to write the result JSON to the file in `CONVEYOR_RESULT`. No result file means a failed stage.
 - Every output line counts as a progress event for stall detection. Token usage and subscription windows are not available; self-hosted models use the daily token limit of their router.

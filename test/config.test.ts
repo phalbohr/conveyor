@@ -214,6 +214,8 @@ stages:
 `)
     expect(Object.keys(c.harnesses).sort()).toEqual(['agent-zero', 'kilocode', 'opencode', 'openhands', 'pi'])
     expect(c.harnesses.pi?.command).toBe('pi')
+    expect(c.harnesses.opencode?.env).toEqual({ OPENCODE_DB: '{temp}/opencode.db' })
+    expect(c.harnesses.kilocode?.env).toEqual({ KILO_DB: '{temp}/kilo.db' })
     expect(c.harnesses.openhands?.env).toEqual({ LLM_MODEL: '{model}', OPENHANDS_WORK_DIR: '{workspace}', LLM_BASE_URL: 'http://litellm:4000' })
   })
 
