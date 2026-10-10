@@ -3,14 +3,14 @@ import type { CommandDefinition } from './command.js'
 export const PRESETS: Record<string, CommandDefinition> = {
   opencode: {
     command: 'opencode',
-    args: ['run', '--auto', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
+    args: ['run', '--auto', '--format', 'json', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
     env: { OPENCODE_DB: '{temp}/opencode.db' },
     models: { args: ['models'] },
     interactive: ['--model', '{model}', '--prompt', '{prompt}'],
   },
   kilocode: {
     command: 'kilo',
-    args: ['run', '--auto', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
+    args: ['run', '--auto', '--format', 'json', '-m', '{model}', '--dir', '{workspace}', '{prompt}'],
     env: { KILO_DB: '{temp}/kilo.db' },
     models: { args: ['models'] },
     interactive: ['--model', '{model}', '--prompt', '{prompt}'],

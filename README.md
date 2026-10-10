@@ -112,7 +112,7 @@ The task is not taken? Check that the issue has a `form::` label that `pickup_fr
 harnesses:
   opencode:
     command: opencode
-    args: [run, --auto, -m, "{model}", --dir, "{workspace}", "{prompt}"]
+    args: [run, --auto, --format, json, -m, "{model}", --dir, "{workspace}", "{prompt}"]
     env: {}
 stages:
   implement: {harness: opencode, model: litellm/qwen3-coder}
