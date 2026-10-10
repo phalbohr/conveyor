@@ -4,7 +4,9 @@ import { FakeBoard } from '../src/board/fake.js'
 import type { Context, Interact } from '../src/cli.js'
 import { renderWorkpad } from '../src/engine/workpad.js'
 import { runCli } from './helpers.js'
-import { harnessCommand } from '../src/commands/live.js'
+import { harnessCommand, helpSessionCommand } from '../src/commands/live.js'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 type Session = { command: string; args: string[]; env: NodeJS.ProcessEnv }
 
@@ -124,6 +126,22 @@ describe('harness session on a task', () => {
     expect(sessions[0]?.args.at(-1)).toContain('form::idea')
     expect((await board.listComments(task.id)).at(-1)?.body).toContain('Search titles and bodies only.')
     expect(output).toContain('Posted the notes')
+  })
+})
+
+describe('help session', () => {
+  it('installs the conveyor-help skill when it is missing and starts the story harness with it', async () => {
+    const paths = await project()
+    const { interact, sessions } = agent()
+    let output = ''
+    const context: Context = { ...paths, stdout: (text) => (output += text), stderr: (text) => (output += text), interactive: true, interact, run: async () => ({ code: 0, stdout: '', stderr: '' }) }
+
+    expect(await helpSessionCommand(context)).toBe(0)
+
+    expect(existsSync(join(paths.home, '.claude', 'skills', 'conveyor-help', 'SKILL.md'))).toBe(true)
+    expect(sessions[0]?.command).toBe('claude')
+    expect(sessions[0]?.args.at(-1)).toContain('Use the conveyor-help skill')
+    expect(output).toContain('Installed the conveyor-help skill')
   })
 })
 

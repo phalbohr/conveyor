@@ -12,6 +12,7 @@ import { Trust } from '../engine/trust.js'
 import { commentText, findWorkpad } from '../engine/workpad.js'
 import { childEnv } from '../harness/harness.js'
 import { prepare } from './run.js'
+import { skillInstall } from './skill.js'
 
 const TEMPLATES = fileURLToPath(new URL('../../templates/live/', import.meta.url))
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n?/
@@ -92,6 +93,23 @@ export async function harnessCommand(context: Context, id: string): Promise<numb
   }
   await board.addComment(id, `Notes from a live session:\n\n${text.value.trim()}`)
   context.stdout(`Posted the notes of the session on task ${id}.\n`)
+  return 0
+}
+
+export async function helpSessionCommand(context: Context): Promise<number> {
+  const prepared = prepare(context)
+  if (!prepared) return 1
+  const stage = stageNamed(prepared.config, 'story')
+  const folder = stage.harness === 'claude' ? '.claude' : '.agents'
+  const installed = [context.cwd, context.home].some((base) => existsSync(join(base, folder, 'skills', 'conveyor-help', 'SKILL.md')))
+  if (!installed) skillInstall({ ...context, stdout: () => undefined }, {}, false)
+  const prompt = 'Use the conveyor-help skill. Help me with the conveyor of this project: answer my questions about the workflow, the board, and the settings, or walk me through the setup.'
+  const args =
+    stage.harness === 'codex'
+      ? [...(stage.model ? ['-m', stage.model] : []), '-c', `model_reasoning_effort="${stage.effort}"`, '--', prompt]
+      : [...(stage.model ? ['--model', stage.model] : []), '--effort', stage.effort, '--', prompt]
+  await context.interact(stage.harness, args, { cwd: context.cwd, env: childEnv(process.env) })
+  context.stdout(installed ? 'The help session ended.\n' : 'Installed the conveyor-help skill in your home directory; the help session ended.\n')
   return 0
 }
 

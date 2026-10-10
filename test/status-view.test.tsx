@@ -373,6 +373,18 @@ describe('StatusScreen as the hub', () => {
     expect(lines[row + 1]?.trim().length).toBeGreaterThan(0)
   })
 
+  it('asks the conveyor-help skill from the help screen with a', async () => {
+    const actions: HubAction[] = []
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('?')
+    await vi.waitFor(() => expect(lastFrame()).toContain('[a] ask the conveyor-help skill'), { timeout: 5_000 })
+    await settle()
+    stdin.write('a')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'help' }]), { timeout: 5_000 })
+  })
+
   it('closes help, usage, and log with Esc and names the way back', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })

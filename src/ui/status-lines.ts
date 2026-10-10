@@ -145,7 +145,7 @@ function reserveReached(quota: StatusSnapshot['limits']['subscription'][string])
 
 export function helpLines(): Line[] {
   return [
-    { text: 'conveyor help · [h] or Esc back', tone: 'title' },
+    { text: 'conveyor help · [h] or Esc back · [a] ask the conveyor-help skill', tone: 'title' },
     { text: 'The board holds every task. `conveyor run` takes tasks within your limits and runs their stages; you decide at the gates.' },
     { text: '' },
     { text: 'Flow', tone: 'title' },
