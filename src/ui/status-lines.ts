@@ -8,6 +8,12 @@ export const CELL_WIDTH = 28
 
 const row = (left: string, right: string): Line => ({ text: `  ${left.padEnd(CELL_WIDTH - 2)}${right}`, cells: [`  ${left}`, right] })
 const time = (iso: string) => new Date(iso).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+const QUIET = 2 * 60_000
+const span = (ms: number) => {
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 1) return `${Math.max(0, Math.floor(ms / 1000))}s`
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
 const number = (value: number) => value.toLocaleString('en-US')
 const percent = (value: number) => `${Math.round(value * 100)}%`
 
@@ -28,13 +34,22 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
       const details: string[] = []
       if (task.stage) details.push(`stage::${task.stage}`)
       if (task.part) details.push(`part ${task.part}`)
+      const now = Date.now()
+      const quiet = task.activity ? now - Date.parse(task.activity.lastOutputAt) : 0
+      if (task.activity) details.push(`● running here ${span(now - Date.parse(task.activity.startedAt))} · ${quiet < QUIET ? `output ${span(quiet)} ago` : `no output for ${span(quiet)}`}`)
+      else if (task.state === 'in-progress') {
+        const heartbeat = task.heartbeat ? ` · heartbeat ${span(now - Date.parse(task.heartbeat))} ago` : ''
+        if (!status.runner.running) details.push('○ not running: [s] starts the conveyor')
+        else if (status.runner.here) details.push(`○ waits for its next attempt${heartbeat}`)
+        else details.push(`runs in conveyor pid ${status.runner.pid ?? '?'}${heartbeat}`)
+      }
       if (task.state === 'queued') details.push('answered, waits for a free slot')
       if (task.attempt > 0) details.push(`attempt ${task.attempt + 1}`)
       if (task.retryAt) details.push(`retry ${time(task.retryAt)}`)
       if (task.state === 'needs-input') details.push(task.answered ? 'answered, resumes next cycle' : `waits for your answer since ${task.waitingSince ? time(task.waitingSince) : '?'}`)
       if (task.state === 'review' && task.pullRequest) details.push(task.pullRequest)
       if (task.lastError) details.push(`last error: ${task.lastError}`)
-      const tone = task.lastError ? 'error' : task.state === 'needs-input' && !task.answered ? 'warning' : undefined
+      const tone = task.lastError && !task.activity ? 'error' : (task.state === 'needs-input' && !task.answered) || quiet >= QUIET ? 'warning' : task.activity ? 'ok' : undefined
       return { id: task.id, title: task.title, url: task.url, detail: details.join(' · '), ...(tone ? { tone } : {}) }
     })
 }
@@ -158,6 +173,8 @@ export function helpLines(): Line[] {
     row('in progress 1/3', 'my tasks in this column against my limit; needs input and review the same'),
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),
+    row('● ○ in progress', '● running here with time and last harness output (yellow: quiet) · ○ waits or not running · pid N: another terminal'),
+    row('live sessions', 'n, a, h, and a in help use live.harness and live.model from local.yaml (settings: Personal)'),
     row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h harness · i form::idea on/off (backlog) · Esc back'),
     row('part::2/3', 'the plan split the story into parts, one pull request each; the story is done after the last part merges'),
     row('an opened task', 'p switches between the issue and its pull request · c comments where you are · ↑↓ scroll'),

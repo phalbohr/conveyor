@@ -221,7 +221,9 @@ export class GitHubBoard implements Board {
 
   async addBlocker(id: string, blockerId: string) {
     const blocker = await this.api<Issue>([`${this.repo}/issues/${blockerId}`])
-    await this.api(['-X', 'POST', `${this.repo}/issues/${id}/dependencies/blocked_by`, '-F', `issue_id=${blocker.id}`])
+    const result = await this.call(['-X', 'POST', `${this.repo}/issues/${id}/dependencies/blocked_by`, '-F', `issue_id=${blocker.id}`])
+    if (result.status === 422 && /already been taken/i.test(result.stderr)) return
+    this.parse(result)
   }
 
   async claim(id: string) {

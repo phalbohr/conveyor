@@ -1,6 +1,7 @@
 import { TextInput } from '@inkjs/ui'
 import { Box, Text, render, useApp, useInput, useWindowSize } from 'ink'
 import { useCallback, useEffect, useState } from 'react'
+import type { Activity } from '../engine/engine.js'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
 import { BACKLOG, CELL_WIDTH, STATUS_COLUMNS, boardLines, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
@@ -15,6 +16,7 @@ export type RunnerControl = {
   subscribe(listener: () => void): () => void
   start(): Promise<{ ok: true } | { ok: false; error: string }>
   stop(): Promise<void>
+  activity?(): Record<string, Activity>
 }
 
 export type HubAction =
@@ -41,7 +43,7 @@ type Opened = { id: string; target: Target; detail?: TaskDetail }
 
 export function StatusScreen({ load, refreshMs, runner, control, notice, onAction }: Props) {
   const { exit } = useApp()
-  const [status, setStatus] = useState<StatusSnapshot>()
+  const [loaded, setStatus] = useState<StatusSnapshot>()
   const [error, setError] = useState<string>()
   const [updated, setUpdated] = useState<Date>()
   const [panel, setPanel] = useState<Panel>('status')
@@ -71,6 +73,12 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   }, [refresh, refreshMs])
 
   useEffect(() => runner?.subscribe(() => setTick((value) => value + 1)), [runner])
+  useEffect(() => {
+    const timer = setInterval(() => runner?.running && setTick((value) => value + 1), 5_000)
+    return () => clearInterval(timer)
+  }, [runner])
+  const activity = runner?.activity?.() ?? {}
+  const status = loaded && { ...loaded, runner: { ...loaded.runner, here: runner?.running ?? false }, mine: loaded.mine.map((task) => (activity[task.id] ? { ...task, activity: activity[task.id] } : task)) }
 
   const act = (action: HubAction) => {
     onAction?.(action)
@@ -192,7 +200,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (key === 'l') setInput({ kind: 'release' })
       if (key === 's' && runner) {
         if (runner.running) {
-          setMessage({ text: 'Stopping the conveyor…' })
+          setMessage({ text: 'Stopping the conveyor: running stages are aborted, the current cycle ends… [o] log' })
           void runner.stop().then(() => {
             setMessage({ text: 'The conveyor stopped.' })
             refresh()

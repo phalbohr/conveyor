@@ -49,3 +49,12 @@ describe('base branch', () => {
     expect(config('a b').ok).toBe(false)
   })
 })
+
+describe('GitHub blockers', () => {
+  it('treats an existing blocked-by link as added', async () => {
+    const { run } = recorder(() => JSON.stringify({ id: 99 }))
+    const failing: Run = async (command, args) =>
+      args.includes('POST') ? { code: 1, stdout: '', stderr: 'gh: Validation failed: Target issue has already been taken (HTTP 422)' } : run(command, args)
+    await expect(new GitHubBoard('acme/app', failing).addBlocker('5', '4')).resolves.toBeUndefined()
+  })
+})

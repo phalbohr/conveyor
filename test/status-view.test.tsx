@@ -2,7 +2,7 @@ import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import type { StatusSnapshot } from '../src/status.js'
-import { statusLines, usageLines } from '../src/ui/status-lines.js'
+import { columnTasks, statusLines, usageLines } from '../src/ui/status-lines.js'
 import { StatusScreen, type HubAction, type RunnerControl } from '../src/ui/status-screen.js'
 import type { TaskControl } from '../src/ui/task-lines.js'
 import type { RunnerEvent } from '../src/runner.js'
@@ -468,5 +468,28 @@ describe('conveyor without arguments', () => {
     const result = await runCli([], { cwd: init.context.cwd, home: init.context.home, board: new FakeBoard('me') })
     expect(result.stdout).toContain('backlog:')
     expect(result.stdout).toContain('none')
+  })
+})
+
+describe('liveness of tasks in progress', () => {
+  const at = (iso: string) => vi.setSystemTime(new Date(iso))
+  const login = (status: StatusSnapshot) => columnTasks(status, 1).find((task) => task.id === '4')
+
+  it('shows a stage running here with its last output', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    at('2026-10-05T10:05:00.000Z')
+    const activity = { stage: 'implement', startedAt: '2026-10-05T10:00:00.000Z', lastOutputAt: '2026-10-05T10:04:50.000Z' }
+    const running = { ...snapshot, runner: { running: true, pid: 7, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, activity } : task)) }
+    expect(login(running)).toMatchObject({ detail: expect.stringContaining('● running here 5m · output 10s ago'), tone: 'ok' })
+
+    at('2026-10-05T10:08:00.000Z')
+    expect(login(running)).toMatchObject({ detail: expect.stringContaining('no output for 3m'), tone: 'warning' })
+    vi.useRealTimers()
+  })
+
+  it('tells a stopped conveyor from a run in another process', () => {
+    expect(login(snapshot)?.detail).toContain('○ not running: [s] starts the conveyor')
+    const elsewhere = { ...snapshot, runner: { running: true, pid: 42 }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, heartbeat: new Date(Date.now() - 3 * 60_000).toISOString() } : task)) }
+    expect(login(elsewhere)?.detail).toContain('runs in conveyor pid 42 · heartbeat 3m ago')
   })
 })

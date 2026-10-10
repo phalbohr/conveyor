@@ -44,6 +44,8 @@ export type EngineOptions = {
 
 type Running = { controller: AbortController; promise: Promise<void> }
 
+export type Activity = { stage: string; startedAt: string; lastOutputAt: string }
+
 type StageAttempt = StageOutput & { fatal?: boolean }
 
 type Verdict = {
@@ -116,6 +118,8 @@ const WAITING_STATES: Task['state'][] = ['needs-input', 'queued', 'review']
 
 export class Engine {
   private readonly running = new Map<string, Running>()
+  private readonly activities = new Map<string, Activity>()
+  private readonly halt = new AbortController()
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
   private triageRetryAt = 0
@@ -143,6 +147,7 @@ export class Engine {
     const config = loaded.config
     await this.probeQuotas(config)
     await this.triage(config).catch((error: unknown) => this.log(`triage failed: ${(error as Error).message}`))
+    if (this.halt.signal.aborted) return
 
     const resumable: Task[] = []
     const fresh: Task[] = []
@@ -200,6 +205,7 @@ export class Engine {
       }
     }
 
+    if (this.halt.signal.aborted) return
     let slots = config.limits.running - this.running.size
     let waiting = 0
     for (const task of this.sorted(resumable, me)) {
@@ -233,9 +239,19 @@ export class Engine {
     }
   }
 
-  async stop() {
+  abort() {
+    this.halt.abort()
     for (const running of this.running.values()) running.controller.abort()
+    return [...this.running.keys()]
+  }
+
+  async stop() {
+    this.abort()
     await this.idle()
+  }
+
+  activity(): Record<string, Activity> {
+    return Object.fromEntries(this.activities)
   }
 
   async release(id: string, reason: string) {
@@ -655,8 +671,9 @@ export class Engine {
         model: config.triage.model,
         effort: config.triage.effort,
         cwd,
-        signal: AbortSignal.timeout(config.timeouts.stage),
+        signal: AbortSignal.any([AbortSignal.timeout(config.timeouts.stage), this.halt.signal]),
       })
+      if (this.halt.signal.aborted) return
       this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
       const parsed = output.result.outcome === 'done' && output.result.artifact ? parseJson(output.result.artifact.content) : undefined
       const result = triageSchema.safeParse(parsed)
@@ -823,7 +840,11 @@ export class Engine {
       controller.abort()
     }, stageTimeout)
     let watchdog: ReturnType<typeof setTimeout> | undefined
+    const started = new Date().toISOString()
+    this.activities.set(task.id, { stage: stage.name, startedAt: started, lastOutputAt: started })
     const arm = () => {
+      const activity = this.activities.get(task.id)
+      if (activity) activity.lastOutputAt = new Date().toISOString()
       if (!stall) return
       clearTimeout(watchdog)
       watchdog = setTimeout(() => {
@@ -850,6 +871,7 @@ export class Engine {
       })
       return reason ? { ...output, result: failed(reason) } : output
     } finally {
+      this.activities.delete(task.id)
       clearTimeout(deadline)
       clearTimeout(watchdog)
       context.signal.removeEventListener('abort', stop)

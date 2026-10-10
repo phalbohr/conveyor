@@ -5,7 +5,7 @@ import { probesOf, type Context } from './cli.js'
 import { harnessesInUse, modelsFile } from './commands/models.js'
 import { checkStages, cleanupWorkspaces, quotaFile, usageFile } from './commands/run.js'
 import { loadConfig, type Config } from './config.js'
-import { Engine } from './engine/engine.js'
+import { Engine, type Activity } from './engine/engine.js'
 import { ClaudeHarness } from './harness/claude.js'
 import { CodexHarness } from './harness/codex.js'
 import { CommandHarness } from './harness/command.js'
@@ -35,6 +35,7 @@ export class Runner {
   private loop: Promise<void> | undefined
   private stopping = false
   private wake: () => void = () => undefined
+  private engine: Engine | undefined
 
   constructor(
     private readonly context: Context,
@@ -101,7 +102,7 @@ export class Runner {
       },
     })
     const log = (text: string) => this.emit('info', text)
-    const engine = new Engine({
+    const engine = (this.engine = new Engine({
       board,
       harnesses: {
         claude: new ClaudeHarness(),
@@ -117,7 +118,7 @@ export class Runner {
       loadConfig: () => loadConfig(settings),
       log,
       redact: (text) => redactSecrets(text, this.setup.secrets()),
-    })
+    }))
 
     let noticed = ''
     const checkSync = async () => {
@@ -158,7 +159,6 @@ export class Runner {
             }
           })
         }
-        log('stopping: running stages are aborted, tasks resume on the next start')
         await engine.stop()
         log('stopped')
       } finally {
@@ -173,9 +173,17 @@ export class Runner {
 
   async stop() {
     if (!this.loop) return
-    this.stopping = true
-    this.wake()
+    if (!this.stopping) {
+      this.stopping = true
+      const aborted = this.engine?.abort() ?? []
+      this.emit('info', `stopping: ${aborted.length ? `aborting the stages of ${aborted.map((id) => `#${id}`).join(', ')}` : 'no stage runs'}; the current cycle ends without new tasks, tasks resume on the next start`)
+      this.wake()
+    }
     await this.loop
+  }
+
+  activity(): Record<string, Activity> {
+    return this.engine?.activity() ?? {}
   }
 
   note(text: string) {

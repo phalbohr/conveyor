@@ -5,6 +5,7 @@ import type { Config } from './config.js'
 import { findWorkpad, repliesSince } from './engine/workpad.js'
 import type { QuotaWindow } from './harness/harness.js'
 import { runningPid } from './lock.js'
+import type { Activity } from './engine/engine.js'
 import { checkSettingsSync, type SettingsSync } from './settings-sync.js'
 import { undescribedStages } from './stage-catalog.js'
 import { QuotaStore, UsageLedger } from './usage.js'
@@ -24,6 +25,8 @@ export type MyTask = {
   answered?: boolean
   pullRequest?: string
   part?: string
+  heartbeat?: string
+  activity?: Activity
 }
 
 export type BacklogTask = { id: string; title: string; url: string; form?: NonNullable<Task['form']>; priority?: number }
@@ -35,7 +38,7 @@ export type StatusSnapshot = {
   project: string
   provider: Config['board']['provider']
   me: string
-  runner: { running: boolean; pid?: number }
+  runner: { running: boolean; pid?: number; here?: boolean }
   settingsSync: SettingsSync
   board?: BoardCheck
   undescribed: string[]
@@ -76,6 +79,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     if (stage) entry.stage = stage
     if (state?.parts) entry.part = `${(state.part ?? 0) + 1}/${state.parts.length}`
     if (state?.retryAt) entry.retryAt = state.retryAt
+    if (state?.heartbeat) entry.heartbeat = state.heartbeat
     if (state?.lastError) entry.lastError = state.lastError
     if (state?.waiting) entry.waitingSince = state.waiting.since
     if (task.state === 'needs-input') entry.answered = repliesSince(comments, state?.waiting?.commentId).length > 0

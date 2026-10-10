@@ -169,6 +169,45 @@ describe('Engine timeouts', () => {
   })
 })
 
+describe('Engine activity and stop', () => {
+  it('reports how long a stage runs and when the harness wrote last', async () => {
+    let beat: (() => void) | undefined
+    const { board, engine, started } = setup({
+      script: (run) => {
+        beat = run.onEvent
+        return never()
+      },
+    })
+    await board.createTask('Login', 'p', { form: 'plan' })
+
+    await engine.tick()
+    await started(['1:implement'])
+    const first = engine.activity()['1']
+    expect(first).toMatchObject({ stage: 'implement' })
+    expect(first?.lastOutputAt).toBe(first?.startedAt)
+    await vi.advanceTimersByTimeAsync(MINUTE)
+    beat?.()
+    const later = engine.activity()['1']
+    expect(Date.parse(later?.lastOutputAt ?? '') - Date.parse(later?.startedAt ?? '')).toBeGreaterThanOrEqual(MINUTE)
+
+    expect(engine.abort()).toEqual(['1'])
+    await engine.idle()
+    expect(engine.activity()).toEqual({})
+  })
+
+  it('claims no new tasks after abort', async () => {
+    const { board, engine, runs } = setup({ script: never })
+    await board.createTask('Login', 'p', { form: 'plan' })
+
+    engine.abort()
+    await engine.tick()
+    await engine.idle()
+
+    expect(runs()).toEqual([])
+    expect((await board.getTask('1'))?.owner).toBeUndefined()
+  })
+})
+
 describe('Engine reconciliation', () => {
   it('stops the stage and removes the workspace when the task is closed', async () => {
     const { board, engine, workspaces, started } = setup({ script: never })
