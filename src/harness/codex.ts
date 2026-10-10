@@ -23,7 +23,7 @@ export class CodexHarness implements Harness {
   constructor(private readonly options: HarnessOptions = {}) {}
 
   async probeQuota(cwd: string): Promise<Quota | undefined> {
-    const output = await this.runStage({ prompt: 'Reply with the word ok.', model: '', effort: 'low', cwd })
+    const output = await this.runStage({ prompt: 'Reply with the word ok.', model: 'gpt-6-luna', effort: 'low', cwd })
     return output.quota
   }
 
