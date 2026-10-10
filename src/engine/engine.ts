@@ -993,9 +993,11 @@ export class Engine {
 
   private sorted(tasks: Task[], me: string) {
     const rank = (task: Task) => (task.assignees.includes(me) ? 0 : 1)
+    const started = (task: Task) => (task.state && task.state !== 'backlog' ? 0 : 1)
     return [...tasks].sort(
       (a, b) =>
         rank(a) - rank(b) ||
+        started(a) - started(b) ||
         (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) ||
         a.createdAt.localeCompare(b.createdAt) ||
         Number(a.id) - Number(b.id),

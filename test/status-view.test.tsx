@@ -505,6 +505,7 @@ describe('liveness of tasks in progress', () => {
     const activity = { stage: 'implement', startedAt: '2026-10-05T10:00:00.000Z', lastOutputAt: '2026-10-05T10:04:50.000Z' }
     const running = { ...snapshot, runner: { running: true, pid: 7, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, activity } : task)) }
     expect(login(running)).toMatchObject({ detail: expect.stringContaining('● running here 5m · output 10s ago'), tone: 'ok' })
+    expect(login(running)?.detail).not.toMatch(/attempt|last error/)
 
     at('2026-10-05T10:08:00.000Z')
     expect(login(running)).toMatchObject({ detail: expect.stringContaining('no output for 3m'), tone: 'warning' })
@@ -515,5 +516,13 @@ describe('liveness of tasks in progress', () => {
     expect(login(snapshot)?.detail).toContain('○ not running: [s] starts the conveyor')
     const elsewhere = { ...snapshot, runner: { running: true, pid: 42 }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, heartbeat: new Date(Date.now() - 3 * 60_000).toISOString() } : task)) }
     expect(login(elsewhere)?.detail).toContain('runs in conveyor pid 42 · heartbeat 3m ago')
+  })
+})
+
+describe('released tasks in the backlog', () => {
+  it('counts them apart and shows where they resume', () => {
+    const status = { ...snapshot, backlog: [{ id: '5', title: 'Pool v2', url: 'https://example.test/issues/5', released: { state: 'in-progress' as const, stage: 'plan' } }, ...snapshot.backlog] }
+    expect(statusLines(status).map((line) => line.text).join('\n')).toContain('backlog 1|1|0|1 +1 released')
+    expect(columnTasks(status, 0)[0]).toMatchObject({ id: '5', released: true, detail: expect.stringContaining('released · resumes at stage::plan (conveyor::in-progress) before new tasks') })
   })
 })

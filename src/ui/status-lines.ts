@@ -18,14 +18,18 @@ const number = (value: number) => value.toLocaleString('en-US')
 const percent = (value: number) => `${Math.round(value * 100)}%`
 
 export type StatusView = { column: number; open: boolean; focus: 'columns' | 'tasks'; task: number }
-export type ColumnTask = { id: string; title: string; url: string; detail: string; tone?: Line['tone']; form?: string }
+export type ColumnTask = { id: string; title: string; url: string; detail: string; tone?: Line['tone']; form?: string; released?: boolean }
 
 export const STATUS_COLUMNS = ['backlog', 'in progress', 'needs input', 'review'] as const
 export const BACKLOG = 0
 
 export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[] {
   if (column === BACKLOG) {
-    return status.backlog.map((task) => ({ id: task.id, title: task.title, url: task.url, detail: task.form ? `form::${task.form}` : 'no form', ...(task.form ? { form: task.form } : {}) }))
+    return status.backlog.map((task) =>
+      task.released
+        ? { id: task.id, title: task.title, url: task.url, detail: `released · resumes${task.released.stage ? ` at stage::${task.released.stage}` : ''} (conveyor::${task.released.state}) before new tasks · x resets it`, tone: 'warning' as const, released: true }
+        : { id: task.id, title: task.title, url: task.url, detail: task.form ? `form::${task.form}` : 'no form', ...(task.form ? { form: task.form } : {}) },
+    )
   }
   const states = [['in-progress'], ['needs-input', 'queued'], ['review']][column - 1] ?? []
   return status.mine
@@ -44,11 +48,11 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
         else details.push(`runs in conveyor pid ${status.runner.pid ?? '?'}${heartbeat}`)
       }
       if (task.state === 'queued') details.push('answered, waits for a free slot')
-      if (task.attempt > 0) details.push(`attempt ${task.attempt + 1}`)
-      if (task.retryAt) details.push(`retry ${time(task.retryAt)}`)
+      if (task.attempt > 0 && !task.activity) details.push(`attempt ${task.attempt + 1}`)
+      if (task.retryAt && !task.activity) details.push(`retry ${time(task.retryAt)}`)
       if (task.state === 'needs-input') details.push(task.answered ? 'answered, resumes next cycle' : `waits for your answer since ${task.waitingSince ? time(task.waitingSince) : '?'}`)
       if (task.state === 'review' && task.pullRequest) details.push(task.pullRequest)
-      if (task.lastError) details.push(`last error: ${task.lastError}`)
+      if (task.lastError && !task.activity) details.push(`last error: ${task.lastError}`)
       const tone = task.lastError && !task.activity ? 'error' : (task.state === 'needs-input' && !task.answered) || quiet >= QUIET ? 'warning' : task.activity ? 'ok' : undefined
       return { id: task.id, title: task.title, url: task.url, detail: details.join(' · '), ...(tone ? { tone } : {}) }
     })
@@ -63,10 +67,12 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
     ...undescribedNotice(status.undescribed).map((text): Line => ({ text, tone: 'warning' })),
     ...(status.board && needsAttention(status.board) ? [{ text: `the board differs from what this version uses: ${boardSummary(status.board)} · [k] board check`, tone: 'warning' as const }] : []),
   ]
-  const forms = [status.backlog.filter((task) => !task.form), ...(['idea', 'story', 'plan'] as const).map((form) => status.backlog.filter((task) => task.form === form))]
+  const waiting = status.backlog.filter((task) => !task.released)
+  const released = status.backlog.length - waiting.length
+  const forms = [waiting.filter((task) => !task.form), ...(['idea', 'story', 'plan'] as const).map((form) => waiting.filter((task) => task.form === form))]
   const counts = [limits.running, limits.awaitingMe, limits.awaitingReview]
   const columns = STATUS_COLUMNS.map((label, index) =>
-    index === BACKLOG ? `${label} ${forms.map((group) => group.length).join('|')}` : `${label} ${counts[index - 1]?.used}/${counts[index - 1]?.limit}`,
+    index === BACKLOG ? `${label} ${forms.map((group) => group.length).join('|')}${released ? ` +${released} released` : ''}` : `${label} ${counts[index - 1]?.used}/${counts[index - 1]?.limit}`,
   )
   lines.push({
     text: `my board: ${columns.join(' · ')}`,
@@ -170,6 +176,7 @@ export function helpLines(): Line[] {
     { text: '' },
     { text: 'Board panel', tone: 'title' },
     row('backlog 8|4|6|2', 'tasks of the whole board in Backlog: no form | form::idea | form::story | form::plan'),
+    row('+3 released', 'started tasks nobody owns (after release): listed first in Backlog; the conveyor resumes them at their stage before new tasks'),
     row('in progress 1/3', 'my tasks in this column against my limit; needs input and review the same'),
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),

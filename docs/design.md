@@ -289,6 +289,7 @@ Release deletes the lock branch, removes `claimed-by::<user>`, and posts a comme
 - `timeouts.waiting` accepts calendar days (`4d`) or working days (`2wd`, Monday to Friday; holidays are not counted).
 - Automatic releases skip tasks with private artifacts. Manual release of such a task by a non-owner requires `--force`, because the next owner cannot read the private artifacts.
 - `conveyor release <issue>` on a task that runs on this workstation stops the harness first.
+- A released started task keeps its `conveyor::` state, `stage::` label, and workpad. The control screen lists it first in Backlog (`released · resumes at stage::<name>`), and the engine takes started tasks before new ones (after tasks assigned to me), so it resumes at its stage.
 - Reset (`x` on the control screen, `conveyor reset <issue>`): the engine holds the task (aborts its stage and skips it in cycles), then the CLI closes the open PR/MR, removes the workspace, deletes `conveyor/<issue>`, writes an empty workpad, removes `stage::` and `part::`, sets `conveyor::backlog` with the chosen form, and releases the claim. The workpad records `form` when the conveyor takes a task; it is the default form of a reset. Only the owner resets; `conveyor reset` refuses while a conveyor runs for the board, because that process may run the stage. Merged parts stay merged.
 
 ## Candidate order

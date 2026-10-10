@@ -29,7 +29,7 @@ export type MyTask = {
   activity?: Activity
 }
 
-export type BacklogTask = { id: string; title: string; url: string; form?: NonNullable<Task['form']>; priority?: number }
+export type BacklogTask = { id: string; title: string; url: string; form?: NonNullable<Task['form']>; priority?: number; released?: { state: NonNullable<Task['state']>; stage?: string } }
 
 type Limit = { used: number; limit: number }
 
@@ -91,9 +91,18 @@ export async function collectStatus(options: { board: Board; config: Config; set
   }
   mine.sort((a, b) => Number(a.id) - Number(b.id))
   const backlog = tasks
-    .filter((task) => !task.owner && (task.state === 'backlog' || (task.state === undefined && task.form !== undefined)))
-    .map((task): BacklogTask => ({ id: task.id, title: task.title, url: task.url, ...(task.form ? { form: task.form } : {}), ...(task.priority !== undefined ? { priority: task.priority } : {}) }))
-    .sort((a, b) => (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) || Number(a.id) - Number(b.id))
+    .filter((task) => !task.owner && task.state !== 'done' && (task.state !== undefined || task.form !== undefined))
+    .map(
+      (task): BacklogTask => ({
+        id: task.id,
+        title: task.title,
+        url: task.url,
+        ...(task.form ? { form: task.form } : {}),
+        ...(task.priority !== undefined ? { priority: task.priority } : {}),
+        ...(task.state && task.state !== 'backlog' ? { released: { state: task.state, ...(task.stage ? { stage: task.stage } : {}) } } : {}),
+      }),
+    )
+    .sort((a, b) => Number(!a.released) - Number(!b.released) || (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) || Number(a.id) - Number(b.id))
 
   const pid = runningPid(home, project)
   const fetch = Date.now() - lastFetch >= FETCH_EVERY

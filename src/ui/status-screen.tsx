@@ -149,7 +149,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         if (key === 'b' && url) void control.open(url).catch(fail)
         if (key === 'h') act({ kind: 'harness', id: current.id })
         if (key === 'x') {
-          if (panel === 'status' && view.column === BACKLOG) setMessage({ text: 'x resets my tasks in progress, needs input, or review.', error: true })
+          if (panel === 'status' && view.column === BACKLOG && !selected?.released) setMessage({ text: 'x resets started tasks: mine, or released ones in Backlog.', error: true })
           else setInput({ kind: 'reset', id: current.id })
         }
       }
@@ -184,7 +184,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         if (special.downArrow) setView((now) => ({ ...now, task: Math.min(tasks.length - 1, now.task + 1) }))
         if (special.return && selected) openTask(selected.id)
         if (key === 'i' && selected && control) {
-          if (view.column !== BACKLOG) setMessage({ text: 'i sets or removes form::idea on backlog tasks only.', error: true })
+          if (view.column !== BACKLOG || selected.released) setMessage({ text: 'i sets or removes form::idea on backlog tasks that have not started.', error: true })
           else
             void control
               .toggleIdea(selected.id)

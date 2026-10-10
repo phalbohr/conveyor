@@ -34,6 +34,24 @@ async function board() {
 }
 
 describe('collectStatus', () => {
+  it('lists released started tasks first in the backlog with their stage', async () => {
+    const settings = tempDir('conveyor-settings-')
+    writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')
+    const loaded = loadConfig(settings)
+    if (!loaded.ok) throw new Error(loaded.errors.join('\n'))
+    const fake = new FakeBoard('me')
+    await fake.createTask('New story', 'body', { form: 'story' })
+    const released = await fake.createTask('Released', 'body', { state: 'in-progress' })
+    await fake.setStage(released.id, 'plan')
+
+    const status = await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })
+
+    expect(status.backlog.map((task) => [task.id, task.released])).toEqual([
+      [released.id, { state: 'in-progress', stage: 'plan' }],
+      ['1', undefined],
+    ])
+  })
+
   it('summarizes my tasks, the team queue, and my limits', async () => {
     const settings = tempDir('conveyor-settings-')
     writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')

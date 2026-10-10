@@ -13,6 +13,7 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- Released started tasks show first in the Backlog panel (`+N released`) and the conveyor resumes them before new tasks; a stage that runs hides the attempt number and the last error of earlier attempts.
 - Reset: `x` on a task in the control screen or `conveyor reset <number> [--form]` stops it, closes its pull request, deletes its branch and workspace, clears the workpad, and returns it to Backlog as idea, story, plan, or draft.
 - `limits.running` counts my tasks in progress that wait for a retry; before, a failed stage freed its slot and the conveyor claimed more tasks than the limit.
 - The `opencode` and `kilocode` presets run with `--format json`: without a terminal both print nothing until the end, so the stall timeout aborted working stages; JSON events arrive on every step.

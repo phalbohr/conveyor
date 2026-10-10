@@ -238,6 +238,20 @@ describe('Engine activity and stop', () => {
     await engine.idle()
   })
 
+  it('resumes a released started task before new tasks of higher priority', async () => {
+    const { settings, board, engine, started } = setup({ script: never })
+    writeFileSync(join(settings, 'local.yaml'), 'limits: {running: 1}\n')
+    const fresh = await board.createTask('New', 'p', { form: 'plan' })
+    await board.setPriority(fresh.id, 1)
+    const released = await board.createTask('Released', 'p', { state: 'in-progress' })
+    await board.setPriority(released.id, 5)
+
+    await engine.tick()
+    await started([`${released.id}:implement`])
+    engine.abort()
+    await engine.idle()
+  })
+
   it('claims no new tasks after abort', async () => {
     const { board, engine, runs } = setup({ script: never })
     await board.createTask('Login', 'p', { form: 'plan' })
