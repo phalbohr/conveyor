@@ -48,6 +48,7 @@ export interface Board {
   user(): Promise<string>
   boardUrl(): Promise<string>
   inspect(): Promise<BoardInspection>
+  syncMirror(tasks: Task[]): Promise<number>
   prepare(stages: string[]): Promise<void>
   canWrite(user: string): Promise<boolean>
   createTask(title: string, body: string, labels?: TaskLabels): Promise<Task>
