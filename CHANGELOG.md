@@ -13,6 +13,7 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- `limits.running` counts my tasks in progress that wait for a retry; before, a failed stage freed its slot and the conveyor claimed more tasks than the limit.
 - The `opencode` and `kilocode` presets run with `--format json`: without a terminal both print nothing until the end, so the stall timeout aborted working stages; JSON events arrive on every step.
 - The control screen shows whether a task in progress is alive: running time and last harness output, or the heartbeat of a conveyor in another terminal. `s` stops at once: it aborts triage and the running stages and logs which. An existing blocked-by link no longer logs an error.
 - Workpad state stays readable when a harness error contains color codes or other control characters; before, such an error broke the hidden state and the task restarted at the wrong stage.

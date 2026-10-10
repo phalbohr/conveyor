@@ -83,6 +83,21 @@ describe('Engine retries', () => {
     expect(runs()).toEqual(['1:implement', '1:implement', '1:review', '1:merge'])
   })
 
+  it('counts a task waiting for its retry against the running limit', async () => {
+    const { settings, board, cycle, runs } = setup({
+      script: (run) => (run.taskId === '1' && run.stage === 'implement' ? { outcome: 'failed', summary: 'tests are red' } : never()),
+    })
+    writeFileSync(join(settings, 'local.yaml'), 'limits: {running: 1}\n')
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await board.createTask('Search', 'p', { form: 'plan' })
+
+    await cycle()
+    await cycle()
+
+    expect(runs()).toEqual(['1:implement'])
+    expect((await board.getTask('2'))?.owner).toBeUndefined()
+  })
+
   it('asks a human after the maximum number of attempts and resumes on reply', async () => {
     let failures = 2
     const { board, cycle, runs } = setup({

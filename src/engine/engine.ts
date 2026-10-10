@@ -153,6 +153,7 @@ export class Engine {
     const fresh: Task[] = []
     let awaitingMe = 0
     let awaitingReview = 0
+    let backingOff = 0
     const now = Date.now()
 
     const listedTasks = await board.listTasks()
@@ -192,6 +193,7 @@ export class Engine {
         case 'queued': {
           if (!owned) fresh.push(task)
           else if (await this.retryDue(task.id, now)) resumable.push(task)
+          else if (task.state === 'in-progress') backingOff++
           break
         }
         case undefined:
@@ -206,7 +208,7 @@ export class Engine {
     }
 
     if (this.halt.signal.aborted) return
-    let slots = config.limits.running - this.running.size
+    let slots = config.limits.running - this.running.size - backingOff
     let waiting = 0
     for (const task of this.sorted(resumable, me)) {
       if (slots > 0) {
