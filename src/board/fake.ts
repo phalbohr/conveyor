@@ -12,6 +12,7 @@ import {
   taskLabels,
   type Board,
   type BoardInspection,
+  type LinkedProject,
   type Comment,
   type MergeMethod,
   type PullRequest,
@@ -62,6 +63,20 @@ export class FakeBoard implements Board {
       .filter(([, issue]) => !issue.closed && issue.labels.some((label) => CONVEYOR_PREFIXES.some((prefix) => label.startsWith(prefix))))
       .map(([id, issue]) => ({ id, title: issue.title, labels: [...issue.labels] }))
     return { labels: [...new Set([...this.labels, ...[...this.issues.values()].flatMap((issue) => issue.labels)])], issues }
+  }
+
+  readonly projects: LinkedProject[] = []
+  readonly createdProjects: string[] = []
+
+  async linkedProjects() {
+    return [...this.projects]
+  }
+
+  async createProject(title: string) {
+    const project = { number: 100 + this.createdProjects.length, title, url: `https://example.test/projects/${100 + this.createdProjects.length}` }
+    this.createdProjects.push(title)
+    this.projects.push(project)
+    return project
   }
 
   async syncMirror() {

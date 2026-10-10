@@ -3,12 +3,12 @@ import { FakeBoard } from '../src/board/fake.js'
 import { boardCheckLines, checkBoard, needsAttention } from '../src/board-check.js'
 import { loadConfig } from '../src/config.js'
 import { runCli, tempDir } from './helpers.js'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 function config() {
   const dir = tempDir('conveyor-settings-')
-  writeFileSync(join(dir, 'config.yaml'), 'board: {provider: github, project: acme/app}\nstages:\n  implement: {}\n  polish: {}\n  merge: {}\n')
+  writeFileSync(join(dir, 'config.yaml'), 'board: {provider: github, project: acme/app, github_project: 1}\nstages:\n  implement: {}\n  polish: {}\n  merge: {}\n')
   const loaded = loadConfig(dir)
   if (!loaded.ok) throw new Error(loaded.errors.join('\n'))
   return loaded.config
@@ -53,6 +53,48 @@ describe('checkBoard', () => {
     const board = new FakeBoard('me')
     await board.prepare(['story', 'plan', 'implement', 'polish', 'merge'])
     expect(needsAttention(await checkBoard(board, config()))).toBe(false)
+  })
+})
+
+describe('GitHub project', () => {
+  function settingsDir() {
+    const dir = tempDir('conveyor-settings-')
+    writeFileSync(join(dir, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')
+    return dir
+  }
+
+  it('reports a repository without a project and a linked project that is not set', async () => {
+    const dir = settingsDir()
+    const loaded = loadConfig(dir)
+    if (!loaded.ok) throw new Error(loaded.errors.join('\n'))
+    const board = new FakeBoard('me')
+    expect(boardCheckLines(await checkBoard(board, loaded.config))[0]).toContain('The repository has no GitHub project')
+    board.projects.push({ number: 2, title: 'Tic board', url: 'https://example.test/projects/2' })
+    const check = await checkBoard(board, loaded.config)
+    expect(needsAttention(check)).toBe(true)
+    expect(boardCheckLines(check)[0]).toContain('linked to GitHub project 2 (Tic board), but board.github_project is not set')
+  })
+
+  it('board update uses the linked project, or creates and links one', async () => {
+    const linked = new FakeBoard('me')
+    linked.projects.push({ number: 2, title: 'Tic board', url: 'https://example.test/projects/2' })
+    const one = await runCli(['init', '--provider', 'github', '--project', 'acme/app'], { board: linked })
+    expect(one.stdout).toContain('Uses the linked GitHub project 2')
+    expect(readFileSync(join(one.context.cwd, '.conveyor', 'config.yaml'), 'utf8')).toContain('github_project: 2')
+    expect(linked.createdProjects).toEqual([])
+
+    const empty = new FakeBoard('me')
+    const created = await runCli(['init', '--provider', 'github', '--project', 'acme/app'], { board: empty })
+    expect(created.stdout).toContain('Created and linked the GitHub project 100')
+    expect(empty.createdProjects).toEqual(['app conveyor'])
+  })
+
+  it('leaves the choice to the user when several projects are linked', async () => {
+    const board = new FakeBoard('me')
+    board.projects.push({ number: 2, title: 'A', url: 'u' }, { number: 3, title: 'B', url: 'u' })
+    const result = await runCli(['init', '--provider', 'github', '--project', 'acme/app'], { board })
+    expect(result.stderr).toContain('several GitHub projects (2 A, 3 B)')
+    expect(readFileSync(join(result.context.cwd, '.conveyor', 'config.yaml'), 'utf8')).not.toContain('github_project')
   })
 })
 

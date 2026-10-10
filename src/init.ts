@@ -5,6 +5,7 @@ import type { Context } from './cli.js'
 import { loadConfig, type Config } from './config.js'
 import { FORM_LABEL, STATE_LABEL, TASK_FORMS, TASK_STATES, type TaskState } from './board/board.js'
 import { boardAdapter } from './commands/run.js'
+import { setUpProject } from './project-setup.js'
 import { SETTINGS_DIR, findSettings, linkSettings } from './settings.js'
 
 export type Board = Config['board']
@@ -58,10 +59,20 @@ export async function initProject(context: Context, target: Target, board?: Boar
 
 async function finish(context: Context, settings: string, config: Config): Promise<InitResult> {
   const warnings = await checkTools(config, context)
-  await boardAdapter(context, config)
-    .prepare(config.stages.map((stage) => stage.name))
+  let current = config
+  const project = await setUpProject(boardAdapter(context, config), config, settings).catch((error: unknown) => {
+    warnings.push(`the GitHub project was not set up: ${(error as Error).message}`)
+    return {} as { number?: number; message?: string }
+  })
+  if (project.number) {
+    const reloaded = loadConfig(settings)
+    if (reloaded.ok) current = reloaded.config
+  }
+  if (project.message && !project.number) warnings.push(project.message)
+  await boardAdapter(context, current)
+    .prepare(current.stages.map((stage) => stage.name))
     .catch((error: unknown) => warnings.push(`the board labels were not created: ${(error as Error).message}`))
-  return { ok: true, settings, warnings, board: boardSteps(config) }
+  return { ok: true, settings, warnings, board: [...(project.number && project.message ? [project.message] : []), ...boardSteps(current)] }
 }
 
 function boardSteps(config: Config): string[] {

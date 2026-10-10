@@ -17,6 +17,7 @@ import {
   taskLabels,
   type Board,
   type BoardInspection,
+  type LinkedProject,
   type Comment,
   type MergeMethod,
   type PullRequest,
@@ -281,6 +282,21 @@ export class GitHubBoard implements Board {
   async closePullRequest(id: string) {
     const pull = await this.pullRequest(id)
     if (pull?.state === 'open') await this.gh(['pr', 'close', pull.number, '-R', this.project])
+  }
+
+  async linkedProjects(): Promise<LinkedProject[]> {
+    const [owner, name] = this.project.split('/')
+    const found = await this.graphql<{ repository: { projectsV2: { nodes: LinkedProject[] } } }>(
+      'query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { projectsV2(first: 20) { nodes { number title url } } } }',
+      { owner, name },
+    )
+    return found.repository.projectsV2.nodes
+  }
+
+  async createProject(title: string): Promise<LinkedProject> {
+    const created = JSON.parse(await this.gh(['project', 'create', '--owner', this.owner(), '--title', title, '--format', 'json'])) as LinkedProject
+    await this.gh(['project', 'link', String(created.number), '--owner', this.owner(), '--repo', this.project])
+    return { number: created.number, title: created.title ?? title, url: created.url }
   }
 
   async syncMirror(tasks: Task[]) {

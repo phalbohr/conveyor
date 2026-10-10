@@ -49,6 +49,8 @@ export interface Board {
   boardUrl(): Promise<string>
   inspect(): Promise<BoardInspection>
   syncMirror(tasks: Task[]): Promise<number>
+  linkedProjects(): Promise<LinkedProject[]>
+  createProject(title: string): Promise<LinkedProject>
   prepare(stages: string[]): Promise<void>
   canWrite(user: string): Promise<boolean>
   createTask(title: string, body: string, labels?: TaskLabels): Promise<Task>
@@ -77,6 +79,7 @@ export interface Board {
 
 export type TaskLabels = { state?: TaskState; form?: TaskForm }
 export type BoardInspection = { labels: string[]; field?: { options: string[] } | 'missing'; issues: { id: string; title: string; labels: string[] }[] }
+export type LinkedProject = { number: number; title: string; url: string }
 export const CONVEYOR_PREFIXES = ['conveyor::', 'form::', 'stage::']
 
 export const STATE_COLORS: Record<TaskState, string> = {
