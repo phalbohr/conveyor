@@ -1,5 +1,5 @@
 import { Select, TextInput } from '@inkjs/ui'
-import { Box, Text, render, useApp } from 'ink'
+import { Box, Text, render, useApp, useInput } from 'ink'
 import { useState } from 'react'
 import type { Board, Target } from '../init.js'
 import { clearOnShrink } from './terminal.js'
@@ -16,6 +16,7 @@ const TARGETS = [
   { label: 'Initialize a project in this directory', value: 'here' },
   { label: 'Initialize a project with settings at a path', value: 'path' },
   { label: 'Use existing settings', value: 'use' },
+  { label: 'Cancel', value: 'cancel' },
 ]
 
 const PROVIDERS = [
@@ -34,11 +35,16 @@ export function InitPrompt({ askTarget, detected, onDone }: Props) {
     exit()
   }
 
+  useInput((_input, key) => {
+    if (key.escape) exit()
+  })
+
   if (!kind) {
     return (
       <Box flexDirection="column">
         <Text>No conveyor settings found.</Text>
-        <Select options={TARGETS} onChange={(value) => setKind(value as Target['kind'])} />
+        <Select options={TARGETS} onChange={(value) => (value === 'cancel' ? exit() : setKind(value as Target['kind']))} />
+        <Text color="gray">Esc cancels</Text>
       </Box>
     )
   }

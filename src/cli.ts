@@ -70,6 +70,10 @@ export async function main(argv: string[], context: Context): Promise<number> {
           ? { kind: 'path', path: options.path }
           : { kind: 'here' }
       const board = target.kind === 'use' ? undefined : await resolveBoard(context, options)
+      if (!board && target.kind !== 'use' && context.interactive) {
+        context.stdout('Initialization cancelled; nothing was created.\n')
+        return
+      }
       exitCode = report(context, await initProject(context, target, board), json())
     })
 
@@ -228,7 +232,10 @@ async function status(context: Context, json: boolean): Promise<number> {
       return 1
     }
     const answers = await promptInit({ askTarget: true, detected: await detectBoard(context) })
-    if (!answers) return 1
+    if (!answers) {
+      context.stdout('Initialization cancelled; nothing was created.\n')
+      return 0
+    }
     return report(context, await initProject(context, answers.target, answers.board), json)
   }
 

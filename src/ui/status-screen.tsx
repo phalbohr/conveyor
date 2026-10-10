@@ -24,6 +24,7 @@ export type HubAction =
   | { kind: 'attach'; id: string }
   | { kind: 'release'; id: string }
   | { kind: 'harness'; id: string }
+  | { kind: 'help' }
 
 type Props = {
   load: (force?: boolean) => Promise<StatusSnapshot>
@@ -122,6 +123,10 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         return
       }
       if (key === '?' || (key === 'h' && panel === 'help')) toggle('help')
+      if (key === 'a' && panel === 'help') {
+        act({ kind: 'help' })
+        return
+      }
       if (key === 'u') toggle('usage')
       if (key === 'o') toggle('log')
       if (key === 'k') toggle('board')
@@ -310,6 +315,7 @@ function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefine
     return `[↑↓] scroll · [c] comment · [b] browser · [h] harness${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
   }
   if (panel === 'board') return `[Enter] add what is missing · [↑↓] scroll · [Esc] back · [q] quit`
+  if (panel === 'help') return `[a] ask the conveyor-help skill in a live session · [↑↓] scroll · [Esc] back · [q] quit`
   if (panel !== 'status') return `[↑↓] scroll · [Esc] back · [q] quit`
   if (view.focus === 'tasks') {
     return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness${view.column === BACKLOG ? ' · [i] form::idea on/off' : ''} · [Esc] columns · [?] help · [q] quit${time}`

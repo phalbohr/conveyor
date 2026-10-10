@@ -43,6 +43,24 @@ describe('InitPrompt', () => {
     await until(() => expect(onDone).toHaveBeenCalledWith({ target: { kind: 'use', path: '/settings' } }))
   })
 
+  it('cancels with the Cancel option and creates nothing', async () => {
+    const onDone = vi.fn()
+    const rendered = render(<InitPrompt askTarget detected={{}} onDone={onDone} />)
+    await until(() => expect(rendered.lastFrame()).toContain('Cancel'))
+    await press(rendered, DOWN, DOWN, DOWN, ENTER)
+    await settle()
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
+  it('cancels with Esc on a later step', async () => {
+    const onDone = vi.fn()
+    const rendered = render(<InitPrompt askTarget detected={{}} onDone={onDone} />)
+    await until(() => expect(rendered.lastFrame()).toContain('Esc cancels'))
+    await press(rendered, ENTER, '\u001B')
+    await settle()
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
   it('asks only for the board when the target is known', async () => {
     const onDone = vi.fn()
     const rendered = render(<InitPrompt askTarget={false} detected={{}} onDone={onDone} />)

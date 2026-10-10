@@ -9,7 +9,7 @@ import { showSettings } from '../ui/settings-screen.js'
 import { showStatus } from '../ui/status-screen.js'
 import type { TaskControl } from '../ui/task-lines.js'
 import { commentText, findWorkpad } from '../engine/workpad.js'
-import { attachCommand, harnessCommand, newCommand } from './live.js'
+import { attachCommand, harnessCommand, helpSessionCommand, newCommand } from './live.js'
 import { modelsFile } from './models.js'
 import { releaseCommand } from './run.js'
 
@@ -92,6 +92,7 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     if (action.kind === 'attach') await attachCommand(captured, action.id)
     if (action.kind === 'release') await releaseCommand(captured, action.id, false)
     if (action.kind === 'harness') await harnessCommand(captured, action.id)
+    if (action.kind === 'help') await helpSessionCommand(captured)
     notice = output.trim() || undefined
     if (notice) runner.note(notice)
   }
