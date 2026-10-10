@@ -27,6 +27,14 @@ export class RedactingBoard implements Board {
     return this.board.syncMirror(tasks)
   }
 
+  linkedProjects() {
+    return this.board.linkedProjects()
+  }
+
+  createProject(title: string) {
+    return this.board.createProject(title)
+  }
+
   boardUrl() {
     return this.board.boardUrl()
   }

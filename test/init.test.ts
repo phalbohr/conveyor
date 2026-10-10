@@ -40,7 +40,8 @@ describe('conveyor init', () => {
       ].sort(),
     )
     expect(result.stdout).toContain('form::idea, form::story, form::plan')
-    expect(result.stdout).toContain('create a GitHub project, set board.github_project')
+    expect(result.stdout).toContain('Created and linked the GitHub project 100')
+    expect(result.stdout).toContain('in project 100, open a Board view')
   })
 
   it('explains the GitLab board lists', async () => {
@@ -130,7 +131,7 @@ describe('conveyor init', () => {
     const result = await runCli(['init', ...BOARD_FLAGS, '--json'], { responses: { 'gh auth status': { code: 1 } } })
     const output = JSON.parse(result.stdout)
     expect(output.settings).toBe(join(result.context.cwd, '.conveyor'))
-    expect(output.warnings).toHaveLength(1)
+    expect(output.warnings).toContainEqual(expect.stringContaining('gh auth status'))
   })
 })
 

@@ -89,6 +89,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
 
 function boardSummary(check: BoardCheck) {
   return [
+    check.project ? (check.project.linked.length ? 'board.github_project not set' : 'no GitHub project') : '',
     check.missing.length ? `${check.missing.length} labels missing` : '',
     check.field === 'missing' ? 'no Conveyor field' : check.field ? `${check.field.missingOptions.length} Conveyor options missing` : '',
     check.outdated.length ? `${check.outdated.length} tasks with old labels` : '',
@@ -104,7 +105,7 @@ export function boardLines(status: StatusSnapshot): Line[] {
     { text: 'The conveyor compares the board with the labels and fields this version uses. It never changes or deletes what exists.', tone: 'muted' },
     { text: '' },
     ...(status.board ? (lines.length ? lines.map((text): Line => ({ text: `  ${text}` })) : [{ text: '  The board has everything this version uses.', tone: 'ok' as const }]) : [{ text: '  Not checked yet; press r.', tone: 'muted' as const }]),
-    ...(status.board && (status.board.missing.length || status.board.field) ? [{ text: '' }, { text: 'Enter adds the missing labels, the Conveyor field, and its missing options; existing ones and card values stay.', tone: 'title' as const }] : []),
+    ...(status.board && (status.board.missing.length || status.board.field || status.board.project) ? [{ text: '' }, { text: 'Enter sets up the GitHub project when it is missing and adds the missing labels, the Conveyor field, and its missing options; existing ones and card values stay.', tone: 'title' as const }] : []),
   ]
 }
 

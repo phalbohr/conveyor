@@ -13,6 +13,7 @@ import {
   taskLabels,
   type Board,
   type BoardInspection,
+  type LinkedProject,
   type Comment,
   type MergeMethod,
   type PullRequest,
@@ -87,6 +88,14 @@ export class GitLabBoard implements Board {
       .map((issue) => ({ id: String(issue.iid), title: issue.title, labels: issue.labels }))
       .filter((issue) => issue.labels.some((label) => CONVEYOR_PREFIXES.some((prefix) => label.startsWith(prefix))))
     return { labels, issues }
+  }
+
+  async linkedProjects(): Promise<LinkedProject[]> {
+    return []
+  }
+
+  async createProject(): Promise<LinkedProject> {
+    throw new Error('GitLab boards need no separate project')
   }
 
   async syncMirror() {

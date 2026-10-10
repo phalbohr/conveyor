@@ -12,6 +12,7 @@ First public release.
 - Review command `/approve` (one approval; the conveyor merges after `review.approvals` distinct approvals). On GitLab, `/approve` in a merge request is GitLab's own approval and counts.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
+- GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
 - Board upgrades: every start and the control screen report what the board lacks for this version; `conveyor board update` (or `k`) adds it on request and never changes or deletes existing labels or fields.
 - Parts: the plan can split a story into ordered parts, one pull request each; the story is done after the last part merges.
 - Board panel on the control screen: Backlog by form and my columns against my limits; open a task with its text, workpad, comments, and pull request; comment, open in the browser, open it in a live session with the harness, and toggle `form::idea`.

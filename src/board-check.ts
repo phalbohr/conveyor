@@ -1,15 +1,18 @@
 import { CONVEYOR_PREFIXES, TASK_STATES, boardLabels, type Board } from './board/board.js'
 import type { Config } from './config.js'
+import { projectGap, projectGapLine, type ProjectGap } from './project-setup.js'
 
 export type BoardCheck = {
   missing: string[]
   unused: string[]
   field?: 'missing' | { missingOptions: string[] }
   outdated: { id: string; title: string; labels: string[] }[]
+  project?: ProjectGap
 }
 
 export async function checkBoard(board: Board, config: Config): Promise<BoardCheck> {
   const found = await board.inspect()
+  const project = await projectGap(board, config)
   const required = new Set(boardLabels(config.stages.map((stage) => stage.name)).map((label) => label.name))
   const unused = found.labels.filter((label) => CONVEYOR_PREFIXES.some((prefix) => label.startsWith(prefix)) && !required.has(label)).sort()
   const outdated = found.issues
@@ -22,15 +25,16 @@ export async function checkBoard(board: Board, config: Config): Promise<BoardChe
     unused,
     ...(field && (field === 'missing' || field.missingOptions.length > 0) ? { field } : {}),
     outdated,
+    ...(project ? { project } : {}),
   }
 }
 
 export function needsAttention(check: BoardCheck) {
-  return check.missing.length > 0 || check.field !== undefined || check.outdated.length > 0
+  return check.missing.length > 0 || check.field !== undefined || check.outdated.length > 0 || check.project !== undefined
 }
 
 export function boardCheckLines(check: BoardCheck): string[] {
-  const lines: string[] = []
+  const lines: string[] = check.project ? [projectGapLine(check.project)] : []
   if (check.missing.length) lines.push(`Missing labels this version uses (conveyor board update adds them): ${check.missing.join(', ')}`)
   if (check.field === 'missing') lines.push('The GitHub project has no Conveyor field (conveyor board update adds it)')
   else if (check.field) lines.push(`The Conveyor field of the GitHub project lacks the options ${check.field.missingOptions.join(', ')} (conveyor board update adds them and keeps the existing options and card values)`)

@@ -16,7 +16,7 @@ Agents run as your user and, by default, without permission prompts. Read [Secur
 
 - macOS or Linux. Windows is not supported.
 - Node.js 22.12 or later, and git.
-- GitHub: `gh`, signed in (`gh auth login`), with the `project` scope if you mirror states to GitHub Projects.
+- GitHub: `gh`, signed in (`gh auth login`) with the `project` scope: the board with columns is a GitHub project.
 - GitLab: `glab`, signed in (`glab auth login`).
 - The CLI of every harness your settings use, signed in. The default settings use `claude` (Claude Code) for every stage and for triage; `codex`, `opencode`, `kilo` (Kilo Code), `pi`, `openhands`, and `a0` are needed only when a stage uses them.
 
@@ -34,7 +34,7 @@ conveyor init
 conveyor run
 ```
 
-`conveyor init` reads the board from `git remote origin` and creates `.conveyor/`. Without a terminal, pass `--provider github --project owner/repo`. To keep the settings outside the repository, use `--path <dir>`; to reuse existing settings, use `--use <dir>`.
+`conveyor init` reads the board from `git remote origin` and creates `.conveyor/`. On GitHub it also sets up the board with columns: it uses the GitHub project linked to the repository, or creates and links one (with several linked projects it asks you to choose with `conveyor config set board.github_project <number>`), adds the `Conveyor` field, and writes `board.github_project`. Without a terminal, pass `--provider github --project owner/repo`. To keep the settings outside the repository, use `--path <dir>`; to reuse existing settings, use `--use <dir>`.
 
 Put a task on the board with the labels `conveyor::backlog` and `form::plan` (or `form::story` / `form::idea`, depending on `pickup_from`), or shape one with an agent:
 
@@ -88,7 +88,7 @@ The task is not taken? Check that the issue has a `form::` label that `pickup_fr
 
 | I want to change … | File | Key |
 |---|---|---|
-| the board, the GitHub Projects mirror | `config.yaml` | `board.project`, `board.github_project` |
+| the board and its GitHub project | `config.yaml` | `board.project`, `board.github_project` |
 | from which state the conveyor takes tasks | `config.yaml` | `pickup_from` (`idea`, `story`, `plan`) |
 | where human decisions happen | `config.yaml` | `transitions` (`interactive`, `autonomous`, `smart`; merge: `human`, `ai`, `smart`) |
 | the stages, their order, harness, model, effort | `config.yaml` | `stages`, `defaults`, `triage` |
@@ -167,7 +167,7 @@ The conveyor takes an open task that has a `form::` label allowed by `pickup_fro
 
 Set up the board once:
 
-- **GitHub:** create a project, then `conveyor config set board.github_project <number>` and `conveyor board update`: it adds the single-select field `Conveyor` with one option per state. GitHub does not move cards by labels itself; the conveyor does it: every cycle of `conveyor run`, `conveyor board update`, and `k` on the control screen add open issues with a `conveyor::` label to the project and set their `Conveyor` value from the label, so a card follows its label within one cycle. In a Board view, choose `Conveyor` under "Column by". Labels, `stage::` included, show on the cards.
+- **GitHub:** the board with columns is a GitHub project; labels alone give no board there. `conveyor init` (or later `conveyor board update`, or `k` and Enter) uses the project linked to the repository or creates and links one, adds the `Conveyor` field, and writes `board.github_project`. GitHub does not move cards by labels itself; the conveyor does it: every cycle of `conveyor run`, `conveyor board update`, and `k` add open issues with a `conveyor::` label to the project and set their `Conveyor` value from the label. Once, in the project, choose the Board layout and "Column by: Conveyor" (GitHub has no API for views). Without `board.github_project` the start log, the control screen, and `conveyor board check` report that the board has no columns.
 - **GitLab:** open Issues → Boards and add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
 
 A large story can merge in **parts**: the `plan` stage returns their order in `parts`, and each part becomes one pull request. The conveyor runs the stages after `plan` for part 1, reviews and merges it, then moves the task back to In progress for part 2 on a fresh branch from the updated base branch, and so on. The card shows `part::2/3`, the pull request title names the part, and the story is done after the last part merges.

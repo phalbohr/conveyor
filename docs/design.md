@@ -246,7 +246,7 @@ A comment without the marker after an agent question is the answer. The task goe
 | `conveyor::done` | merged and post-merge stages complete |
 | `stage::<name>` | the running or waiting stage; removed at review and done |
 
-GitHub Projects: with `board.github_project: <number>` the CLI adds every task to the project and mirrors its state to the single-select field `Conveyor` (created automatically with one option per state). The standard `Status` field stays untouched. Choose `Conveyor` as the column field of a board view.
+GitHub Projects: on GitHub the board with columns is a GitHub project, a required part of the setup. `conveyor init` and `conveyor board update` use the project linked to the repository (`repository.projectsV2`), or create one and link it when none is linked, and write `board.github_project`; with several linked projects the user chooses. The CLI adds every task to the project and mirrors its state to the single-select field `Conveyor` (one option per state) on every state change and on a sync every cycle. The standard `Status` field stays untouched. The Board layout and "Column by: Conveyor" are chosen once by hand; GitHub has no API for views. A GitHub board without `board.github_project` is reported by the board check.
 
 ## Board upgrades
 

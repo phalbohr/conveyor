@@ -3,12 +3,12 @@ import { loadConfig } from '../config.js'
 import { ModelCache, catalogsFor } from '../models.js'
 import { Runner, type RunnerSetup } from '../runner.js'
 import { SettingsDocument } from '../settings-editor.js'
-import { checkBoard } from '../board-check.js'
 import { collectStatus, forgetBoardCheck } from '../status.js'
 import { showSettings } from '../ui/settings-screen.js'
 import { showStatus } from '../ui/status-screen.js'
 import type { TaskControl } from '../ui/task-lines.js'
 import { commentText, findWorkpad } from '../engine/workpad.js'
+import { applyBoardUpdate } from './board.js'
 import { attachCommand, harnessCommand, helpSessionCommand, newCommand } from './live.js'
 import { modelsFile } from './models.js'
 import { releaseCommand } from './run.js'
@@ -56,18 +56,10 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
       await this.open(await board.boardUrl())
     },
     async updateBoard() {
-      const current = loadConfig(setup.settings)
-      if (!current.ok) throw new Error(current.errors.join('; '))
-      const before = await checkBoard(board, current.config)
-      await board.prepare(current.config.stages.map((stage) => stage.name))
-      const synced = await board.syncMirror(await board.listTasks())
+      const { added, synced, project } = await applyBoardUpdate(context, setup.settings)
       forgetBoardCheck()
-      const added = [
-        ...before.missing,
-        ...(before.field === 'missing' ? ['the Conveyor field'] : before.field ? before.field.missingOptions.map((option) => `the Conveyor option ${option}`) : []),
-      ]
       const moved = synced ? ` Moved ${synced} cards to the column of their conveyor:: label.` : ''
-      return `${added.length ? `Added ${added.join(', ')}.` : 'Nothing to add.'}${moved}`
+      return `${project ? `${project} Restart the control screen to use it. ` : ''}${added.length ? `Added ${added.join(', ')}.` : 'Nothing to add.'}${moved}`
     },
   }
   let notice: string | undefined
