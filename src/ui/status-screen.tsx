@@ -17,6 +17,7 @@ export type RunnerControl = {
   start(): Promise<{ ok: true } | { ok: false; error: string }>
   stop(): Promise<void>
   activity?(): Record<string, Activity>
+  cycle?(): boolean
 }
 
 export type HubAction =
@@ -145,8 +146,9 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (key === 'o') toggle('log')
       if (key === 'k') toggle('board')
       if (key === 'r') {
-        setMessage({ text: 'Reading the board again and checking it…' })
-        refresh(true, () => setMessage({ text: `Board read again at ${new Date().toLocaleTimeString()}.` }))
+        const cycle = runner?.cycle?.() ? ' The conveyor starts a cycle now: it picks up answers and due retries.' : ''
+        setMessage({ text: `Reading the board again and checking it…${cycle}` })
+        refresh(true, () => setMessage({ text: `Board read again at ${new Date().toLocaleTimeString()}.${cycle}` }))
         if (panel === 'task' && opened) openTask(opened.id, opened.target)
       }
       if (current && control) {

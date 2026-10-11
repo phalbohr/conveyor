@@ -50,6 +50,7 @@ export class Runner {
   private loop: Promise<void> | undefined
   private stopping = false
   private wake: () => void = () => undefined
+  private again = false
   private engine: Engine | undefined
 
   constructor(
@@ -152,10 +153,12 @@ export class Runner {
         log(`conveyor runs for ${project}`)
         let interval = config.poll_interval
         while (!this.stopping) {
+          this.again = false
           await checkSync().catch((error: unknown) => this.emit('warning', (error as Error).message))
           await engine.tick().catch((error: unknown) => this.emit('error', `cycle failed: ${(error as Error).message}`))
           const reloaded = loadConfig(settings)
           if (reloaded.ok) interval = reloaded.config.poll_interval
+          if (this.again) continue
           await new Promise<void>((resolve) => {
             const timer = setTimeout(resolve, interval)
             this.wake = () => {
@@ -189,6 +192,13 @@ export class Runner {
 
   activity(): Record<string, Activity> {
     return this.engine?.activity() ?? {}
+  }
+
+  cycle() {
+    if (!this.loop || this.stopping) return false
+    this.again = true
+    this.wake()
+    return true
   }
 
   async reset(id: string, form?: ResetForm) {

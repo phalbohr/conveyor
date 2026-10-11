@@ -158,6 +158,8 @@ function fakeRunner() {
       runner.running = false
       for (const listener of listeners) listener()
     },
+    cycles: 0,
+    cycle: () => (runner.running ? (runner.cycles++, true) : false),
   }
   return runner satisfies RunnerControl
 }
@@ -225,6 +227,17 @@ describe('StatusScreen as a control panel', () => {
     stdin.write('r')
     await vi.waitFor(() => expect(lastFrame()).toContain('Board read again at'), { timeout: 5_000 })
     expect(loads).toBe(2)
+  })
+
+  it('starts a conveyor cycle on r while the conveyor runs', async () => {
+    const runner = fakeRunner()
+    runner.running = true
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} runner={runner} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('r')
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('The conveyor starts a cycle now'), { timeout: 5_000 })
+    expect(runner.cycles).toBe(1)
   })
 
   it('resets a task in progress after the form is chosen', async () => {

@@ -497,6 +497,7 @@ export class Engine {
         return { status: 'stopped', summary }
       }
       await run.save()
+      this.log(`task ${id}: stage ${stage.name} started (${stage.harness}${stage.model ? `, ${stage.model}` : ''})`)
       const task = (await board.getTask(id)) ?? (await this.mustGetTask(id))
       if (task.stage !== stage.name) await board.setStage(id, stage.name)
       const comments = await this.comments(id)
