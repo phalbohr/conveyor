@@ -34,12 +34,13 @@ export async function newCommand(context: Context, json: boolean): Promise<numbe
 
 export type NewForm = 'idea' | 'story' | 'plan' | 'draft'
 
+const WRITE_HINT = '<!-- Write the task below this line. form: idea, story (a user story), plan (a story with its plan), or draft (no form: the conveyor does not take it yet). Save and close the editor; an empty title creates nothing. -->'
 const WRITE_TEMPLATE = `---
 title:
 form: idea
 ---
 
-<!-- Write the task below this line. form: idea, story (a user story), plan (a story with its plan), or draft (no form: the conveyor does not take it yet). Save and close the editor; an empty title creates nothing. -->
+${WRITE_HINT}
 `
 const writtenSchema = z.object({ title: z.string().trim().min(1), form: z.enum(['idea', 'story', 'plan', 'draft']).default('idea') })
 
@@ -68,7 +69,7 @@ export async function writeCommand(context: Context, json: boolean): Promise<num
       context.stdout('No title; nothing was created.\n')
       return 0
     }
-    const body = text.slice(match?.[0].length ?? 0).replace(/<!--[\s\S]*?-->/g, '').trim()
+    const body = text.slice(match?.[0].length ?? 0).replace(WRITE_HINT, '').trim()
     return createTaskCommand(context, { title: parsed.data.title, form: parsed.data.form, body }, json)
   } finally {
     rmSync(dir, { recursive: true, force: true })

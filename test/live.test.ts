@@ -301,6 +301,18 @@ describe('conveyor new without an agent', () => {
     expect(await board.getTask('1')).toMatchObject({ form: 'story', body: 'As a user, I want to export reports.' })
   })
 
+  it('removes only its own hint and keeps HTML comments of the text', async () => {
+    const board = new FakeBoard('me')
+    const text = 'Keep <!-- this note -->, <scr<!-- x -->ipt>, and\n```html\n<!-- example -->\n```'
+    const editor: Interact = async (_command, args) => {
+      const file = args.at(-1) ?? ''
+      writeFileSync(file, readFileSync(file, 'utf8').replace('title:', 'title: Notes') + text + '\n')
+      return 0
+    }
+    await runCli(['new', '--write'], { ...(await project()), board, interact: editor })
+    expect((await board.getTask('1'))?.body).toBe(text)
+  })
+
   it('creates nothing when the title stays empty', async () => {
     const board = new FakeBoard('me')
     const result = await runCli(['new', '--write'], { ...(await project()), board, interact: async () => 0 })
