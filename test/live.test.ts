@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import type { Context, Interact } from '../src/cli.js'
@@ -278,5 +278,33 @@ describe('conveyor attach', () => {
     const result = await runCli(['attach', task.id], { ...(await project()), board, interact: agent().interact })
     expect(result.code).toBe(1)
     expect(await board.listComments(task.id)).toHaveLength(before)
+  })
+})
+
+describe('conveyor new without an agent', () => {
+  it('creates a task from a title and form', async () => {
+    const board = new FakeBoard('me')
+    const result = await runCli(['new', '--title', 'Dark mode', '--form', 'idea'], { ...(await project()), board })
+    expect(result.stdout).toContain('Created task 1: Dark mode (form::idea)')
+    expect(await board.getTask('1')).toMatchObject({ title: 'Dark mode', state: 'backlog', form: 'idea' })
+  })
+
+  it('creates a task written in the editor and ignores the template hint', async () => {
+    const board = new FakeBoard('me')
+    const editor: Interact = async (_command, args) => {
+      const file = args.at(-1) ?? ''
+      writeFileSync(file, readFileSync(file, 'utf8').replace('title:', 'title: Export to CSV').replace('form: idea', 'form: story') + 'As a user, I want to export reports.\n')
+      return 0
+    }
+    const result = await runCli(['new', '--write'], { ...(await project()), board, interact: editor })
+    expect(result.stdout).toContain('Created task 1: Export to CSV (form::story)')
+    expect(await board.getTask('1')).toMatchObject({ form: 'story', body: 'As a user, I want to export reports.' })
+  })
+
+  it('creates nothing when the title stays empty', async () => {
+    const board = new FakeBoard('me')
+    const result = await runCli(['new', '--write'], { ...(await project()), board, interact: async () => 0 })
+    expect(result.stdout).toContain('nothing was created')
+    expect(await board.listTasks()).toEqual([])
   })
 })

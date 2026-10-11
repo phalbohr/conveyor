@@ -3,7 +3,7 @@ import { Argument, Command, CommanderError, Option } from 'commander'
 import type { Board as BoardPort } from './board/board.js'
 import { configEdit, configGet, configList } from './commands/config.js'
 import { hub, openSettings } from './commands/hub.js'
-import { attachCommand, newCommand } from './commands/live.js'
+import { attachCommand, createTaskCommand, newCommand, writeCommand, type NewForm } from './commands/live.js'
 import { modelsCommand } from './commands/models.js'
 import { type ClaudeModel, type Probes } from './models.js'
 import { skillInstall } from './commands/skill.js'
@@ -193,9 +193,15 @@ export async function main(argv: string[], context: Context): Promise<number> {
 
   program
     .command('new')
-    .description('shape a new task in a live session with an agent and put it on the board')
-    .action(async () => {
-      exitCode = await newCommand(context, json())
+    .description('put a new task on the board: shape it with an agent (default), write it in your editor (--write), or give its title (--title)')
+    .option('--write', 'write title, form, and text in $EDITOR')
+    .option('--title <title>', 'create the task with this title, without an agent')
+    .addOption(new Option('--form <form>', 'form of the task for --title').choices(['idea', 'story', 'plan', 'draft']).default('idea'))
+    .option('--body <text>', 'text of the task for --title')
+    .action(async (options: { write?: boolean; title?: string; form: NewForm; body?: string }) => {
+      if (options.title) exitCode = await createTaskCommand(context, { title: options.title, form: options.form, ...(options.body ? { body: options.body } : {}) }, json())
+      else if (options.write) exitCode = await writeCommand(context, json())
+      else exitCode = await newCommand(context, json())
     })
 
   program

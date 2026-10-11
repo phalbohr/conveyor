@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,6 +30,49 @@ export async function newCommand(context: Context, json: boolean): Promise<numbe
   const task = await board.createTask(parsed.title, parsed.body, { state: 'backlog', form: parsed.form })
   context.stdout(json ? `${JSON.stringify({ id: task.id, title: task.title, form: parsed.form })}\n` : `Created task ${task.id}: ${task.title}\n`)
   return 0
+}
+
+export type NewForm = 'idea' | 'story' | 'plan' | 'draft'
+
+const WRITE_TEMPLATE = `---
+title:
+form: idea
+---
+
+<!-- Write the task below this line. form: idea, story (a user story), plan (a story with its plan), or draft (no form: the conveyor does not take it yet). Save and close the editor; an empty title creates nothing. -->
+`
+const writtenSchema = z.object({ title: z.string().trim().min(1), form: z.enum(['idea', 'story', 'plan', 'draft']).default('idea') })
+
+export async function createTaskCommand(context: Context, input: { title: string; form: NewForm; body?: string }, json: boolean): Promise<number> {
+  const prepared = prepare(context)
+  if (!prepared) return 1
+  const form = input.form === 'draft' ? undefined : input.form
+  const task = await prepared.board.createTask(input.title, input.body ?? '', { state: 'backlog', ...(form ? { form } : {}) })
+  context.stdout(json ? `${JSON.stringify({ id: task.id, title: task.title, form: input.form })}\n` : `Created task ${task.id}: ${task.title} (${form ? `form::${form}` : 'draft'})\n`)
+  return 0
+}
+
+export async function writeCommand(context: Context, json: boolean): Promise<number> {
+  if (!prepare(context)) return 1
+  const dir = mkdtempSync(join(tmpdir(), 'conveyor-new-'))
+  const file = join(dir, 'task.md')
+  try {
+    writeFileSync(file, WRITE_TEMPLATE)
+    const [editor, ...args] = (process.env.VISUAL || process.env.EDITOR || 'vi').split(/\s+/)
+    const code = await context.interact(editor ?? 'vi', [...args, file], { cwd: context.cwd, env: process.env })
+    if (code !== 0) return fail(context, `${editor} exited with code ${code}; nothing was created`)
+    const text = readFileSync(file, 'utf8')
+    const match = text.match(FRONTMATTER)
+    const parsed = writtenSchema.safeParse(match ? (parse(match[1] ?? '') ?? {}) : {})
+    if (!parsed.success) {
+      context.stdout('No title; nothing was created.\n')
+      return 0
+    }
+    const body = text.slice(match?.[0].length ?? 0).replace(/<!--[\s\S]*?-->/g, '').trim()
+    return createTaskCommand(context, { title: parsed.data.title, form: parsed.data.form, body }, json)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 export async function attachCommand(context: Context, id: string): Promise<number> {

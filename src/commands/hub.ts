@@ -9,7 +9,7 @@ import { showStatus } from '../ui/status-screen.js'
 import type { TaskControl } from '../ui/task-lines.js'
 import { commentText, findWorkpad } from '../engine/workpad.js'
 import { applyBoardUpdate } from './board.js'
-import { attachCommand, harnessCommand, helpSessionCommand, newCommand } from './live.js'
+import { attachCommand, createTaskCommand, harnessCommand, helpSessionCommand, newCommand, writeCommand } from './live.js'
 import { modelsFile } from './models.js'
 import { releaseCommand } from './run.js'
 
@@ -86,6 +86,8 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     let output = ''
     const captured: Context = { ...context, stdout: (text) => (output += text), stderr: (text) => (output += text) }
     if (action.kind === 'new') await newCommand(captured, false)
+    if (action.kind === 'write') await writeCommand(captured, false)
+    if (action.kind === 'idea') await createTaskCommand(captured, { title: action.title, form: 'idea' }, false)
     if (action.kind === 'attach') await attachCommand(captured, action.id)
     if (action.kind === 'release') await releaseCommand(captured, action.id, false)
     if (action.kind === 'harness') await harnessCommand(captured, action.id)

@@ -34,7 +34,7 @@ Commands:
 |---|---|
 | `conveyor` | settings TUI |
 | `conveyor run` | work loop: poll the board, claim tasks within limits |
-| `conveyor new` | live dialog in the terminal; result is a new task on the board |
+| `conveyor new` | live dialog in the terminal; result is a new task on the board. `--write` opens a template (title, form, text) in `$VISUAL`/`$EDITOR`; `--title` creates the task at once |
 | `conveyor attach <issue>` | answer the questions of a `needs-input` task in the terminal |
 | `conveyor release <issue>` | release the task claim manually |
 | `conveyor reset <issue> [--form]` | start a task over: stop it, close its PR/MR, delete its branch and workspace, clear the workpad, return it to Backlog with a form |

@@ -27,6 +27,8 @@ export type HubAction =
   | { kind: 'quit' }
   | { kind: 'settings' }
   | { kind: 'new' }
+  | { kind: 'write' }
+  | { kind: 'idea'; title: string }
   | { kind: 'attach'; id: string }
   | { kind: 'release'; id: string }
   | { kind: 'harness'; id: string }
@@ -42,7 +44,7 @@ type Props = {
 }
 
 type Panel = 'status' | 'help' | 'usage' | 'log' | 'task' | 'board'
-type Input = { kind: 'attach' | 'release' } | { kind: 'comment'; id: string; target: Target } | { kind: 'reset'; id: string }
+type Input = { kind: 'attach' | 'release' } | { kind: 'new' } | { kind: 'idea' } | { kind: 'comment'; id: string; target: Target } | { kind: 'reset'; id: string }
 
 const RESET_FORMS: Record<string, 'idea' | 'story' | 'plan' | 'none'> = { i: 'idea', s: 'story', p: 'plan', d: 'none' }
 type Opened = { id: string; target: Target; detail?: TaskDetail }
@@ -214,7 +216,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (key === 'h') toggle('help')
       if (key === 'b' && control) void control.openBoard().catch(fail)
       if (key === 'e') act({ kind: 'settings' })
-      if (key === 'n') act({ kind: 'new' })
+      if (key === 'n') setInput({ kind: 'new' })
       if (key === 'a') setInput({ kind: 'attach' })
       if (key === 'l') setInput({ kind: 'release' })
       if (key === 's' && runner) {
@@ -242,6 +244,12 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   useInput(
     (key, special) => {
       if (special.escape) setInput(undefined)
+      if (input?.kind === 'new') {
+        if (key === 'e') act({ kind: 'write' })
+        if (key === 'a') act({ kind: 'new' })
+        if (key === 'i') setInput({ kind: 'idea' })
+        return
+      }
       const form = RESET_FORMS[key]
       if (input?.kind === 'reset' && form && control) {
         const { id } = input
@@ -321,6 +329,23 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
               const id = value.trim().replace(/^#/, '')
               if (/^\d+$/.test(id)) act({ kind: input.kind, id })
               else setMessage({ text: 'Enter the issue number from the board, for example #51.', error: true })
+            }}
+          />
+        </Box>
+      )}
+      {input?.kind === 'new' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="cyan">New task: [e] write title, form, and text in your editor · [i] one-line idea here · [a] shape it with an agent · [Esc] cancel</Text>
+        </Box>
+      )}
+      {input?.kind === 'idea' && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="cyan">New idea (form::idea) · Enter creates · Esc cancels</Text>
+          <TextInput
+            placeholder="title of the idea"
+            onSubmit={(value) => {
+              if (value.trim()) act({ kind: 'idea', title: value.trim() })
+              else setInput(undefined)
             }}
           />
         </Box>

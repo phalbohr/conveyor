@@ -264,6 +264,23 @@ describe('StatusScreen as a control panel', () => {
     expect(runner.cycles).toBe(1)
   })
 
+  it('offers editor, one-line idea, and agent on n and creates an idea from one line', async () => {
+    const actions: HubAction[] = []
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('n')
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[e] write title, form, and text in your editor'), { timeout: 5_000 })
+    await settle()
+    stdin.write('i')
+    await vi.waitFor(() => expect(lastFrame()).toContain('New idea (form::idea)'), { timeout: 5_000 })
+    await settle()
+    stdin.write('Dark mode')
+    await settle()
+    stdin.write('\r')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'idea', title: 'Dark mode' }]), { timeout: 5_000 })
+  })
+
   it('resets a task in progress after the form is chosen', async () => {
     const { value, calls } = control()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
@@ -519,13 +536,22 @@ describe('StatusScreen as the hub', () => {
     await vi.waitFor(() => expect(actions).toEqual([{ kind: 'attach', id: '51' }]), { timeout: 5_000 })
   })
 
-  it('opens the live session for a new task with n', async () => {
+  it('opens the live session for a new task with n and a, and the editor with n and e', async () => {
     const actions: HubAction[] = []
-    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('[n] new'), { timeout: 5_000 })
+    const first = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(first.lastFrame()).toContain('[n] new'), { timeout: 5_000 })
     await settle()
-    stdin.write('n')
+    first.stdin.write('n')
+    await settle()
+    first.stdin.write('a')
     await vi.waitFor(() => expect(actions).toEqual([{ kind: 'new' }]), { timeout: 5_000 })
+    const second = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(second.lastFrame()).toContain('[n] new'), { timeout: 5_000 })
+    await settle()
+    second.stdin.write('n')
+    await settle()
+    second.stdin.write('e')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'new' }, { kind: 'write' }]), { timeout: 5_000 })
   })
 })
 
