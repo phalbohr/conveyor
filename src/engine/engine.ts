@@ -88,6 +88,8 @@ const LAND = 'land'
 const LAND_WAIT = 60_000
 const CHECKS_GRACE = 5 * 60_000
 const MERGE_LOCK = 'merge'
+const BASE_FIX_LOCK = 'base-fix'
+export const BASE_FIX = '<!-- conveyor:base-fix -->'
 const LOCK_TTL = 10 * 60_000
 
 type StageContext = {
@@ -123,6 +125,7 @@ export class Engine {
   private readonly halt = new AbortController()
   private readonly held = new Set<string>()
   private draining = false
+  private baseRed?: { sha: string; fix: string; failed: string[] }
   private readonly limited = new Map<string, string>()
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
@@ -150,6 +153,7 @@ export class Engine {
     }
     const config = loaded.config
     if (this.draining) return
+    await this.guardBase().catch((error: unknown) => this.log(`the base branch check failed: ${(error as Error).message}`))
     await this.probeQuotas(config)
     await this.triage(config).catch((error: unknown) => this.log(`triage failed: ${(error as Error).message}`))
     if (this.halt.signal.aborted || this.draining) return
@@ -654,6 +658,7 @@ export class Engine {
 
     const task = await this.mustGetTask(id)
     if (task.openBlockers > 0) return wait('open blockers')
+    if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; task #${this.baseRed.fix} fixes it first`)
     const pull = await board.pullRequest(id)
     if (pull?.state === 'merged') return 'success'
     if (pull?.state === 'open' && pull.headSha !== state.headSha) {
@@ -750,6 +755,38 @@ export class Engine {
     await board.setState(id, 'needs-input')
     await run.save()
     return false
+  }
+
+  private async guardBase() {
+    const { board } = this.options
+    const sha = await board.baseHead()
+    const checks = await board.commitChecks(sha)
+    if (checks !== 'failure') {
+      if (this.baseRed && checks === 'success') this.log('the base branch CI is green again; merges continue')
+      if (checks === 'success') this.baseRed = undefined
+      return
+    }
+    if (this.baseRed?.sha === sha) return
+    const failed = await board.failedChecks(sha).catch(() => [])
+    const open = async () => (await board.listTasks()).find((task) => task.body.includes(BASE_FIX) && !task.closed && task.state !== 'done')
+    let fix = (await open())?.id
+    if (!fix) {
+      if (!(await this.lock(BASE_FIX_LOCK, LOCK_TTL))) return
+      try {
+        fix = (await open())?.id
+        if (!fix) {
+          const base = await board.baseBranch()
+          const body = `The CI of the base branch \`${base}\` fails at commit \`${sha}\`${failed.length ? `: ${failed.join(', ')}` : ''}.\n\nFind the cause and fix it so that every check passes on the base branch again. Other tasks of the conveyor do not merge until this task is merged and the base branch is green.\n\n${BASE_FIX}`
+          const task = await board.createTask(`Fix the CI of the base branch ${base}`, body, { state: 'backlog', form: 'plan' })
+          await board.setPriority(task.id, 1)
+          fix = task.id
+        }
+      } finally {
+        await board.release(BASE_FIX_LOCK)
+      }
+    }
+    this.baseRed = { sha, fix, failed }
+    this.log(`the base branch CI fails at ${sha.slice(0, 7)}${failed.length ? ` (${failed.join(', ')})` : ''}; task #${fix} fixes it, and other tasks do not merge until it is green`)
   }
 
   private checksMayStart(state: WorkpadState, sha: string) {
@@ -966,6 +1003,11 @@ export class Engine {
       ...(context.merge ? { merge: context.merge } : {}),
       ...(stage.name === 'merge' && config.transitions.merge === 'smart' ? { mergeCriteria: this.read('smart', 'merge.md') } : {}),
       ...(context.parts ? { parts: context.parts } : {}),
+      ...(this.baseRed && this.baseRed.fix !== task.id
+        ? {
+            base: `The CI of the base branch fails at \`${this.baseRed.sha.slice(0, 7)}\`${this.baseRed.failed.length ? ` (${this.baseRed.failed.join(', ')})` : ''}, before this task changed anything. Task #${this.baseRed.fix} fixes it; this task merges only after the base branch is green again. Do not fix failures that also occur on the base branch. Make the tests of your change pass, and name the failures that come from the base branch in your summary.`,
+          }
+        : {}),
     })
 
     const controller = new AbortController()
@@ -1112,7 +1154,7 @@ export class Engine {
   }
 
   private sorted(tasks: Task[], me: string) {
-    const rank = (task: Task) => (task.assignees.includes(me) ? 0 : 1)
+    const rank = (task: Task) => (task.body.includes(BASE_FIX) ? -1 : task.assignees.includes(me) ? 0 : 1)
     const started = (task: Task) => (task.state && task.state !== 'backlog' ? 0 : 1)
     return [...tasks].sort(
       (a, b) =>

@@ -300,6 +300,18 @@ export class GitLabBoard implements Board {
     return merged[0]?.merge_commit_sha ?? merged[0]?.squash_commit_sha ?? undefined
   }
 
+  async baseHead() {
+    const branch = await this.json<{ commit: { id: string } }>([`${this.api}/repository/branches/${encodeURIComponent(await this.baseBranch())}`])
+    return branch.commit.id
+  }
+
+  async failedChecks(sha: string) {
+    const commit = await this.json<{ last_pipeline: { id: number; status: string } | null }>([`${this.api}/repository/commits/${sha}`])
+    if (!commit.last_pipeline || checks(commit.last_pipeline.status) !== 'failure') return []
+    const jobs = await this.json<{ name: string; status: string }[]>([`${this.api}/pipelines/${commit.last_pipeline.id}/jobs?scope[]=failed&per_page=100`])
+    return jobs.map((job) => job.name)
+  }
+
   async commitChecks(sha: string) {
     const commit = await this.json<{ last_pipeline: { status: string } | null }>([`${this.api}/repository/commits/${sha}`])
     return checks(commit.last_pipeline?.status)

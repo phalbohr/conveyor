@@ -515,3 +515,29 @@ describe('a task without changes', () => {
     expect((await board.listComments('1')).some((comment) => comment.body.includes('Nothing to merge'))).toBe(true)
   })
 })
+
+describe('a red base branch', () => {
+  it('creates one fix task, merges it first, and holds the other merges until the base is green', async () => {
+    const { board, harness, cycle, expireRetry } = setup({ mode: 'ai' })
+    board.headChecks = 'failure'
+    board.baseFailures = ['Backend (Java 21)']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    const fix = (await board.listTasks()).find((task) => task.title.startsWith('Fix the CI of the base branch'))
+    expect(fix?.body).toContain('Backend (Java 21)')
+    expect(fix?.priority).toBe(1)
+    expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id])
+    expect((await board.getTask('1'))?.state).toBe('in-progress')
+    const login = stageRuns(harness).find((run) => run.taskId === '1' && run.stage === 'implement')
+    expect(login?.prompt).toContain(`Task #${fix?.id} fixes it`)
+
+    await cycle()
+    expect((await board.listTasks()).filter((task) => task.title.startsWith('Fix the CI')).length).toBe(1)
+
+    board.headChecks = 'success'
+    await expireRetry('1')
+    await cycle()
+    expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id, '1'])
+  })
+})

@@ -295,6 +295,19 @@ export class GitHubBoard implements Board {
     return (JSON.parse(output) as { mergeCommit: { oid: string } | null }[])[0]?.mergeCommit?.oid
   }
 
+  async baseHead() {
+    return (await this.api<{ object: { sha: string } }>([`${this.repo}/git/ref/heads/${await this.baseBranch()}`])).object.sha
+  }
+
+  async failedChecks(sha: string) {
+    const runs = (await this.api<{ check_runs: { name: string; conclusion: string | null }[] }[]>(['--paginate', '--slurp', `${this.repo}/commits/${sha}/check-runs?per_page=100`])).flatMap((page) => page.check_runs)
+    const statuses = (await this.api<{ statuses: { context: string; state: string }[] }>([`${this.repo}/commits/${sha}/status`])).statuses
+    return [
+      ...runs.filter((run) => FAILED.includes((run.conclusion ?? '').toUpperCase())).map((run) => run.name),
+      ...statuses.filter((status) => FAILED.includes(status.state.toUpperCase())).map((status) => status.context),
+    ]
+  }
+
   async commitChecks(sha: string) {
     const runs = (await this.api<{ check_runs: { status: string; conclusion: string | null }[] }[]>(['--paginate', '--slurp', `${this.repo}/commits/${sha}/check-runs?per_page=100`])).flatMap((page) => page.check_runs)
     const statuses = (await this.api<{ statuses: { state: string }[] }>([`${this.repo}/commits/${sha}/status`])).statuses
@@ -436,10 +449,10 @@ function toTask(issue: Issue): Task {
   }
 }
 
+const FAILED = ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE']
+
 function checksOf(checks: Check[]): PullRequest['checks'] {
-  const failed = checks.some((check) =>
-    ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(check.conclusion ?? check.state ?? ''),
-  )
+  const failed = checks.some((check) => FAILED.includes(check.conclusion ?? check.state ?? ''))
   const pending = checks.some((check) => (check.status && check.status !== 'COMPLETED') || ['PENDING', 'EXPECTED'].includes(check.state ?? ''))
   return checks.length === 0 ? 'none' : failed ? 'failure' : pending ? 'pending' : 'success'
 }

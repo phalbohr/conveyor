@@ -378,6 +378,8 @@ After the `merge` stage the CLI pushes the task branch and opens a pull request 
 | `ai` | the CLI lands the pull request |
 | `smart` | the merge stage returns `approval` (review needed, by `smart/merge.md`) or `done` (land) |
 
+Base guard: every cycle the CLI reads the checks of the base branch head. When they fail, it creates (under the lock `conveyor-lock/base-fix`) one task `Fix the CI of the base branch <name>` with the failing check names, `form::plan`, priority 1, and a hidden marker, and orders it before all candidates. While the base is red, stage prompts of other tasks name the fix task and tell the agent not to fix failures that also occur on the base, and landing of other tasks waits. When the base head is green again, landing continues; the up-to-date check rebases the waiting branches and their CI runs again.
+
 Landing is a deterministic CLI step, retried every minute while it waits:
 
 1. Open blockers → wait (dependency order).

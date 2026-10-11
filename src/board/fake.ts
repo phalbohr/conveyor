@@ -78,8 +78,22 @@ export class FakeBoard implements Board {
     return this.pulls.get(id)?.state === 'merged' ? `merged-${id}`.padEnd(40, '0') : undefined
   }
 
-  async commitChecks() {
+  headChecks: PullRequest['checks'] = 'success'
+
+  async commitChecks(sha: string) {
+    if (sha === this.baseSha) return this.headChecks
     return this.baseChecks.length > 1 ? (this.baseChecks.shift() ?? 'success') : (this.baseChecks[0] ?? 'success')
+  }
+
+  baseSha = 'b'.repeat(40)
+  baseFailures: string[] = []
+
+  async failedChecks() {
+    return [...this.baseFailures]
+  }
+
+  async baseHead() {
+    return this.baseSha
   }
 
   async baseBranch() {

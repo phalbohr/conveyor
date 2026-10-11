@@ -15,6 +15,7 @@ export type PromptInput = {
   review?: string
   reviewMode?: 'fix' | 'rework'
   merge?: string
+  base?: string
   mergeCriteria?: string
   parts?: { list: string[]; current: number }
 }
@@ -64,6 +65,7 @@ export function buildPrompt(input: PromptInput): string {
     )
   }
   if (input.merge) sections.push(`## Merge\n\n${input.merge}`)
+  if (input.base) sections.push(`## Base branch\n\n${input.base}`)
   if (input.mergeCriteria !== undefined) {
     sections.push(
       `## Merge decision\n\nDecide if this change needs human review. Return outcome \`approval\` with the reason in the summary if the criteria below require human review. Otherwise return outcome \`done\`, and the conveyor merges the change.\n\n${input.mergeCriteria.trim()}`,

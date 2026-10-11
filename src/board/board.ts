@@ -77,6 +77,8 @@ export interface Board {
   closePullRequest(id: string): Promise<void>
   mergeCommit(id: string): Promise<string | undefined>
   commitChecks(sha: string): Promise<PullRequest['checks']>
+  failedChecks(sha: string): Promise<string[]>
+  baseHead(): Promise<string>
   commentPullRequest(id: string, body: string): Promise<void>
 }
 

@@ -35,6 +35,14 @@ export class RedactingBoard implements Board {
     return this.board.commitChecks(sha)
   }
 
+  failedChecks(sha: string) {
+    return this.board.failedChecks(sha)
+  }
+
+  baseHead() {
+    return this.board.baseHead()
+  }
+
   baseBranch() {
     return this.board.baseBranch()
   }
