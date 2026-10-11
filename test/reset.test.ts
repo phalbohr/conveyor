@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { resetTask } from '../src/engine/reset.js'
+import { manualRelease } from '../src/engine/release.js'
 import { findWorkpad, renderWorkpad } from '../src/engine/workpad.js'
 import { FakeWorkspaces } from './fakes.js'
 import { runCli } from './helpers.js'
@@ -67,5 +68,17 @@ describe('conveyor reset', () => {
     expect(result.code).toBe(0)
     expect(result.stdout).toContain('back in Backlog with form::idea')
     expect((await board.getTask(id))?.form).toBe('idea')
+  })
+})
+
+describe('release', () => {
+  it('removes the conveyor user from the assignees and keeps a human assignee', async () => {
+    const board = new FakeBoard('me')
+    const id = await started(board)
+    board.assign(id, 'me', 'alice')
+    expect(await manualRelease(board, id, false)).toEqual({ ok: true })
+    const task = await board.getTask(id)
+    expect(task?.assignees).toEqual(['alice'])
+    expect(task?.owner).toBeUndefined()
   })
 })
