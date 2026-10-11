@@ -214,6 +214,16 @@ describe('StatusScreen as a control panel', () => {
     await vi.waitFor(() => expect(lastFrame()).toContain('› #8 Search'), { timeout: 5_000 })
   })
 
+  it('says that r reads the board again and when it is done', async () => {
+    let loads = 0
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => (loads++, snapshot)} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('r')
+    await vi.waitFor(() => expect(lastFrame()).toContain('Board read again at'), { timeout: 5_000 })
+    expect(loads).toBe(2)
+  })
+
   it('resets a task in progress after the form is chosen', async () => {
     const { value, calls } = control()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)

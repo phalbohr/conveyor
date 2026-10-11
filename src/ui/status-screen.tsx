@@ -58,15 +58,19 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const [opened, setOpened] = useState<Opened>()
   const [, setTick] = useState(0)
 
-  const refresh = useCallback((force?: boolean) => {
-    load(force)
-      .then((snapshot) => {
-        setStatus(snapshot)
-        setError(undefined)
-        setUpdated(new Date())
-      })
-      .catch((cause: unknown) => setError((cause as Error).message))
-  }, [load])
+  const refresh = useCallback(
+    (force?: boolean, done?: () => void) => {
+      load(force)
+        .then((snapshot) => {
+          setStatus(snapshot)
+          setError(undefined)
+          setUpdated(new Date())
+          done?.()
+        })
+        .catch((cause: unknown) => setError((cause as Error).message))
+    },
+    [load],
+  )
 
   useEffect(() => {
     refresh()
@@ -141,7 +145,8 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (key === 'o') toggle('log')
       if (key === 'k') toggle('board')
       if (key === 'r') {
-        refresh(true)
+        setMessage({ text: 'Reading the board again and checking it…' })
+        refresh(true, () => setMessage({ text: `Board read again at ${new Date().toLocaleTimeString()}.` }))
         if (panel === 'task' && opened) openTask(opened.id, opened.target)
       }
       if (current && control) {

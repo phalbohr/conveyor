@@ -69,6 +69,8 @@ export function isModelError(text: string) {
   return MODEL_ERROR.test(text)
 }
 
+const CATALOG_TTL = 24 * 60 * 60_000
+
 export class ModelCache {
   private readonly catalogs: Record<string, Catalog>
 
@@ -92,7 +94,7 @@ export async function catalogsFor(harnesses: string[], config: Config, probes: P
   const catalogs: Record<string, Catalog> = {}
   for (const harness of harnesses) {
     const cached = cache.get(harness)
-    const usable = !refresh && cached && !cached.error ? cached : undefined
+    const usable = !refresh && cached && !cached.error && Date.now() - Date.parse(cached.fetchedAt) < CATALOG_TTL ? cached : undefined
     const catalog = usable ?? (await discoverModels(harness, config, probes))
     if (!usable) cache.set(harness, catalog)
     catalogs[harness] = catalog

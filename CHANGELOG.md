@@ -13,6 +13,7 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- Model lists of the harnesses expire after a day, so new models appear without `--refresh`; `r` on the control screen says that it reads the board again and when it is done.
 - The `opencode` and `kilocode` presets pass the stage effort as `--variant`.
 - Command harnesses count CPU work of their processes as activity, so a model that streams one long answer without output is not aborted as stalled; `timeouts.stage` still ends endless runs.
 - `conveyor config set` and the settings editor set `sandbox` and `network` of codex stages.

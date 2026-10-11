@@ -117,6 +117,15 @@ describe('model helpers', () => {
     expect(new ModelCache(file).get('codex')).toEqual(catalog)
   })
 
+  it('asks again when the cached list is older than a day', async () => {
+    const cache = new ModelCache(join(tempDir(), 'models.json'))
+    cache.set('opencode', { models: [{ id: 'litellm/old-model' }], fetchedAt: new Date(Date.now() - 25 * 60 * 60_000).toISOString() })
+    const fresh = await catalogsFor(['opencode'], config(), { run: responder({ 'opencode models': 'litellm/new-model\n' }) }, cache, false)
+    expect(fresh.opencode?.models.map((model) => model.id)).toEqual(['litellm/new-model'])
+    const cached = await catalogsFor(['opencode'], config(), { run: responder({}) }, cache, false)
+    expect(cached.opencode?.models.map((model) => model.id)).toEqual(['litellm/new-model'])
+  })
+
   it('asks again after a failed listing instead of using the cached failure', async () => {
     const cache = new ModelCache(join(tempDir(), 'models.json'))
     cache.set('opencode', { models: [], fetchedAt: '2026-10-06T00:00:00.000Z', error: 'opencode exited with code 127' })
