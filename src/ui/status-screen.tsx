@@ -246,7 +246,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (special.escape) setInput(undefined)
       if (input?.kind === 'new') {
         if (key === 'e') act({ kind: 'write' })
-        if (key === 'a') act({ kind: 'new' })
+        if (key === 'h') act({ kind: 'new' })
         if (key === 'i') setInput({ kind: 'idea' })
         return
       }
@@ -335,7 +335,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       )}
       {input?.kind === 'new' && (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="cyan">New task: [e] write title, form, and text in your editor · [i] one-line idea here · [a] shape it with an agent · [Esc] cancel</Text>
+          <Text color="cyan">New task: [e] write title, form, and text in your editor · [i] one-line idea here · [h] shape it in a live harness session · [Esc] cancel</Text>
         </Box>
       )}
       {input?.kind === 'idea' && (

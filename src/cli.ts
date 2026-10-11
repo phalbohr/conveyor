@@ -193,9 +193,9 @@ export async function main(argv: string[], context: Context): Promise<number> {
 
   program
     .command('new')
-    .description('put a new task on the board: shape it with an agent (default), write it in your editor (--write), or give its title (--title)')
+    .description('put a new task on the board: shape it in a live harness session (default), write it in your editor (--write), or give its title (--title)')
     .option('--write', 'write title, form, and text in $EDITOR')
-    .option('--title <title>', 'create the task with this title, without an agent')
+    .option('--title <title>', 'create the task with this title, without a harness session')
     .addOption(new Option('--form <form>', 'form of the task for --title').choices(['idea', 'story', 'plan', 'draft']).default('idea'))
     .option('--body <text>', 'text of the task for --title')
     .action(async (options: { write?: boolean; title?: string; form: NewForm; body?: string }) => {
@@ -206,7 +206,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
 
   program
     .command('attach')
-    .description('answer the questions of a waiting task in a live session with an agent')
+    .description('answer the questions of a waiting task in a live harness session')
     .argument('<issue>', 'issue number on the board, for example 51')
     .action(async (issue: string) => {
       exitCode = await attachCommand(context, issue)

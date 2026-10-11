@@ -16,7 +16,7 @@ Before step 1, show the user the current flow as a chain, for example `plan → 
 
 ## 1. Where tasks start — `pickup_from`
 
-The earliest form the conveyor takes. A task is ready for the conveyor when it has a `form::` label; without one it is a draft in the backlog. Everything before the form is written by humans, alone or with an agent in `conveyor new`.
+The earliest form the conveyor takes. A task is ready for the conveyor when it has a `form::` label; without one it is a draft in the backlog. Everything before the form is written by humans, alone or in a live harness session (`conveyor new`).
 
 | Value | Takes tasks with | The conveyor runs |
 |---|---|---|

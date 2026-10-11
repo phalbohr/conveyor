@@ -192,7 +192,7 @@ export function helpLines(): Line[] {
     { text: '' },
     { text: 'Your actions', tone: 'title' },
     row('answer a question', 'reply in the issue, or `conveyor attach <number>` for a live session'),
-    row('new task', 'n: e write it in your editor (title, form, text) · i one-line idea · a shape it with an agent; or an issue with conveyor::backlog and a form::idea|story|plan label'),
+    row('new task', 'n: e write it in your editor (title, form, text) · i one-line idea · h shape it in a live harness session; or an issue with conveyor::backlog and a form::idea|story|plan label'),
     row('approve a reviewed task', '`/approve` or an Approve review on the issue or the pull request; the conveyor merges after `review.approvals` people approved'),
     row('small fixes', '`/fix <notes>`, or `/fix_from: <stage> <notes>` to start later'),
     row('start over', '`/rework <notes>`'),

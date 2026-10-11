@@ -536,14 +536,14 @@ describe('StatusScreen as the hub', () => {
     await vi.waitFor(() => expect(actions).toEqual([{ kind: 'attach', id: '51' }]), { timeout: 5_000 })
   })
 
-  it('opens the live session for a new task with n and a, and the editor with n and e', async () => {
+  it('opens the live harness session for a new task with n and h, and the editor with n and e', async () => {
     const actions: HubAction[] = []
     const first = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
     await vi.waitFor(() => expect(first.lastFrame()).toContain('[n] new'), { timeout: 5_000 })
     await settle()
     first.stdin.write('n')
     await settle()
-    first.stdin.write('a')
+    first.stdin.write('h')
     await vi.waitFor(() => expect(actions).toEqual([{ kind: 'new' }]), { timeout: 5_000 })
     const second = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
     await vi.waitFor(() => expect(second.lastFrame()).toContain('[n] new'), { timeout: 5_000 })
