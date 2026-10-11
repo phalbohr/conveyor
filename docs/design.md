@@ -364,7 +364,7 @@ If the board read fails, running stages continue; the next cycle tries again.
 
 ## Merge and dependencies
 
-After the `merge` stage the CLI pushes the task branch and opens a pull request. The body has no closing keyword (`Closes #N`), so GitHub does not close the issue on merge; the CLI closes it when the task is complete.
+After the `merge` stage the CLI pushes the task branch and opens a pull request assigned to the conveyor user. The body says `Closes #N` only when the CLI closes the issue anyway (`close_on_done: true` and the last part); then GitHub shows the pull request under Development and closes the issue on merge into the default branch. Otherwise it says `Part of #N`, because GitHub links pull requests to an issue under Development only as closing references.
 
 | Merge mode | After the merge stage |
 |---|---|
@@ -375,10 +375,10 @@ After the `merge` stage the CLI pushes the task branch and opens a pull request.
 Landing is a deterministic CLI step, retried every minute while it waits:
 
 1. Open blockers → wait (dependency order).
-2. Checks pending or mergeability unknown → wait.
-3. Checks failed, conflicts, or merge error → run post-merge stages with `when: failure` or `always` (for example `fix-ci`), then land again. Without such stages, or after `retry.max_attempts` landing failures, the task goes to `needs-input`.
-4. Otherwise take the lock `conveyor-lock/merge`, merge with `merge_method` (`merge`, `squash`, `rebase`; default `merge`), release the lock.
-5. Success → post-merge stages with `when: success` or `always` → `conveyor::done`: the CLI closes the issue only with `close_on_done: true` (default `false`: a human closes it after acceptance), deletes the claim lock, the workspace, and the merged task branch.
+2. Checks pending or mergeability unknown → wait. No checks at all → wait up to 5 minutes for CI to start (GitHub registers checks a few seconds after the pull request opens).
+3. Checks failed, conflicts, or merge error → run post-merge stages with `when: failure` or `always` (for example `fix-ci`), then land again. Without such stages, or after `retry.max_attempts` landing failures, the task goes to `needs-input`; there `/fix`, `/fix_from:`, and `/rework` send it back to work with the error.
+4. Otherwise take the lock `conveyor-lock/merge` and fetch the base branch. A task branch behind it is rebased in the workspace and pushed, the lock is released, and landing waits for the new checks (merge-queue order: every merge is tested on top of the previous ones). A rebase conflict aborts the rebase and sends the task back to the `merge` stage. An up-to-date branch is merged with `merge_method` (`merge`, `squash`, `rebase`; default `merge`); then the lock is released.
+5. Success → wait for the checks of the merge commit on the base branch. Red → the post-merge stages with `when: failure` or `always` run on the task branch reset to the latest base and the CLI opens and lands a follow-up pull request (at most `retry.max_attempts` times); without such stages the task goes to `needs-input`. Green or no checks → post-merge stages with `when: success` or `always` → `conveyor::done`: the CLI closes the issue only with `close_on_done: true` (default `false`: a human closes it after acceptance), deletes the claim lock, the workspace, and the merged task branch.
 
 In `review` the CLI checks every cycle for signals since the task entered `review`, on the pull request and on the issue:
 

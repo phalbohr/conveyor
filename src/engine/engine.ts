@@ -395,6 +395,10 @@ export class Engine {
         state.reviewMode = 'fix'
         state.stage = verdict?.from ?? 'plan'
       }
+      if (state.followUp) {
+        await workspaces.reset(id)
+        delete state.followUp
+      }
       this.log(`task ${id}: ${state.reviewMode} from ${state.stage}`)
     } else if (verdict?.kind === 'merged') {
       state.landing = 'success'
@@ -439,6 +443,25 @@ export class Engine {
       delete state.stage
     }
 
+    if (state.landing === 'success' && state.verify && !(await this.verifyBase(run))) return
+    if (state.broken) {
+      const repair = config.stages.slice(mergeIndex + 1).filter((stage) => stage.when === 'failure' || stage.when === 'always')
+      const resumeRepair = state.stage ? repair.findIndex((stage) => stage.name === state.stage) : 0
+      if (!state.stage) await workspaces.reset(id)
+      const fixed = await this.runChain(run, repair.slice(Math.max(resumeRepair, 0)), {
+        merge: `The base branch CI failed after this task was merged (commit ${state.broken.slice(0, 7)}). Fix the base branch in the task branch, which starts from the latest base branch. The conveyor opens a follow-up pull request and merges it after its checks pass.`,
+      })
+      if (fixed.status !== 'done') return
+      const task = (await board.getTask(id)) ?? initial
+      const opened = await board.openPullRequest(id, `Fix the base branch after: ${task.title}`, `Part of #${id}: the base branch CI failed after its merge.\n\n${fixed.summary}`)
+      state.pull = { number: opened.number, url: opened.url }
+      delete state.broken
+      delete state.landing
+      state.stage = LAND
+      await run.save()
+      return
+    }
+
     const landing = state.landing ?? 'success'
     const post = config.stages.slice(mergeIndex + 1).filter((stage) => stage.when === 'always' || stage.when === landing)
     const resumeAt = state.stage ? post.findIndex((stage) => stage.name === state.stage) : 0
@@ -468,7 +491,7 @@ export class Engine {
       return
     }
 
-    for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError'] as const) delete state[key]
+    for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError', 'checksWait', 'repairs'] as const) delete state[key]
     state.attempt = 0
     await board.setState(id, 'done')
     await board.setStage(id, undefined)
@@ -627,11 +650,28 @@ export class Engine {
     else if (pull.mergeable === 'no') error = 'the branch has conflicts with the base branch'
     else {
       if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return wait('another workstation merges')
+      let synced: 'current' | 'rebased' | 'conflict' | 'unknown' = 'unknown'
       try {
-        const merged = await board.mergePullRequest(id, config.merge_method, pull.headSha)
-        if (!merged.ok) error = merged.error
+        synced = await this.options.workspaces.syncBase(id).catch(() => 'unknown' as const)
+        if (synced === 'rebased') state.headSha = await this.options.workspaces.push(id)
+        if (synced === 'current') {
+          const merged = await board.mergePullRequest(id, config.merge_method, pull.headSha)
+          if (!merged.ok) error = merged.error
+          const sha = merged.ok ? await board.mergeCommit(id).catch(() => undefined) : undefined
+          if (sha) state.verify = { sha, since: new Date().toISOString() }
+        }
       } finally {
         await board.release(MERGE_LOCK)
+      }
+      if (synced === 'unknown') return wait('the branch could not be compared with the latest base branch')
+      if (synced === 'rebased') return wait('the base branch moved; the branch is rebased onto it and waits for CI')
+      if (synced === 'conflict') {
+        state.stage = 'merge'
+        state.reviewMode = 'fix'
+        state.review = 'The base branch moved while this task waited for merge, and the task branch no longer rebases onto it without conflicts. Rebase onto the latest base branch, resolve the conflicts so that the changes of both sides stay (for example renumber a migration that another task already added), and run the tests.'
+        await run.save()
+        this.log(`task ${id}: the base branch moved and the rebase conflicts; the merge stage runs again`)
+        return 'stop'
       }
     }
     if (!error) {
@@ -654,6 +694,37 @@ export class Engine {
     await board.setState(id, 'needs-input')
     await run.save()
     return 'stop'
+  }
+
+  private async verifyBase(run: TaskRun): Promise<boolean> {
+    const { board } = this.options
+    const { id, config, state } = run
+    const verify = state.verify
+    if (!verify) return true
+    const checks = await board.commitChecks(verify.sha).catch(() => 'pending' as const)
+    if (checks === 'pending' || (checks === 'none' && Date.now() - Date.parse(verify.since) < CHECKS_GRACE)) {
+      state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
+      await run.save()
+      this.log(`task ${id}: merged; waits for the CI of the base branch at ${verify.sha.slice(0, 7)}`)
+      return false
+    }
+    delete state.verify
+    if (checks !== 'failure') return true
+    this.log(`task ${id}: the CI of the base branch failed after the merge at ${verify.sha.slice(0, 7)}`)
+    const names = config.stages.map((stage) => stage.name)
+    const repair = config.stages.slice(names.indexOf('merge') + 1).some((stage) => stage.when === 'failure' || stage.when === 'always')
+    if (repair && (state.repairs ?? 0) < config.retry.max_attempts) {
+      state.repairs = (state.repairs ?? 0) + 1
+      state.broken = verify.sha
+      return true
+    }
+    const text = `**The base branch CI failed after this task was merged** (commit \`${verify.sha.slice(0, 7)}\`).\n\nReply \`/fix_from: implement <notes>\` to fix it in a follow-up pull request from the latest base branch, or reply with any comment to finish the task as it is.`
+    const comment = await board.addComment(id, agentComment('error', text))
+    state.followUp = true
+    state.waiting = { kind: 'error', stage: 'verify', commentId: comment.id, since: new Date().toISOString() }
+    await board.setState(id, 'needs-input')
+    await run.save()
+    return false
   }
 
   private checksMayStart(state: WorkpadState, sha: string) {

@@ -27,6 +27,14 @@ export class RedactingBoard implements Board {
     return this.board.syncMirror(tasks)
   }
 
+  mergeCommit(id: string) {
+    return this.board.mergeCommit(id)
+  }
+
+  commitChecks(sha: string) {
+    return this.board.commitChecks(sha)
+  }
+
   baseBranch() {
     return this.board.baseBranch()
   }

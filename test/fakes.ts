@@ -44,6 +44,12 @@ export class FakeWorkspaces implements Workspaces {
     this.resets.push(taskId)
   }
 
+  syncs: ('current' | 'rebased' | 'conflict')[] = []
+
+  async syncBase() {
+    return this.syncs.shift() ?? 'current'
+  }
+
   async deleteBranch(taskId: string) {
     this.deletedBranches.push(taskId)
   }

@@ -423,3 +423,80 @@ describe('fix and rework', () => {
     expect(stageRuns(harness)[2]?.prompt).toContain('Please split the controller.')
   })
 })
+
+describe('merge against the latest base branch', () => {
+  it('rebases a branch that fell behind, waits for its new checks, then merges', async () => {
+    const { board, workspaces, cycle, expireRetry } = setup({ mode: 'ai' })
+    workspaces.syncs = ['rebased', 'current']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect(workspaces.pushes.length).toBeGreaterThan(1)
+
+    await expireRetry()
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+  })
+
+  it('sends a branch that conflicts with the new base back to the merge stage', async () => {
+    const { board, harness, workspaces, cycle } = setup({ mode: 'ai' })
+    workspaces.syncs = ['conflict', 'current']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect(board.merges).toEqual([])
+    await cycle()
+
+    const merges = stageRuns(harness).filter((run) => run.stage === 'merge')
+    expect(merges).toHaveLength(2)
+    expect(merges[1]?.prompt).toContain('no longer rebases onto it without conflicts')
+    expect(board.merges).toHaveLength(1)
+  })
+})
+
+describe('the base branch after the merge', () => {
+  it('waits for the CI of the merge commit before the task is done', async () => {
+    const { board, cycle, expireRetry } = setup({ mode: 'ai' })
+    board.baseChecks = ['pending', 'success']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+    expect((await board.getTask('1'))?.state).toBe('in-progress')
+
+    await expireRetry()
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('done')
+  })
+
+  it('asks a human when the base CI fails and no repair stage exists', async () => {
+    const { board, cycle } = setup({ mode: 'ai' })
+    board.baseChecks = ['failure']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+    expect((await board.listComments('1')).at(-1)?.body).toContain('The base branch CI failed after this task was merged')
+
+    await board.addComment('1', 'Known flaky job, fine.')
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('done')
+  })
+
+  it('runs the repair stage from the latest base and merges a follow-up pull request', async () => {
+    const { board, harness, workspaces, cycle } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
+    board.baseChecks = ['failure', 'success']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    await cycle()
+
+    const repair = stageRuns(harness).find((run) => run.stage === 'fix-ci')
+    expect(repair?.prompt).toContain('The base branch CI failed after this task was merged')
+    expect(workspaces.resets).toContain('1')
+    expect(board.pullTitles.at(-1)).toBe('Fix the base branch after: Add login')
+    expect(board.merges).toHaveLength(2)
+    expect((await board.getTask('1'))?.state).toBe('done')
+  })
+})

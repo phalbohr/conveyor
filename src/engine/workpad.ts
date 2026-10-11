@@ -27,6 +27,10 @@ export type WorkpadState = {
   form?: 'idea' | 'story' | 'plan'
   checksWait?: { sha: string; since: string }
   branch?: string
+  verify?: { sha: string; since: string }
+  broken?: string
+  followUp?: boolean
+  repairs?: number
   pull?: { number: string; url: string }
 }
 
@@ -58,6 +62,10 @@ const stateSchema = z.object({
   form: z.enum(['idea', 'story', 'plan']).optional(),
   checksWait: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
   branch: z.string().optional(),
+  verify: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
+  broken: z.string().optional(),
+  followUp: z.boolean().optional(),
+  repairs: z.int().nonnegative().optional(),
   pull: z.object({ number: z.string(), url: z.string() }).optional(),
 })
 

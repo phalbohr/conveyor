@@ -293,6 +293,18 @@ export class GitLabBoard implements Board {
     await this.json(['-X', 'POST', `${this.api}/merge_requests/${pull.number}/notes`, '-f', `body=${body}`])
   }
 
+  async mergeCommit(id: string) {
+    const merged = await this.json<{ merge_commit_sha: string | null; squash_commit_sha: string | null }[]>([
+      `${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${id}`)}&state=merged&order_by=updated_at&sort=desc`,
+    ])
+    return merged[0]?.merge_commit_sha ?? merged[0]?.squash_commit_sha ?? undefined
+  }
+
+  async commitChecks(sha: string) {
+    const commit = await this.json<{ last_pipeline: { status: string } | null }>([`${this.api}/repository/commits/${sha}`])
+    return checks(commit.last_pipeline?.status)
+  }
+
   async closePullRequest(id: string) {
     const pull = await this.pullRequest(id)
     if (pull?.state === 'open') await this.json(['-X', 'PUT', `${this.api}/merge_requests/${pull.number}`, '-f', 'state_event=close'])

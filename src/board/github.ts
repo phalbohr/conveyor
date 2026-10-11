@@ -290,6 +290,20 @@ export class GitHubBoard implements Board {
     await this.gh(['pr', 'comment', pull.number, '-R', this.project, '--body', body])
   }
 
+  async mergeCommit(id: string) {
+    const output = await this.gh(['pr', 'list', '-R', this.project, '--head', `conveyor/${id}`, '--state', 'merged', '--limit', '1', '--json', 'mergeCommit'])
+    return (JSON.parse(output) as { mergeCommit: { oid: string } | null }[])[0]?.mergeCommit?.oid
+  }
+
+  async commitChecks(sha: string) {
+    const runs = (await this.api<{ check_runs: { status: string; conclusion: string | null }[] }[]>(['--paginate', '--slurp', `${this.repo}/commits/${sha}/check-runs?per_page=100`])).flatMap((page) => page.check_runs)
+    const statuses = (await this.api<{ statuses: { state: string }[] }>([`${this.repo}/commits/${sha}/status`])).statuses
+    return checksOf([
+      ...runs.map((run) => ({ status: run.status.toUpperCase(), ...(run.conclusion ? { conclusion: run.conclusion.toUpperCase() } : {}) })),
+      ...statuses.map((status) => ({ state: status.state.toUpperCase() })),
+    ])
+  }
+
   async closePullRequest(id: string) {
     const pull = await this.pullRequest(id)
     if (pull?.state === 'open') await this.gh(['pr', 'close', pull.number, '-R', this.project])
@@ -422,18 +436,22 @@ function toTask(issue: Issue): Task {
   }
 }
 
-function toPull(pull: GitHubPull, inline: PullRequest['feedback']): PullRequest {
-  const checks = pull.statusCheckRollup ?? []
+function checksOf(checks: Check[]): PullRequest['checks'] {
   const failed = checks.some((check) =>
     ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(check.conclusion ?? check.state ?? ''),
   )
   const pending = checks.some((check) => (check.status && check.status !== 'COMPLETED') || ['PENDING', 'EXPECTED'].includes(check.state ?? ''))
+  return checks.length === 0 ? 'none' : failed ? 'failure' : pending ? 'pending' : 'success'
+}
+
+function toPull(pull: GitHubPull, inline: PullRequest['feedback']): PullRequest {
+  const checks = pull.statusCheckRollup ?? []
   return {
     number: String(pull.number),
     url: pull.url,
     headSha: pull.headRefOid,
     state: pull.state === 'OPEN' ? 'open' : pull.state === 'MERGED' ? 'merged' : 'closed',
-    checks: checks.length === 0 ? 'none' : failed ? 'failure' : pending ? 'pending' : 'success',
+    checks: checksOf(checks),
     mergeable: pull.mergeable === 'MERGEABLE' ? 'yes' : pull.mergeable === 'CONFLICTING' ? 'no' : 'unknown',
     feedback: inline,
     reviews: pull.reviews.map((review) => ({

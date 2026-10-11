@@ -74,6 +74,32 @@ describe('GitWorkspaces', () => {
     expect(existsSync(join(workspace.path, 'develop.txt'))).toBe(true)
   })
 
+  it('syncs a task branch with the latest base branch and reports conflicts', async () => {
+    const { project, seed } = repository()
+    const manager = workspaces(project)
+    const workspace = await manager.prepare('5')
+    git(workspace.path, 'config', 'user.email', 'test@example.com')
+    git(workspace.path, 'config', 'user.name', 'Test')
+    writeFileSync(join(workspace.path, 'V24.sql'), 'ours\n')
+    await manager.commitAll('5', 'add migration')
+    expect(await manager.syncBase('5')).toBe('current')
+
+    writeFileSync(join(seed, 'other.txt'), 'other\n')
+    git(seed, 'add', '.')
+    git(seed, 'commit', '-m', 'other task')
+    git(seed, 'push', 'origin', 'main')
+    expect(await manager.syncBase('5')).toBe('rebased')
+    expect(existsSync(join(workspace.path, 'other.txt'))).toBe(true)
+
+    writeFileSync(join(seed, 'V24.sql'), 'theirs\n')
+    git(seed, 'add', '.')
+    git(seed, 'commit', '-m', 'their migration')
+    git(seed, 'push', 'origin', 'main')
+    expect(await manager.syncBase('5')).toBe('conflict')
+    expect(readFileSync(join(workspace.path, 'V24.sql'), 'utf8')).toBe('ours\n')
+    expect(git(workspace.path, 'status', '--porcelain')).toBe('')
+  })
+
   it('runs after_create once in a new workspace', async () => {
     const { project } = repository()
     const manager = workspaces(project, { after_create: 'echo created >> hook.log' })

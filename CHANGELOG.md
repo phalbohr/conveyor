@@ -13,6 +13,8 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- Merge only on the latest base branch: a branch that fell behind is rebased and tested again before merge; a rebase conflict sends the task back to the merge stage.
+- After the merge the conveyor waits for the base branch CI; a failure runs `when: failure` stages and merges a follow-up pull request, or asks a human.
 - After failed checks or a failed merge, `/fix`, `/fix_from: <stage>`, and `/rework` in a reply send the task back to work with the error and your notes.
 - The workpad links the task branch and the pull request; claimed tasks without an assignee get one.
 - The control screen has a queued column, as the board: answered tasks that wait for a free slot.
