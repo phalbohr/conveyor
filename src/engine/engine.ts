@@ -711,7 +711,7 @@ export class Engine {
       if (synced === 'conflict') {
         state.stage = 'merge'
         state.reviewMode = 'fix'
-        state.review = 'The base branch moved while this task waited for merge, and the task branch no longer rebases onto it without conflicts. Rebase onto the latest base branch, resolve the conflicts so that the changes of both sides stay (for example renumber a migration that another task already added), and run the tests.'
+        state.review = 'The base branch moved while this task waited for merge, and the task branch no longer rebases onto it without conflicts. Rebase onto the latest base branch, resolve the conflicts by the intent of each side (the base side is already merged work of other tasks; keep what fulfils both, for example renumber this task's migration after one another task already added; ask with outcome `questions` when the intents contradict), and run the tests.'
         await run.save()
         this.log(`task ${id}: the base branch moved and the rebase conflicts; the merge stage runs again`)
         return 'stop'

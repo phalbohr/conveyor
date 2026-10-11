@@ -15,6 +15,7 @@ First public release.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
 - `n` offers `e` (write title, form, and text in your editor), `i` (one-line idea), and `h` (live harness session); `conveyor new --write` and `conveyor new --title … --form …` do the same from a shell.
 - A task with a pull/merge request linked by a human asks first: `/continue` from its branch or `/fresh`; draft pull/merge requests are never merged.
+- Merge and fix-ci instructions resolve conflicts by the intent of each side and ask a human when the intents contradict, instead of keeping both sides blindly.
 - Stage template `fix-ci.md` (`after_merge: failure` in its frontmatter) repairs failed merges and a red base branch; it comes switched off, and turning it on in the settings editor adds it after the merge.
 - A task that repairs the base after its own merge is the fixer of the red base; the guard opens no second fix task.
 - Red base guard: a failing base branch gets one fix task that runs first; other tasks do not merge until the base is green, and their agents know the failures are not theirs.
