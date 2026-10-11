@@ -125,7 +125,7 @@ harnesses:
 
 **A second reviewer on another harness:** `conveyor config stage add review-2`, `conveyor config set stages.review-2.harness codex`, write `stages/review-2.md`.
 
-**Repair broken CI after merge:** `conveyor config stage add fix-ci --after-merge --when failure`, write `stages/fix-ci.md`. It runs when the merge fails and when the base branch CI fails after the merge; in the second case its changes go to a follow-up pull request.
+**Repair broken CI after merge:** the template `stages/fix-ci.md` comes with `init` (switched off); turn it on in the settings editor under Stage files, or run `conveyor config stage add fix-ci --after-merge --when failure` (copy `fix-ci.md` from the package templates into older settings first). It runs when the merge fails and when the base branch CI fails after the merge; in the second case its changes go to a follow-up pull request.
 
 **Work on `develop` instead of the default branch:** `conveyor config set board.base_branch develop`. Task branches `conveyor/<number>` then start from `origin/develop`, rework and the next part reset to it, and pull requests merge into it. The conveyor pushes only to `conveyor/<number>` and merges through pull requests, so a `develop` that accepts changes only through pull requests works. Branch protection still applies: when it requires approvals that the token cannot bypass, keep `transitions.merge: human`; with `ai` the merge fails and the task goes to needs-input. An empty value returns to the default branch of the repository.
 

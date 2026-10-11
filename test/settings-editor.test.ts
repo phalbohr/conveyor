@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runCli } from './helpers.js'
 import { SettingsDocument } from '../src/settings-editor.js'
+import { loadConfig } from '../src/config.js'
 import { tempDir } from './helpers.js'
 
 function settings(config: string, local = 'limits:\n  running: 3\n') {
@@ -75,6 +76,21 @@ describe('SettingsDocument', () => {
     expect(doc.fields().find((f) => f.key === 'stages.review.sandbox')?.value).toBe('full-access')
     expect(doc.save()).toMatchObject({ ok: true })
     expect(readFileSync(join(dir, 'config.yaml'), 'utf8')).toMatch(/review: \{.*sandbox: full-access.*network: true/)
+  })
+
+  it('turns on a stage file with after_merge as a stage after the merge', () => {
+    const dir = settings(CONFIG)
+    mkdirSync(join(dir, 'stages'), { recursive: true })
+    writeFileSync(join(dir, 'stages', 'fix-ci.md'), readFileSync(join(import.meta.dirname, '..', 'templates', 'stages', 'fix-ci.md'), 'utf8'))
+    const doc = new SettingsDocument(dir, { catalogs: CATALOGS })
+    expect(doc.fields().find((f) => f.key === 'stage-files.fix-ci')?.value).toBe('off')
+    doc.set('stage-files.fix-ci', 'on')
+    expect(doc.save()).toMatchObject({ ok: true })
+    const loaded = loadConfig(dir)
+    if (!loaded.ok) throw new Error(loaded.errors.join('\n'))
+    const names = loaded.config.stages.map((stage) => stage.name)
+    expect(names.indexOf('fix-ci')).toBeGreaterThan(names.indexOf('merge'))
+    expect(loaded.config.stages.find((stage) => stage.name === 'fix-ci')?.when).toBe('failure')
   })
 
   it('keeps a model the new harness knows', () => {

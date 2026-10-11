@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Document, isMap, parseDocument, YAMLMap, type Pair, type Scalar } from 'yaml'
 import { PERMISSION_MODES, loadConfig, type Config } from './config.js'
 import { effortsFor, modelKnown, type Catalog } from './models.js'
+import { parseStageFile } from './engine/stage-file.js'
 import { stageCatalog, stageStub } from './stage-catalog.js'
 
 export type FieldKind = 'select' | 'text' | 'number' | 'boolean'
@@ -223,7 +224,12 @@ export class SettingsDocument {
     if (key.startsWith('stage-files.')) {
       const name = key.slice('stage-files.'.length)
       const enabled = this.stageNames().includes(name) || (this.config?.stages ?? []).some((stage) => stage.name === name)
-      if (value === 'on' && !enabled) this.addStage(name, 'before-merge')
+      if (value === 'on' && !enabled) {
+        const path = join(this.dir, 'stages', `${name}.md`)
+        const file = existsSync(path) ? parseStageFile(readFileSync(path, 'utf8')) : undefined
+        if (file?.ok && file.afterMerge) this.addStage(name, 'after-merge', file.afterMerge)
+        else this.addStage(name, 'before-merge')
+      }
       if (value === 'off' && enabled) this.removeStage(name)
       return
     }

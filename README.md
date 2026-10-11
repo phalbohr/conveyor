@@ -79,7 +79,7 @@ The task is not taken? Check that the issue has a `form::` label that `pickup_fr
 .conveyor/
   config.yaml        team settings, committed
   local.yaml         your personal settings, not committed
-  stages/<stage>.md  what each stage does (strict Liquid template, optional `skills:` frontmatter)
+  stages/<stage>.md  what each stage does (strict Liquid template, optional `skills:` and `after_merge:` frontmatter); fix-ci.md is a ready repair stage, off until you turn it on
   smart/<gate>.md    when a smart gate asks a human
   live/new.md        instructions for `conveyor new`
   live/attach.md     instructions for `conveyor attach`

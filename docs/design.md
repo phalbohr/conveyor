@@ -153,6 +153,7 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 ## Stage skills and isolation
 
 - Harness sessions run isolated: no personal settings, plugins, hooks, or MCP servers (claude: `--setting-sources project,local --strict-mcp-config`). Behavior is the same on every workstation, and each call costs less.
+- A stage file may declare `after_merge: success|failure|always`; turning the file on in the settings editor (Stage files) then adds the stage after `merge` with that `when` instead of before it. The template `fix-ci.md` (`after_merge: failure`) repairs failed merges and a red base branch after a merge; `init` copies it, switched off.
 - A stage file declares the skills it needs in its frontmatter:
 
   ```markdown

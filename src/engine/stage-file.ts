@@ -5,10 +5,10 @@ import { Liquid } from 'liquidjs'
 import { parse } from 'yaml'
 import { z } from 'zod'
 
-export type StageFile = { ok: true; skills: string[]; template: string } | { ok: false; error: string }
+export type StageFile = { ok: true; skills: string[]; template: string; afterMerge?: 'success' | 'failure' | 'always' } | { ok: false; error: string }
 
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n?/
-const frontmatter = z.strictObject({ skills: z.array(z.string().min(1)).default([]) })
+const frontmatter = z.strictObject({ skills: z.array(z.string().min(1)).default([]), after_merge: z.enum(['success', 'failure', 'always']).optional() })
 const FORMATS = fileURLToPath(new URL('../../templates/formats/', import.meta.url))
 const liquid = new Liquid({ strictVariables: true, strictFilters: true, lenientIf: true })
 
@@ -25,7 +25,7 @@ export function parseStageFile(text: string): StageFile {
   if (!result.success) {
     return { ok: false, error: `invalid frontmatter: ${result.error.issues.map((issue) => `${issue.path.join('.') || 'keys'}: ${issue.message}`).join('; ')}` }
   }
-  return { ok: true, skills: result.data.skills, template: text.slice(match[0].length) }
+  return { ok: true, skills: result.data.skills, template: text.slice(match[0].length), ...(result.data.after_merge ? { afterMerge: result.data.after_merge } : {}) }
 }
 
 export function renderInstructions(template: string, variables: Record<string, unknown>): { ok: true; text: string } | { ok: false; error: string } {
