@@ -175,6 +175,10 @@ Set up the board once:
 
 A large story can merge in **parts**: the `plan` stage returns their order in `parts`, and each part becomes one pull request. The conveyor runs the stages after `plan` for part 1, reviews and merges it, then moves the task back to In progress for part 2 on a fresh branch from the updated base branch, and so on. The card shows `part::2/3`, the pull request title names the part, and the story is done after the last part merges.
 
+Merge is safe for parallel tasks: the conveyor merges a pull request only when its checks are green (it waits up to 5 minutes for CI to start), and only when the task branch contains the latest base branch. A branch that fell behind is rebased and tested again; a rebase conflict (for example two tasks add the same migration number) sends the task back to the `merge` stage. After the merge the conveyor waits for the CI of the merge commit; when it fails, a `when: failure` stage such as `fix-ci` repairs the base branch through a follow-up pull request, or the task asks a human. In needs-input after failed checks, `/fix`, `/fix_from: <stage>`, or `/rework` with your notes send the task back to work. Pull requests and claimed issues are assigned to the conveyor user; a pull request says `Closes #N` when the conveyor closes the issue anyway, otherwise `Part of #N`; the workpad links the task branch and the pull request.
+
+A harness at its subscription limit pauses its stages until the reset time named in its error; this counts as no failed attempt.
+
 A finished task gets `conveyor::done` and stays open (`close_on_done: false`, the default), so a human closes it, for example after a sprint review. With `close_on_done: true` the conveyor closes the issue itself; on GitLab it then moves to the built-in Closed list.
 
 On GitLab Free, issue links are not available; the conveyor keeps blockers in a `Blocked by: #N` line in the issue description.

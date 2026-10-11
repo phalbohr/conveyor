@@ -48,7 +48,7 @@ Offer: keep the list; add a stage (common: `polish` for cleanup, `review-2` as a
 
 - **Harness**: `claude`, `codex`, or a configured harness (`opencode`, `kilocode`, `pi`, `openhands`, `agent-zero` presets, or any `harnesses` entry). Self-hosted models run through `opencode`, `kilocode`, `pi`, or `openhands`.
 - **Model**: run `conveyor models <harness>` and offer its models by version and name (for example `claude-opus-5-5 — Opus 5.5`). Claude aliases (`opus`, `sonnet`, `haiku`, `fable`) always mean the newest version; a full name such as `claude-opus-5-5` pins a version, which suits a team configuration.
-- **Effort**: the efforts that `conveyor models` lists for that model or harness.
+- **Effort**: the efforts that `conveyor models` lists for that model or harness. For `opencode` and `kilocode` the effort goes to the provider as `--variant`; a self-hosted reasoning model behind LiteLLM may accept only `low` and `medium` (`high` can return HTTP 400), and `medium` keeps its reasoning short; check that the stage does not inherit an effort such as `max` from `defaults`.
 - **Permissions** (claude stages, `stages.<name>.permission_mode`): `bypassPermissions` (default, every tool without asking), `auto`, `acceptEdits`, or `dontAsk`; with a limiting mode, allow rules come from the repository's `.claude/settings.json`. Codex stages: `sandbox` (`workspace-write` default, or `full-access`) and `network` (`false` default).
 
 Common split: strong models for `story`, `plan`, and `review`; a fast model for `implement`; the cheapest model for `merge`. An empty value inherits from `defaults` (`conveyor config set stages.<name>.model ""`).
@@ -93,7 +93,7 @@ Triage gives new tasks a priority (1–4) and "blocked by" links before anyone c
 Offer the defaults; change them only when the user has a reason.
 
 - `timeouts.stage` (default `60m`, at least `1m`): the longest run of one stage; then the attempt fails and retries.
-- `timeouts.stall` (default `5m`; `0` = off, otherwise at least `1m`): a stage with no agent output for this long fails and retries.
+- `timeouts.stall` (default `5m`; `0` = off, otherwise at least `1m`): a stage with no agent output and, for command harnesses, no CPU work for this long fails and retries. A slow self-hosted model may need `15m`.
 - `timeouts.heartbeat` (default `30m`, at least `1m`): a running task writes a heartbeat into its workpad every third of this value; another workstation releases a claim whose last heartbeat is older. Warn the user before lowering it: a short value lets other workstations take over tasks that still run, so tasks hang or run twice. `0` is rejected.
 - `timeouts.waiting` (default `4d`, at least `1d`; `2wd` means working days): a task that waits this long for its owner (needs-input, queued, review) is released.
 - `retry.max_attempts` (default `5`): failed attempts before the stage asks a human; `retry.max_backoff` (default `5m`): pauses double up to this.

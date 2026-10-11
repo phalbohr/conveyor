@@ -311,6 +311,11 @@ Each `run` cycle runs these steps in order:
 
 If the configuration is invalid, steps 3 and 4 are skipped; reconciliation still runs. Running stages keep the configuration snapshot they started with.
 
+Cycles run every `poll_interval`; `r` on the control screen starts one at once (or right after the running one). Stop modes of the control screen:
+
+- Soft (first `s`): the engine drains. Triage, claims, and the start of the next stage in a running chain stop; the running stages finish and their task saves the next stage in its workpad; the runner stops when no stage runs. Nothing is lost.
+- Hard (second `s`, `q`): the CLI kills the harness processes. The workspace keeps the files; the stage restarts from its beginning on the next start without a counted attempt.
+
 ## Reconciliation
 
 At the start of each cycle the CLI re-reads every task it runs:
@@ -330,6 +335,7 @@ If the board read fails, running stages continue; the next cycle tries again.
 - Delay: `min(10s * 2^(attempt - 1), retry.max_backoff)`.
 - After `retry.max_attempts` the task gets `conveyor::needs-input` with the error in the workpad.
 - The attempt number is available to the stage template as `attempt`.
+- A harness at its subscription limit (`usage limit`, `hit your limit`, `limit reached` in the error, with `try again at 5:30 AM` or `resets 1am` when given) is no failed attempt: the stage waits until that time (an hour when none is given), and no stage of that harness starts and no task is claimed meanwhile.
 
 ## Workspaces and hooks
 
@@ -424,8 +430,8 @@ Other harnesses run through a generic command adapter. Built-in presets:
 
 | Harness | Command | Model endpoint |
 |---|---|---|
-| `opencode` | `opencode run --auto -m {model} --dir {workspace} {prompt}` | custom provider in `opencode.json` (`@ai-sdk/openai-compatible`, `baseURL`) |
-| `kilocode` | `kilo run --auto -m {model} --dir {workspace} {prompt}` | custom provider in `~/.config/kilo/kilo.jsonc`, same format as OpenCode |
+| `opencode` | `opencode run --auto --format json -m {model} --variant {effort} --dir {workspace} {prompt}` | custom provider in `opencode.json` (`@ai-sdk/openai-compatible`, `baseURL`) |
+| `kilocode` | `kilo run --auto --format json -m {model} --variant {effort} --dir {workspace} {prompt}` | custom provider in `~/.config/kilo/kilo.jsonc`, same format as OpenCode |
 | `pi` | `pi --mode json --model {model} --thinking {effort} -- {prompt}` | provider in `~/.pi/agent/models.json` (`api: openai-completions`, `baseUrl`) |
 | `openhands` | `openhands --headless --override-with-envs --json -t {prompt}` with `LLM_MODEL={model}`, `OPENHANDS_WORK_DIR={workspace}` | `LLM_BASE_URL`, `LLM_API_KEY` in `env` |
 | `agent-zero` | `a0 headless -p {prompt} --output jsonl --workspace {workspace}` | model set in the Agent Zero instance; host in `AGENT_ZERO_HOST` |
@@ -435,8 +441,10 @@ Other harnesses run through a generic command adapter. Built-in presets:
 - The `opencode` preset sets `OPENCODE_DB: {temp}/opencode.db` and the `kilocode` preset `KILO_DB: {temp}/kilo.db`: both keep one SQLite database per user, and parallel runs on it fail with "database is locked". Each stage gets its own database; live sessions keep the user's own.
 - Live sessions use `interactive` instead of `args` and skip `env` values with `{result}`, `{artifact}`, or `{temp}`.
 - Result contract: the CLI appends the result schema to the prompt and asks the agent to write the result JSON to the file in `CONVEYOR_RESULT`. No result file means a failed stage. The artifact text goes as plain text to the file in `CONVEYOR_ARTIFACT` (`artifact.md` in the temporary directory), and the JSON sets only `artifact.kind`: self-hosted models often break the JSON when they escape a long Markdown plan as a string, or write no result at all. After the run, a non-empty artifact file fills `artifact.content`; an empty or missing file keeps `artifact.content` from the JSON; an artifact with neither fails the stage with a clear reason.
-- Every output line counts as a progress event for stall detection. Token usage and subscription windows are not available; self-hosted models use the daily token limit of their router.
-- The presets come from the tools' documentation and are not yet verified with real runs.
+- `--format json` makes OpenCode and Kilo print one event per step; in their default format they print nothing until the end when the output is not a terminal. `--variant` passes the stage effort as the provider's reasoning effort.
+- Every output line counts as a progress event for stall detection. A model that streams one long answer prints nothing, so every 30 seconds the CLI also reads the CPU time of the harness process group (`ps`); at least 5% of the interval counts as activity too (streaming uses about 8%, waiting about 1%). An endless loop that keeps working ends at `timeouts.stage`. Token usage and subscription windows are not available; self-hosted models use the daily token limit of their router.
+- The `opencode` and `kilocode` presets are verified with real runs; the other presets come from the tools' documentation.
+- Model catalogs are cached per board for a day; a failed listing is asked again at once; `conveyor models --refresh` and `m` in the settings editor ask at once.
 - Model catalogs: claude from the `initialize` control request in stream-json mode (the `/model` menu: versioned ids, names, aliases, efforts per model; no tokens spent), codex from `codex debug models` (efforts per model), other harnesses from `models: {command, args}` in their definition (one model per output line) and `efforts` from the definition. Catalogs are cached per project in `~/.conveyor/models/<project>.json`. `run` warns about models outside a catalog; a stage failure that names an unknown or unsupported model is a configuration error and goes to a human without retries.
 
 Codex stages accept two options:
