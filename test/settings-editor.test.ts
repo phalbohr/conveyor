@@ -65,6 +65,18 @@ describe('SettingsDocument', () => {
     expect(doc.save()).toMatchObject({ ok: true })
   })
 
+  it('sets the sandbox and network of a codex stage', () => {
+    const dir = settings(CONFIG.replace('  review: {model: opus}', '  review: {harness: codex, model: gpt-6-sol}'))
+    const doc = new SettingsDocument(dir, { catalogs: CATALOGS })
+    expect(doc.fields().some((f) => f.key === 'stages.implement.sandbox')).toBe(false)
+    doc.set('stages.review.sandbox', 'full-access')
+    doc.set('stages.review.network', 'true')
+    expect(doc.problems()).toEqual([])
+    expect(doc.fields().find((f) => f.key === 'stages.review.sandbox')?.value).toBe('full-access')
+    expect(doc.save()).toMatchObject({ ok: true })
+    expect(readFileSync(join(dir, 'config.yaml'), 'utf8')).toMatch(/review: \{.*sandbox: full-access.*network: true/)
+  })
+
   it('keeps a model the new harness knows', () => {
     const doc = new SettingsDocument(settings(CONFIG.replace('  implement: {}', '  implement: {harness: codex, model: gpt-6-sol, effort: high}')), { catalogs: CATALOGS })
     doc.set('stages.implement.harness', 'codex')

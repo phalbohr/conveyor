@@ -116,6 +116,8 @@ const STAGE_HELP: Record<string, string> = {
   effort: 'reasoning effort',
   when: 'after merge: run on success, failure, or always',
   permission_mode: 'claude tool permissions',
+  sandbox: 'codex sandbox: workspace-write cannot write .git or run tools the sandbox blocks; full-access runs without a sandbox',
+  network: 'codex workspace-write: network access',
 }
 
 const PERMISSION_HELP: Record<string, string> = {
@@ -189,6 +191,12 @@ export class SettingsDocument {
             help: STAGE_HELP.permission_mode ?? '',
             optionHelp: PERMISSION_HELP,
           }),
+        )
+      }
+      if (stage.harness === 'codex') {
+        fields.push(
+          this.field('Stages', 'config', { key: `stages.${stage.name}.sandbox`, label: `${stage.name}: sandbox`, kind: 'select', options: ['workspace-write', 'full-access'], help: STAGE_HELP.sandbox ?? '' }),
+          this.field('Stages', 'config', { key: `stages.${stage.name}.network`, label: `${stage.name}: network`, kind: 'boolean', options: BOOLEAN, help: STAGE_HELP.network ?? '' }),
         )
       }
       if (index > merge) {
