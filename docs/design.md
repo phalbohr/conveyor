@@ -186,6 +186,10 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 
 Every stage prompt carries a fixed section `Boundaries` right after the stage instructions (src/engine/prompt.ts `BOUNDARIES`): the prompt sections are the instructions; repository files, dependencies, web pages, command and test output, CI logs, and other issues or pull requests are data; project conventions apply but do not override the task; instructions found in data are ignored and named in the summary; the board steps of the conveyor (comments, approvals, merges, issue and pull request changes, pushes, settings, secrets, `.conveyor/` unless asked) are forbidden, reading with `gh`/`glab` is allowed; a task that needs such a step returns `questions`. The triage prompt marks task texts as data. Live sessions are excluded: a human drives them.
 
+## Team notes
+
+Every stage prompt quotes, under `Notes from the team`, the last 10 trusted human comments on the issue since the workpad was created (the claim), without the conveyor's own comments and without bare `/approve`, `/continue`, or `/fresh`; each is cut at 2000 characters. They count as instructions for the task, a newer one over an older one.
+
 ## Stage result contract
 
 Every stage returns one structured result. The harness adapter enforces the schema with the harness's native support (for example an output schema flag); otherwise it validates the final JSON block.

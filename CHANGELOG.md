@@ -16,6 +16,7 @@ First public release.
 
 ### Stages and gates
 
+- Comments of the team on a task in progress reach every later stage run in a section `Notes from the team`.
 - Configurable stages from idea to merge and after merge. `story`, `plan`, and `merge` are reserved; custom stages run between `plan` and `merge`, or after `merge` with `when: success|failure|always`.
 - Gates idea → story and story → plan: `interactive`, `autonomous`, or `smart`. Merge: `human`, `ai`, or `smart`.
 - Stage files are strict Liquid templates with `skills:` and `after_merge:` frontmatter.

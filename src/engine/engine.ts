@@ -100,6 +100,7 @@ type StageContext = {
   workpad: string
   gate: { mode: GateMode; criteria: string } | undefined
   conversation: { request: string; replies: string[]; approval: boolean } | undefined
+  notes?: { author: string; at: string; text: string }[]
   attempt: number
   signal: AbortSignal
   review?: string | undefined
@@ -578,6 +579,7 @@ export class Engine {
           workpad: run.text,
           gate,
           conversation,
+          notes: teamNotes(comments),
           attempt: state.attempt,
           signal,
           review: state.review,
@@ -1059,6 +1061,7 @@ export class Engine {
       artifacts: context.artifacts,
       workpad: context.workpad,
       ...(context.conversation ? { conversation: context.conversation } : {}),
+      ...(context.notes?.length ? { notes: context.notes } : {}),
       attempt: context.attempt,
       language: config.language.docs,
       ...(context.review ? { review: context.review, reviewMode: context.reviewMode ?? 'rework' } : {}),
@@ -1253,6 +1256,15 @@ function parseJson(text: string): unknown {
   } catch {
     return undefined
   }
+}
+
+function teamNotes(comments: Comment[]) {
+  const pad = comments.find((comment) => comment.id === findWorkpad(comments)?.id)
+  const since = pad?.createdAt ?? ''
+  return comments
+    .filter((comment) => !isAgentComment(comment) && comment.createdAt >= since && !/^\/(approve|continue|fresh)(\s+[!#]?\d+)?\s*$/i.test(comment.body.trim()))
+    .slice(-10)
+    .map((comment) => ({ author: comment.author, at: comment.createdAt.slice(0, 16).replace('T', ' '), text: comment.body.slice(0, 2000) }))
 }
 
 function isCommand(text: string, command: 'approve' | 'rework' | 'fix') {

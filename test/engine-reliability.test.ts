@@ -98,6 +98,24 @@ describe('Engine retries', () => {
     expect((await board.getTask('2'))?.owner).toBeUndefined()
   })
 
+  it('passes comments of the team on a task in progress to the next stage run', async () => {
+    const { board, cycle, harness } = setup({
+      script: (run, index) => (run.stage === 'implement' && index === 0 ? { outcome: 'failed', summary: 'tests are red' } : done),
+    })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await cycle()
+    await board.addComment('1', 'Do not edit the merged migration V24; add V25 instead.')
+    await board.addComment('1', '/approve')
+    await vi.advanceTimersByTimeAsync(10_000)
+    await cycle()
+
+    const retry = stageRuns(harness).filter((run) => run.stage === 'implement')[1]
+    expect(retry?.prompt).toContain('## Notes from the team')
+    expect(retry?.prompt).toContain('add V25 instead')
+    expect(retry?.prompt).not.toMatch(/> \/approve/)
+    expect(retry?.prompt).not.toContain('conveyor:workpad')
+  })
+
   it('asks a human after the maximum number of attempts and resumes on reply', async () => {
     let failures = 2
     const { board, cycle, runs } = setup({
