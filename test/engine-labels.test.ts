@@ -38,6 +38,16 @@ function setup(options: { config?: string; script?: (board: FakeBoard) => Script
 }
 
 describe('board labels', () => {
+  it('assigns my claimed task that has no assignee yet', async () => {
+    const { board, cycle } = setup({ script: () => () => new Promise(() => undefined) })
+    const task = await board.createTask('Login', 'p', { state: 'needs-input' })
+    await board.setOwner(task.id, 'me')
+    board.assign(task.id)
+    void cycle()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect((await board.getTask(task.id))?.assignees).toEqual(['me'])
+  })
+
   it('assigns the task to me', async () => {
     const { board, cycle } = setup({ script: () => () => new Promise(() => undefined) })
     await board.createTask('Login', 'p', { form: 'plan' })

@@ -204,6 +204,22 @@ describe('merge mode ai', () => {
     expect(board.merges).toHaveLength(1)
   })
 
+  it('sends a task with failed checks back to a stage on /fix_from', async () => {
+    const { board, harness, cycle } = setup({ mode: 'ai' })
+    board.checks = 'failure'
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+
+    await board.addComment('1', '/fix_from: implement The backend migration V24 clashes with another task.')
+    await cycle()
+
+    const again = stageRuns(harness).filter((run) => run.stage === 'implement').at(-1)
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['implement', 'merge', 'implement', 'merge'])
+    expect(again?.prompt).toContain('The merge failed: checks failed')
+    expect(again?.prompt).toContain('migration V24 clashes')
+  })
+
   it('waits for open blockers before merging', async () => {
     const { board, cycle, expireRetry } = setup({
       mode: 'ai',

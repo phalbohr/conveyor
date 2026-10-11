@@ -9,7 +9,7 @@ import { NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
 import { isModelError } from '../models.js'
 import { resolveSkills } from '../skills.js'
 import { QuotaStore, type UsageLedger } from '../usage.js'
-import type { Workspaces } from '../workspaces.js'
+import { taskBranch, type Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
 import { buildPrompt, buildTriagePrompt, type GateMode } from './prompt.js'
 import { releaseClaim } from './release.js'
@@ -174,6 +174,7 @@ export class Engine {
       const task = (await this.releaseIfExpired(listed, me, config, now)) ? withoutOwner(listed) : listed
       if (task.owner && task.owner !== me) continue
       const owned = task.owner === me
+      if (owned && !task.assignees.includes(me)) await board.setOwner(task.id, me).catch((error: unknown) => this.log(`task ${task.id}: assigning @${me} failed: ${(error as Error).message}`))
       switch (task.state) {
         case 'review': {
           const verdict = await this.reviewSignal(task.id, config)
@@ -334,7 +335,8 @@ export class Engine {
     const comments = await this.comments(id)
     const pad = findWorkpad(comments)
     const state: WorkpadState = { attempt: 0, ...pad?.state }
-    const verdict = initial.state === 'review' ? await this.reviewSignal(id, config) : undefined
+    const command = initial.state !== 'review' && state.waiting?.kind === 'error' ? await this.reviewSignal(id, config) : undefined
+    const verdict = initial.state === 'review' ? await this.reviewSignal(id, config) : command?.kind === 'fix' || command?.kind === 'rework' ? command : undefined
     if (verdict?.kind === 'stale' || verdict?.kind === 'wait' || verdict?.kind === 'invalid') return
     const pull = verdict?.pull
     const rework = initial.state === 'rework' || verdict?.kind === 'rework'
@@ -368,6 +370,7 @@ export class Engine {
       state.form = initial.form
       await board.setForm(id, undefined)
     }
+    state.branch = initial.url.replace(/\/issues\/\d+$/, `/tree/${taskBranch(id)}`)
     await run.save()
     run.workspace = (await workspaces.prepare(id)).path
 
@@ -378,9 +381,10 @@ export class Engine {
       const feedback =
         verdict?.feedback ??
         comments.filter((comment) => !isAgentComment(comment) && comment.createdAt >= since).map((comment) => comment.body)
+      const failure = state.mergeError ? `The merge failed: ${state.mergeError}` : state.lastError ? `The last attempt failed: ${state.lastError}` : ''
       for (const key of ['landing', 'mergeError', 'landAttempts', 'lastError'] as const) delete state[key]
       state.attempt = 0
-      state.review = feedback.join('\n\n') || 'The reviewer asked for changes. Read the issue comments for details.'
+      state.review = [failure, ...feedback].filter(Boolean).join('\n\n') || 'The reviewer asked for changes. Read the issue comments for details.'
       if (rework) {
         if (pull?.state === 'open') await board.closePullRequest(id)
         await workspaces.reset(id)
@@ -411,11 +415,12 @@ export class Engine {
       delete state.reviewMode
       const task = (await board.getTask(id)) ?? initial
       const part = state.parts ? { index: (state.part ?? 0) + 1, total: state.parts.length, title: state.parts[state.part ?? 0] ?? '' } : undefined
-      await board.openPullRequest(
+      const opened = await board.openPullRequest(
         id,
         part ? `${task.title} (part ${part.index}/${part.total}: ${part.title})` : task.title,
         `${config.close_on_done && (!part || part.index === part.total) ? 'Closes' : 'Part of'} #${id}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
       )
+      state.pull = { number: opened.number, url: opened.url }
       if (chain.merge === 'review') {
         delete state.stage
         state.waiting = { kind: 'review', since: new Date().toISOString() }
@@ -744,7 +749,7 @@ export class Engine {
     const pull = await this.trustedPull(id)
     if (pull?.state === 'merged') return { kind: 'merged', pull, approvers: [], feedback: [] }
     const { comments, pad } = await this.workpad(id)
-    const since = pad?.state.waiting?.kind === 'review' ? pad.state.waiting.since : ''
+    const since = pad?.state.waiting?.kind === 'review' || pad?.state.waiting?.kind === 'error' ? pad.state.waiting.since : ''
     const human = [...comments.filter((comment) => !isAgentComment(comment)), ...(pull?.comments ?? [])].filter((comment) => comment.createdAt >= since)
     const latest = new Map<string, NonNullable<typeof pull>['reviews'][number]>()
     for (const review of pull?.reviews ?? []) {

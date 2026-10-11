@@ -26,6 +26,8 @@ export type WorkpadState = {
   part?: number
   form?: 'idea' | 'story' | 'plan'
   checksWait?: { sha: string; since: string }
+  branch?: string
+  pull?: { number: string; url: string }
 }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
@@ -55,6 +57,8 @@ const stateSchema = z.object({
   part: z.int().nonnegative().optional(),
   form: z.enum(['idea', 'story', 'plan']).optional(),
   checksWait: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
+  branch: z.string().optional(),
+  pull: z.object({ number: z.string(), url: z.string() }).optional(),
 })
 
 const AGENT_MARKER = '<!-- conveyor'
@@ -78,7 +82,7 @@ export function findWorkpad(comments: Comment[]): Workpad | undefined {
     if (!match?.[1]) continue
     const state = stateSchema.safeParse(parseJson(match[1]))
     if (!state.success) continue
-    const text = comment.body.slice(match[0].length).replace(/^### Conveyor workpad\n\n(?:Stage: .*\n\n)?(?:Last error: .*\n\n)?/, '')
+    const text = comment.body.slice(match[0].length).replace(/^### Conveyor workpad\n\n(?:Stage: .*\n\n)?(?:Branch: .*\n\n)?(?:Last error: .*\n\n)?/, '')
     return { id: comment.id, state: state.data as WorkpadState, text }
   }
   return undefined
@@ -88,7 +92,9 @@ export function renderWorkpad(state: WorkpadState, text: string) {
   state = JSON.parse(JSON.stringify(state, (_, value: unknown) => (typeof value === 'string' ? plain(value) : value))) as WorkpadState
   const stage = state.stage ? `Stage: \`${state.stage}\`${state.attempt ? ` · failed attempts: ${state.attempt}` : ''}\n\n` : ''
   const error = state.lastError ? `Last error: ${state.lastError.replaceAll('\n', ' ')}\n\n` : ''
-  return `${AGENT_MARKER}:workpad ${JSON.stringify(state).replaceAll('>', '\\u003e')} -->\n### Conveyor workpad\n\n${stage}${error}${text}`
+  const links = [state.branch ? `[${state.branch.split('/tree/').at(-1)}](${state.branch})` : '', state.pull ? `pull request [#${state.pull.number}](${state.pull.url})` : ''].filter(Boolean)
+  const linked = links.length ? `Branch: ${links.join(' · ')}\n\n` : ''
+  return `${AGENT_MARKER}:workpad ${JSON.stringify(state).replaceAll('>', '\\u003e')} -->\n### Conveyor workpad\n\n${stage}${linked}${error}${text}`
 }
 
 export function repliesSince(comments: Comment[], commentId: string | undefined): Comment[] {
