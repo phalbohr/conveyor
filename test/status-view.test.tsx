@@ -56,6 +56,9 @@ describe('statusLines', () => {
     expect(selected?.text).toBe('review 0/2')
     const focused = statusLines(snapshot, undefined, { column: 0, open: true, focus: 'tasks', task: 1 })
     expect(focused.find((line) => line.text.startsWith('›'))?.text).toBe('› #8 Search — form::idea')
+    const board = focused.find((line) => line.segments)?.segments ?? []
+    expect(board.filter((segment) => segment.marked).map((segment) => segment.text)).toEqual([expect.stringMatching(/^backlog /)])
+    expect(board.some((segment) => segment.selected)).toBe(false)
   })
 
   it('shows a usage line for every harness in use', () => {

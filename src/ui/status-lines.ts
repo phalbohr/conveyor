@@ -3,7 +3,7 @@ import { undescribedNotice } from '../stage-catalog.js'
 import { boardCheckLines, needsAttention, type BoardCheck } from '../board-check.js'
 import type { StatusSnapshot } from '../status.js'
 
-export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean }[]; cells?: [string, string]; cellWidth?: number; selected?: boolean }
+export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean; marked?: boolean }[]; cells?: [string, string]; cellWidth?: number; selected?: boolean }
 export const CELL_WIDTH = 28
 
 const row = (left: string, right: string): Line => ({ text: `  ${left.padEnd(CELL_WIDTH - 2)}${right}`, cells: [`  ${left}`, right] })
@@ -76,7 +76,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   )
   lines.push({
     text: `my board: ${columns.join(' · ')}`,
-    segments: [{ text: 'my board: ' }, ...columns.flatMap((text, index) => [...(index ? [{ text: ' · ' }] : []), { text, selected: view?.column === index && view.focus === 'columns' }])],
+    segments: [{ text: 'my board: ' }, ...columns.flatMap((text, index) => [...(index ? [{ text: ' · ' }] : []), { text, selected: view?.column === index && view.focus === 'columns', marked: view?.column === index && view.focus === 'tasks' }])],
     tone: limits.awaitingMe.used >= limits.awaitingMe.limit || limits.awaitingReview.used >= limits.awaitingReview.limit ? 'warning' : 'muted',
   })
   if (!view) {

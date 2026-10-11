@@ -291,7 +291,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
           <Text key={index} {...(line.tone ? { color: COLORS[line.tone] } : {})} bold={line.tone === 'title'}>
             {line.segments
               ? line.segments.map((segment, part) => (
-                  <Text key={part} inverse={segment.selected ?? false}>
+                  <Text key={part} inverse={segment.selected ?? false} bold={segment.marked ?? false} underline={segment.marked ?? false} {...(segment.marked ? { color: 'cyan' } : {})}>
                     {segment.text}
                   </Text>
                 ))
