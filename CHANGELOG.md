@@ -27,6 +27,7 @@ First public release.
 - `board.base_branch`: the branch that task branches start from and pull requests merge into (default: the default branch of the repository). The conveyor pushes only to `conveyor/<issue>` branches, so a base branch open only to pull requests works.
 - Board upgrades: every start and the control screen report what the board lacks for this version; `conveyor board update` (or `k`) adds it on request and never changes or deletes existing labels or fields.
 - Parts: the plan can split a story into ordered parts, one pull request each; the story is done after the last part merges.
+- Command harnesses write the artifact text (for example the plan) as plain text to the file in `CONVEYOR_ARTIFACT` (placeholder `{artifact}`) and set only `artifact.kind` in the result JSON. Weaker self-hosted models broke the JSON when they escaped a long plan as a string and saved no plan; `artifact.content` inside the JSON still works.
 - Board panel on the control screen: Backlog by form and my columns against my limits; open a task with its text, workpad, comments, and pull request; comment, open in the browser, open it in a live session with the harness, and toggle `form::idea`.
 - Control screen with a live log, settings editor, `new`, `attach`, `release`, `config`, `models`, and the `conveyor-help` skill.
 - Trust checks: tasks, comments, reviews, and commands only from users with write access; secret redaction on the board, in committed artifacts, and in the log; approvals and merges bound to the reviewed head commit.

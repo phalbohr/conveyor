@@ -127,7 +127,7 @@ harnesses:
     env: {LLM_BASE_URL: "http://localhost:4000", LLM_API_KEY: "sk-local"}
 ```
 
-Placeholders: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{temp}` (a temporary directory of the run; the `opencode` and `kilocode` presets keep their databases there, so parallel stages do not lock each other). `interactive` sets the args of live sessions. The agent writes its result as JSON to the file in `CONVEYOR_RESULT`; the conveyor adds the schema to the prompt.
+Placeholders: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{artifact}`, `{temp}` (a temporary directory of the run; the `opencode` and `kilocode` presets keep their databases there, so parallel stages do not lock each other). `interactive` sets the args of live sessions. The agent writes its result as JSON to the file in `CONVEYOR_RESULT`; the conveyor adds the schema to the prompt. The agent writes the artifact text (for example the Markdown plan) as plain text to the file in `CONVEYOR_ARTIFACT` and sets only `artifact.kind` in the JSON, so weaker models do not have to escape a long text as a JSON string; `artifact.content` inside the JSON still works when the artifact file is empty.
 
 Codex stages also accept `sandbox: workspace-write | full-access` (default `workspace-write`) and `network: true | false` (default `false`).
 

@@ -173,7 +173,7 @@ function liveCommand(
     args: definition.interactive.map(fill),
     env: Object.fromEntries(
       Object.entries(definition.env)
-        .filter(([, value]) => !/\{(result|temp)\}/.test(value))
+        .filter(([, value]) => !/\{(result|artifact|temp)\}/.test(value))
         .map(([key, value]) => [key, fill(value)]),
     ),
   }

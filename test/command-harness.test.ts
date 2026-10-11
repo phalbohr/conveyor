@@ -83,6 +83,34 @@ describe('CommandHarness', () => {
     expect(output.result).toMatchObject({ outcome: 'failed', summary: 'the agent wrote a result file that is not JSON: Here is the plan' })
   })
 
+  it('reads the artifact content from the artifact file', async () => {
+    const plan = '# Plan\n\n- step "one"\n- step \\two\n'
+    const { command, recorded } = agent(`fs.writeFileSync(process.env.CONVEYOR_ARTIFACT, ${JSON.stringify(plan)}); fs.writeFileSync(process.env.CONVEYOR_RESULT, JSON.stringify({ outcome: 'done', summary: 'planned', artifact: { kind: 'plan' } }))`)
+    const output = await new CommandHarness({ command, args: ['{prompt}', '--artifact={artifact}'], env: {} }).runStage(run())
+    expect(output.result).toEqual({ outcome: 'done', summary: 'planned', artifact: { kind: 'plan', content: plan } })
+    const { argv, env } = recorded()
+    expect(argv.at(-1)).toBe(`--artifact=${env.CONVEYOR_ARTIFACT}`)
+    expect(argv[0]).toContain('CONVEYOR_ARTIFACT')
+  })
+
+  it('accepts the artifact content inside the result JSON', async () => {
+    const { command } = agent(`fs.writeFileSync(process.env.CONVEYOR_RESULT, JSON.stringify({ outcome: 'done', summary: 'planned', artifact: { kind: 'plan', content: 'inline plan' } }))`)
+    const output = await new CommandHarness({ command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(output.result).toEqual({ outcome: 'done', summary: 'planned', artifact: { kind: 'plan', content: 'inline plan' } })
+  })
+
+  it('uses the inline content when the artifact file is empty', async () => {
+    const { command } = agent(`fs.writeFileSync(process.env.CONVEYOR_ARTIFACT, '  \\n'); fs.writeFileSync(process.env.CONVEYOR_RESULT, JSON.stringify({ outcome: 'done', summary: 'planned', artifact: { kind: 'plan', content: 'inline plan' } }))`)
+    const output = await new CommandHarness({ command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(output.result).toEqual({ outcome: 'done', summary: 'planned', artifact: { kind: 'plan', content: 'inline plan' } })
+  })
+
+  it('fails when the artifact has neither a file nor inline content', async () => {
+    const { command } = agent(`fs.writeFileSync(process.env.CONVEYOR_RESULT, JSON.stringify({ outcome: 'done', summary: 'planned', artifact: { kind: 'plan' } }))`)
+    const output = await new CommandHarness({ command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(output.result).toMatchObject({ outcome: 'failed', summary: expect.stringContaining('artifact file is empty') })
+  })
+
   it('stops on abort', async () => {
     const { command } = agent(`setInterval(() => console.log('still working'), 100)`)
     const controller = new AbortController()
