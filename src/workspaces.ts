@@ -8,7 +8,7 @@ type Hooks = Config['hooks']
 type HookName = 'after_create' | 'before_run' | 'after_run' | 'before_remove'
 
 export interface Workspaces {
-  prepare(taskId: string): Promise<{ path: string; created: boolean }>
+  prepare(taskId: string, from?: string): Promise<{ path: string; created: boolean }>
   runHook(hook: 'before_run' | 'after_run', path: string): Promise<void>
   commitFile(taskId: string, file: string, content: string, message: string): Promise<void>
   commitAll(taskId: string, message: string): Promise<boolean>
@@ -26,13 +26,15 @@ export const taskBranch = (taskId: string) => `conveyor/${taskId}`
 export class GitWorkspaces implements Workspaces {
   constructor(private readonly options: { repo: string; root: string; base: () => Promise<string>; hooks: () => Hooks }) {}
 
-  async prepare(taskId: string) {
+  async prepare(taskId: string, from?: string) {
     const path = this.path(taskId)
     if (existsSync(path)) return { path, created: false }
 
     await this.git(this.options.repo, 'fetch', '--quiet', 'origin')
+    const exists = async (ref: string) => (await this.tryGit(this.options.repo, 'rev-parse', '--verify', '--quiet', ref)) !== undefined
     const remote = `refs/remotes/origin/${taskBranch(taskId)}`
-    const start = (await this.tryGit(this.options.repo, 'rev-parse', '--verify', '--quiet', remote)) ? remote : await this.baseRef()
+    const source = from ? `refs/remotes/origin/${from}` : undefined
+    const start = (await exists(remote)) ? remote : source && (await exists(source)) ? source : await this.baseRef()
     mkdirSync(this.options.root, { recursive: true, mode: 0o700 })
     await this.git(this.options.repo, 'worktree', 'add', '--quiet', '-B', taskBranch(taskId), path, start)
 

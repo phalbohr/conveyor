@@ -89,6 +89,8 @@ const LAND_WAIT = 60_000
 const CHECKS_GRACE = 5 * 60_000
 const MERGE_LOCK = 'merge'
 const BASE_FIX_LOCK = 'base-fix'
+const BASE_SOURCE = 'base'
+const SOURCE_STAGE = 'source'
 export const BASE_FIX = '<!-- conveyor:base-fix -->'
 const LOCK_TTL = 10 * 60_000
 
@@ -353,7 +355,7 @@ export class Engine {
     const rework = initial.state === 'rework' || verdict?.kind === 'rework'
     const waiting = state.waiting
     const approvalStage = waiting?.kind === 'approval' ? waiting.stage : undefined
-    const conversation = waiting && waiting.kind !== 'review' ? this.conversation(comments, waiting) : undefined
+    const conversation = waiting && waiting.kind !== 'review' && waiting.stage !== SOURCE_STAGE ? this.conversation(comments, waiting) : undefined
     if (waiting?.kind === 'error' && waiting.stage === LAND) state.landAttempts = 0
     delete state.waiting
     delete state.retryAt
@@ -383,7 +385,11 @@ export class Engine {
     }
     state.branch = initial.url.replace(/\/issues\/\d+$/, `/tree/${taskBranch(id)}`)
     await run.save()
-    run.workspace = (await workspaces.prepare(id)).path
+    if (!state.source && !state.stage && !rework && !verdict) {
+      const decided = await this.chooseSource(run, comments, waiting)
+      if (!decided) return
+    }
+    run.workspace = (await workspaces.prepare(id, state.source && state.source !== BASE_SOURCE ? state.source : undefined)).path
 
     const names = config.stages.map((stage) => stage.name)
     const mergeIndex = names.indexOf('merge')
@@ -421,7 +427,8 @@ export class Engine {
 
     let pendingPull: { merge?: 'land' | 'review'; summary: string } | undefined
     if (!state.landing && state.stage !== LAND) {
-      const start = state.stage ?? (initial.form === 'idea' ? 'story' : initial.form === 'story' ? 'plan' : names[names.indexOf('plan') + 1])
+      const form = initial.form ?? state.form
+      const start = state.stage ?? (form === 'idea' ? 'story' : form === 'story' ? 'plan' : names[names.indexOf('plan') + 1])
       const chain = await this.runChain(run, config.stages.slice(names.indexOf(start ?? 'merge'), mergeIndex + 1), {
         approvalStage,
         conversation,
@@ -661,6 +668,7 @@ export class Engine {
     if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; task #${this.baseRed.fix} fixes it first`)
     const pull = await board.pullRequest(id)
     if (pull?.state === 'merged') return 'success'
+    if (pull?.state === 'open' && pull.draft) return wait('the pull request is a draft; mark it ready for review')
     if (pull?.state === 'open' && pull.headSha !== state.headSha) {
       delete state.stage
       state.headSha = pull.headSha
@@ -754,6 +762,41 @@ export class Engine {
     state.waiting = { kind: 'error', stage: 'verify', commentId: comment.id, since: new Date().toISOString() }
     await board.setState(id, 'needs-input')
     await run.save()
+    return false
+  }
+
+  private async chooseSource(run: TaskRun, comments: Comment[], waiting: WorkpadState['waiting']): Promise<boolean> {
+    const { board } = this.options
+    const { id, state } = run
+    const foreign = (await board.linkedPulls(id).catch(() => [])).filter((pull) => pull.branch !== taskBranch(id))
+    if (foreign.length === 0) {
+      state.source = BASE_SOURCE
+      return true
+    }
+    if (waiting?.stage === SOURCE_STAGE) {
+      const replies = repliesSince(comments, waiting.commentId).map((comment) => comment.body.trim())
+      const choice = replies.map((text) => text.match(/^\/(continue|fresh)(?:\s+[!#]?(\d+))?/i)).filter(Boolean).at(-1)
+      if (choice?.[1]?.toLowerCase() === 'fresh') {
+        state.source = BASE_SOURCE
+        return true
+      }
+      if (choice) {
+        const picked = foreign.find((pull) => pull.number === choice[2]) ?? foreign[0]
+        if (picked) {
+          state.source = picked.branch
+          await board.addComment(id, agentComment('note', `The conveyor continues the work of ${picked.url} (branch \`${picked.branch}\`) in its branch \`${taskBranch(id)}\` and opens its own pull request. Close ${picked.url} when that one is merged.`))
+          return true
+        }
+      }
+    }
+    const list = foreign.map((pull) => `- ${pull.url} (branch \`${pull.branch}\`${pull.draft ? ', draft' : ''})`).join('\n')
+    const text = `**This task already has a linked pull request:**\n\n${list}\n\nThe conveyor does not start a second line of work on its own. Reply:\n\n- \`/continue\` (or \`/continue <number>\`) to continue that work: the conveyor starts its branch \`${taskBranch(id)}\` from that branch and opens its own pull request;\n- \`/fresh\` to start from the base branch and ignore it;\n- or leave the task to a human: press \`x\` on it in the control screen and choose \`d\` (draft), or close it.`
+    const comment = await board.addComment(id, agentComment('questions', text))
+    state.waiting = { kind: 'questions', stage: SOURCE_STAGE, commentId: comment.id, since: new Date().toISOString() }
+    await board.setState(id, 'needs-input')
+    await board.setStage(id, undefined)
+    await run.save()
+    this.log(`task ${id}: already linked to ${foreign.map((pull) => pull.url).join(', ')}; asks whether to continue it or start fresh`)
     return false
   }
 

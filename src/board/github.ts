@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Run } from '../cli.js'
 import {
+  type LinkedPull,
   boardLabels,
   CONVEYOR_PREFIXES,
   FORM_LABEL,
@@ -52,6 +53,7 @@ type GitHubPull = {
   headRefOid: string
   state: 'OPEN' | 'MERGED' | 'CLOSED'
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+  isDraft?: boolean
   statusCheckRollup: Check[] | null
   reviews: { state: string; body: string; submittedAt: string; author: { login: string } | null }[]
   comments: { body: string; createdAt: string; author: { login: string } | null }[]
@@ -63,7 +65,7 @@ type ProjectMirror = { projectId: string; fieldId: string; options: Map<string, 
 export type GitHubBoardOptions = { projectNumber?: number; baseBranch?: string; warn?: (message: string) => void }
 
 const PROJECT_FIELD = 'Conveyor'
-const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,statusCheckRollup,reviews,comments'
+const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,isDraft,statusCheckRollup,reviews,comments'
 
 const LOCK_PREFIX = 'conveyor-lock/'
 const WRITE_PERMISSIONS = ['admin', 'write']
@@ -295,6 +297,17 @@ export class GitHubBoard implements Board {
     return (JSON.parse(output) as { mergeCommit: { oid: string } | null }[])[0]?.mergeCommit?.oid
   }
 
+  async linkedPulls(id: string): Promise<LinkedPull[]> {
+    const [owner, name] = this.project.split('/')
+    const found = await this.graphql<{ repository: { issue: { closedByPullRequestsReferences: { nodes: { number: number; url: string; headRefName: string; isDraft: boolean; state: string }[] } } | null } }>(
+      'query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issue(number: $number) { closedByPullRequestsReferences(first: 20, includeClosedPrs: false) { nodes { number url headRefName isDraft state } } } } }',
+      { owner, name, number: Number(id) },
+    )
+    return (found.repository.issue?.closedByPullRequestsReferences.nodes ?? [])
+      .filter((pull) => pull.state === 'OPEN')
+      .map((pull) => ({ number: String(pull.number), url: pull.url, branch: pull.headRefName, draft: pull.isDraft }))
+  }
+
   async baseHead() {
     return (await this.api<{ object: { sha: string } }>([`${this.repo}/git/ref/heads/${await this.baseBranch()}`])).object.sha
   }
@@ -466,6 +479,7 @@ function toPull(pull: GitHubPull, inline: PullRequest['feedback']): PullRequest 
     state: pull.state === 'OPEN' ? 'open' : pull.state === 'MERGED' ? 'merged' : 'closed',
     checks: checksOf(checks),
     mergeable: pull.mergeable === 'MERGEABLE' ? 'yes' : pull.mergeable === 'CONFLICTING' ? 'no' : 'unknown',
+    ...(pull.isDraft ? { draft: true } : {}),
     feedback: inline,
     reviews: pull.reviews.map((review) => ({
       author: review.author?.login ?? '',

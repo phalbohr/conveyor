@@ -16,7 +16,10 @@ export class FakeWorkspaces implements Workspaces {
   readonly deletedBranches: string[] = []
   failBeforeRun = false
 
-  async prepare(taskId: string) {
+  readonly sources: string[] = []
+
+  async prepare(taskId: string, from?: string) {
+    if (from) this.sources.push(`${taskId}:${from}`)
     const path = join(this.root, taskId)
     const created = !existsSync(path)
     mkdirSync(path, { recursive: true })

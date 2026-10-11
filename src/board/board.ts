@@ -37,10 +37,13 @@ export type PullRequest = {
   state: 'open' | 'merged' | 'closed'
   checks: 'pending' | 'success' | 'failure' | 'none'
   mergeable: 'yes' | 'no' | 'unknown'
+  draft?: boolean
   feedback: { author: string; body: string }[]
   reviews: { author: string; state: 'approved' | 'changes_requested' | 'commented' | 'dismissed'; body: string; submittedAt: string }[]
   comments: { author: string; body: string; createdAt: string }[]
 }
+
+export type LinkedPull = { number: string; url: string; branch: string; draft: boolean }
 
 export type MergeMethod = 'merge' | 'squash' | 'rebase'
 
@@ -79,6 +82,7 @@ export interface Board {
   commitChecks(sha: string): Promise<PullRequest['checks']>
   failedChecks(sha: string): Promise<string[]>
   baseHead(): Promise<string>
+  linkedPulls(id: string): Promise<LinkedPull[]>
   commentPullRequest(id: string, body: string): Promise<void>
 }
 

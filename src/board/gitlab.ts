@@ -1,5 +1,6 @@
 import type { Run } from '../cli.js'
 import {
+  type LinkedPull,
   boardLabels,
   CONVEYOR_PREFIXES,
   FORM_LABEL,
@@ -45,6 +46,7 @@ type MergeRequest = {
   state: 'opened' | 'merged' | 'closed' | 'locked'
   detailed_merge_status: string
   head_pipeline: { status: string } | null
+  draft?: boolean
 }
 
 type Call = { code: number; stdout: string; stderr: string; status: number }
@@ -264,6 +266,7 @@ export class GitLabBoard implements Board {
       state: request.state === 'opened' || request.state === 'locked' ? 'open' : request.state,
       checks: checks(request.head_pipeline?.status),
       mergeable: mergeable(request.detailed_merge_status),
+      ...(request.draft ? { draft: true } : {}),
       feedback: notes
         .filter((note) => note.position)
         .map((note) => ({ author: note.author.username, body: `${note.position?.new_path ?? ''}${note.position?.new_line ? `:${note.position.new_line}` : ''}: ${note.body}` })),
@@ -298,6 +301,13 @@ export class GitLabBoard implements Board {
       `${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${id}`)}&state=merged&order_by=updated_at&sort=desc`,
     ])
     return merged[0]?.merge_commit_sha ?? merged[0]?.squash_commit_sha ?? undefined
+  }
+
+  async linkedPulls(id: string): Promise<LinkedPull[]> {
+    const related = await this.json<{ iid: number; web_url: string; source_branch: string; state: string; draft?: boolean }[]>([`${this.api}/issues/${id}/related_merge_requests`])
+    return related
+      .filter((request) => request.state === 'opened')
+      .map((request) => ({ number: String(request.iid), url: request.web_url, branch: request.source_branch, draft: request.draft ?? false }))
   }
 
   async baseHead() {

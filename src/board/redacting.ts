@@ -43,6 +43,10 @@ export class RedactingBoard implements Board {
     return this.board.baseHead()
   }
 
+  linkedPulls(id: string) {
+    return this.board.linkedPulls(id)
+  }
+
   baseBranch() {
     return this.board.baseBranch()
   }

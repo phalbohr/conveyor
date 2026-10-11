@@ -541,3 +541,56 @@ describe('a red base branch', () => {
     expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id, '1'])
   })
 })
+
+describe('draft and foreign pull requests', () => {
+  it('does not merge a draft pull request until it is ready', async () => {
+    const { board, cycle, expireRetry } = setup({ mode: 'ai' })
+    board.draft = true
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect(board.merges).toEqual([])
+
+    board.ready('1')
+    await expireRetry()
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+  })
+
+  it('asks before working next to a linked pull request and continues it on /continue', async () => {
+    const { board, workspaces, harness, cycle } = setup({ mode: 'ai' })
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: true }])
+
+    await cycle()
+    expect(stageRuns(harness)).toEqual([])
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+    expect((await board.listComments('1')).at(-1)?.body).toContain('already has a linked pull request')
+
+    await board.addComment('1', '/continue')
+    await cycle()
+    expect(workspaces.sources).toEqual(['1:1-add-login'])
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['implement', 'merge'])
+    expect(board.merges).toHaveLength(1)
+  })
+
+  it('starts from the base branch on /fresh', async () => {
+    const { board, workspaces, harness, cycle } = setup({ mode: 'ai' })
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: false }])
+    await cycle()
+    await board.addComment('1', '/fresh')
+    await cycle()
+    expect(workspaces.sources).toEqual([])
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['implement', 'merge'])
+  })
+
+  it('starts a story at plan after the answer, although the form label is gone', async () => {
+    const { board, harness, cycle } = setup({ mode: 'ai', plan: 'autonomous', config: 'pickup_from: story' })
+    await board.createTask('Add login', 'a story', { form: 'story' })
+    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: false }])
+    await cycle()
+    await board.addComment('1', '/fresh')
+    await cycle()
+    expect(stageRuns(harness).map((run) => run.stage)[0]).toBe('plan')
+  })
+})

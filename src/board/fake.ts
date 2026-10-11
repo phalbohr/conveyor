@@ -1,4 +1,5 @@
 import {
+  type LinkedPull,
   boardLabels,
   CONVEYOR_PREFIXES,
   FORM_LABEL,
@@ -39,6 +40,12 @@ export class FakeBoard implements Board {
   private readonly locks = new Set<string>()
   private readonly pulls = new Map<string, PullRequest>()
   checks: PullRequest['checks'] = 'success'
+  draft = false
+
+  ready(id: string) {
+    const pull = this.pulls.get(id)
+    if (pull) delete pull.draft
+  }
   readonly merges: { id: string; method: MergeMethod }[] = []
   readonly outsiders = new Set<string>()
   readonly pullTitles: string[] = []
@@ -90,6 +97,12 @@ export class FakeBoard implements Board {
 
   async failedChecks() {
     return [...this.baseFailures]
+  }
+
+  readonly linkedPullsOf = new Map<string, LinkedPull[]>()
+
+  async linkedPulls(id: string) {
+    return [...(this.linkedPullsOf.get(id) ?? [])]
   }
 
   async baseHead() {
@@ -231,6 +244,7 @@ export class FakeBoard implements Board {
       headSha: id.padStart(40, '0'),
       state: 'open',
       checks: this.checks,
+      ...(this.draft ? { draft: true } : {}),
       mergeable: 'yes',
       feedback: [],
       reviews: [],
