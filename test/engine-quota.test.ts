@@ -8,6 +8,7 @@ import type { Script } from '../src/harness/fake.js'
 import type { Quota } from '../src/harness/harness.js'
 import { UsageLedger } from '../src/usage.js'
 import { FakeWorkspaces, stageHarness, stageRuns } from './fakes.js'
+import { findWorkpad } from '../src/engine/workpad.js'
 import { tempDir } from './helpers.js'
 
 const later = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
@@ -98,5 +99,25 @@ describe('Engine subscription reserve', () => {
     await cycle()
     expect(probes).toBe(1)
     expect(runs()).toEqual([])
+  })
+})
+
+describe('Engine usage limit of a harness', () => {
+  it('waits for the reset time without counting an attempt and claims no new tasks meanwhile', async () => {
+    let limited = true
+    const { board, cycle, runs } = setup({
+      local: '',
+      script: (run) => (run.stage === 'implement' && limited ? { outcome: 'failed', summary: "You've hit your usage limit. Try again at 5:30 AM." } : { outcome: 'done', summary: 'ok' }),
+    })
+    await board.createTask('First', 'p', { form: 'plan' })
+    await cycle()
+    const state = findWorkpad(await board.listComments('1'))?.state
+    expect(state?.attempt).toBe(0)
+    expect(Date.parse(state?.retryAt ?? '')).toBeGreaterThan(Date.now())
+
+    await board.createTask('Second', 'p', { form: 'plan' })
+    limited = false
+    await cycle()
+    expect(runs()).toEqual(['1:implement'])
   })
 })

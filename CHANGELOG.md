@@ -13,6 +13,8 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- A usage limit of a harness pauses its stages until the reset time instead of counting failed attempts.
+- The review stage template no longer asks the agent to commit: the conveyor commits after the stage, and sandboxed agents cannot write `.git`.
 - A missing result names the exit code of the harness; a result file that is not JSON says so with its first characters.
 - Released started tasks show first in the Backlog panel (`+N released`) and the conveyor resumes them before new tasks; a stage that runs hides the attempt number and the last error of earlier attempts.
 - Reset: `x` on a task in the control screen or `conveyor reset <number> [--form]` stops it, closes its pull request, deletes its branch and workspace, clears the workpad, and returns it to Backlog as idea, story, plan, or draft.

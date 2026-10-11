@@ -5,7 +5,7 @@ import { ClaudeHarness } from '../src/harness/claude.js'
 import { CodexHarness } from '../src/harness/codex.js'
 import { CommandHarness } from '../src/harness/command.js'
 import { PRESETS } from '../src/harness/presets.js'
-import { childEnv, parseResult, type Harness } from '../src/harness/harness.js'
+import { childEnv, parseResult, usageLimitUntil, type Harness } from '../src/harness/harness.js'
 import { tempDir } from './helpers.js'
 import { harnessContract } from './harness-contract.js'
 
@@ -241,3 +241,16 @@ if (real) {
     if (preset) harnessContract(name ?? '', () => new CommandHarness(preset), model, { usage: false })
   }
 }
+
+describe('usage limits', () => {
+  const now = new Date(2026, 9, 11, 1, 24)
+  it('reads the reset time of a usage limit message', () => {
+    expect(usageLimitUntil("You've hit your usage limit. Upgrade to Pro or try again at 5:30 AM.", now)).toBe(new Date(2026, 9, 11, 5, 30).toISOString())
+    expect(usageLimitUntil("You've hit your limit · resets 1am", now)).toBe(new Date(2026, 9, 12, 1, 0).toISOString())
+    expect(usageLimitUntil('Claude usage limit reached', now)).toBe(new Date(now.getTime() + 3_600_000).toISOString())
+  })
+
+  it('ignores other failures', () => {
+    expect(usageLimitUntil('tests are red', now)).toBeUndefined()
+  })
+})

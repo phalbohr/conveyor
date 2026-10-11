@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type { Board, Comment, PullRequest, Task, TaskForm } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, Quota, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
-import { NO_USAGE, failed } from '../harness/harness.js'
+import { NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
 import { isModelError } from '../models.js'
 import { resolveSkills } from '../skills.js'
 import { QuotaStore, type UsageLedger } from '../usage.js'
@@ -121,6 +121,7 @@ export class Engine {
   private readonly activities = new Map<string, Activity>()
   private readonly halt = new AbortController()
   private readonly held = new Set<string>()
+  private readonly limited = new Map<string, string>()
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
   private triageRetryAt = 0
@@ -522,6 +523,14 @@ export class Engine {
       if (signal.aborted) return { status: 'stopped', summary }
       this.options.usage.add(output.usage.inputTokens + output.usage.outputTokens)
       if (output.quota) this.quotas.set(stage.harness, output.quota)
+      const limitedUntil = output.result.outcome === 'failed' ? usageLimitUntil(output.result.summary) : undefined
+      if (limitedUntil) {
+        this.limited.set(stage.harness, limitedUntil)
+        state.retryAt = limitedUntil
+        await run.save()
+        this.log(`task ${id}: stage ${stage.name} waits for the ${stage.harness} usage limit until ${limitedUntil}; no attempt counted`)
+        return { status: 'stopped', summary }
+      }
       this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
       conversation = undefined
       await workspaces
@@ -640,6 +649,8 @@ export class Engine {
   }
 
   private quotaBlock(harness: HarnessName, config: Config): string | undefined {
+    const limited = this.limited.get(harness)
+    if (limited && Date.parse(limited) > Date.now()) return limited
     const known = this.quotas.get(harness)?.quota
     if (!known) return undefined
     const { five_hour_reserve, seven_day_reserve } = config.limits.subscription

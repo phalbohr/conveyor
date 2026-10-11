@@ -106,3 +106,18 @@ export function parseResult(value: unknown): StageResult {
 export function childEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(env).filter(([key]) => !BOARD_CREDENTIALS.includes(key)))
 }
+
+const USAGE_LIMIT = /usage limit|hit your limit|limit reached/i
+const RESET_AT = /(?:try again at|resets(?: at)?)\s+(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i
+
+export function usageLimitUntil(text: string, now = new Date()): string | undefined {
+  if (!USAGE_LIMIT.test(text)) return undefined
+  const match = text.match(RESET_AT)
+  if (!match) return new Date(now.getTime() + 60 * 60_000).toISOString()
+  const meridiem = match[3]?.toLowerCase()
+  const hour = meridiem?.startsWith('p') ? (Number(match[1]) % 12) + 12 : meridiem ? Number(match[1]) % 12 : Number(match[1])
+  const at = new Date(now)
+  at.setHours(hour, Number(match[2] ?? 0), 0, 0)
+  if (at <= now) at.setDate(at.getDate() + 1)
+  return at.toISOString()
+}
