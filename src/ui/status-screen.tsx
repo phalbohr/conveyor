@@ -18,6 +18,8 @@ export type RunnerControl = {
   stop(): Promise<void>
   activity?(): Record<string, Activity>
   cycle?(): boolean
+  readonly finishing?: boolean
+  drain?(): void
 }
 
 export type HubAction =
@@ -57,7 +59,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const [confirmQuit, setConfirmQuit] = useState(false)
   const [view, setView] = useState<StatusView>({ column: 0, open: false, focus: 'columns', task: 0 })
   const [opened, setOpened] = useState<Opened>()
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
 
   const refresh = useCallback(
     (force?: boolean, done?: () => void) => {
@@ -80,6 +82,9 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   }, [refresh, refreshMs])
 
   useEffect(() => runner?.subscribe(() => setTick((value) => value + 1)), [runner])
+  useEffect(() => {
+    if (!runner?.running && message?.text.startsWith('Finishing')) setMessage({ text: 'The conveyor stopped after its running stages finished.' })
+  }, [tick, runner, message])
   useEffect(() => {
     const timer = setInterval(() => runner?.running && setTick((value) => value + 1), 5_000)
     return () => clearInterval(timer)
@@ -212,7 +217,10 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (key === 'a') setInput({ kind: 'attach' })
       if (key === 'l') setInput({ kind: 'release' })
       if (key === 's' && runner) {
-        if (runner.running) {
+        if (runner.running && runner.drain && !runner.finishing) {
+          runner.drain()
+          setMessage({ text: 'Finishing: the running stages end, no new stage or task starts, then the conveyor stops. [s] again stops at once. [o] log' })
+        } else if (runner.running) {
           setMessage({ text: 'Stopping the conveyor: running stages are aborted, the current cycle ends… [o] log' })
           void runner.stop().then(() => {
             setMessage({ text: 'The conveyor stopped.' })
@@ -266,7 +274,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
               ? taskLines(opened.detail, opened.target)
               : [{ text: `Loading task #${opened?.id ?? ''}…`, tone: 'muted' as const }]
             : status
-              ? statusLines(status, runner?.running ? 'running here' : undefined, view)
+              ? statusLines(status, runner?.running ? (runner.finishing ? 'finishing the running stages, then stops' : 'running here') : undefined, view)
               : []
   const footer = keyBar(panel, view, runner, opened, updated)
   const room = Math.max(3, rows - 1 - heightOf(footer, columns) - heightOf(message?.text ?? '', columns) - (input ? 4 : 0) - (error ? 1 : 0) - 1)
@@ -361,7 +369,7 @@ function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefine
   if (view.focus === 'tasks') {
     return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness${view.column === BACKLOG ? ' · [i] form::idea on/off' : ' · [x] reset'} · [Esc] columns · [?] help · [q] quit${time}`
   }
-  return `${runner ? `[s] ${runner.running ? 'stop' : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [k] board check · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
+  return `${runner ? `[s] ${runner.running ? (runner.finishing ? 'stop now' : 'stop') : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [k] board check · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
 }
 
 function heightOf(text: string, columns: number) {

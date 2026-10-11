@@ -122,6 +122,7 @@ export class Engine {
   private readonly activities = new Map<string, Activity>()
   private readonly halt = new AbortController()
   private readonly held = new Set<string>()
+  private draining = false
   private readonly limited = new Map<string, string>()
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
@@ -148,9 +149,10 @@ export class Engine {
       return
     }
     const config = loaded.config
+    if (this.draining) return
     await this.probeQuotas(config)
     await this.triage(config).catch((error: unknown) => this.log(`triage failed: ${(error as Error).message}`))
-    if (this.halt.signal.aborted) return
+    if (this.halt.signal.aborted || this.draining) return
 
     const resumable: Task[] = []
     const fresh: Task[] = []
@@ -211,7 +213,7 @@ export class Engine {
       }
     }
 
-    if (this.halt.signal.aborted) return
+    if (this.halt.signal.aborted || this.draining) return
     let slots = config.limits.running - this.running.size - backingOff
     let waiting = 0
     for (const task of this.sorted(resumable, me)) {
@@ -243,6 +245,11 @@ export class Engine {
     while (this.running.size > 0 || this.cleanups.size > 0) {
       await Promise.all([...[...this.running.values()].map((running) => running.promise), ...this.cleanups])
     }
+  }
+
+  drain() {
+    this.draining = true
+    return [...this.running.keys()]
   }
 
   abort() {
@@ -517,6 +524,12 @@ export class Engine {
 
     for (const stage of stages) {
       if (signal.aborted) return { status: 'stopped', summary }
+      if (this.draining) {
+        state.stage = stage.name
+        await run.save()
+        this.log(`task ${id}: stops before stage ${stage.name}; it starts there on the next start`)
+        return { status: 'stopped', summary }
+      }
       state.stage = stage.name
       const blockedUntil = this.quotaBlock(stage.harness, config)
       if (blockedUntil) {

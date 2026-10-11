@@ -51,6 +51,7 @@ export class Runner {
   private stopping = false
   private wake: () => void = () => undefined
   private again = false
+  private draining = false
   private engine: Engine | undefined
 
   constructor(
@@ -147,6 +148,7 @@ export class Runner {
     }
 
     this.stopping = false
+    this.draining = false
     this.loop = (async () => {
       try {
         await cleanupWorkspaces(board, workspaces, log)
@@ -172,11 +174,26 @@ export class Runner {
       } finally {
         lock.release()
         this.loop = undefined
+        this.draining = false
         this.notify()
       }
     })()
     this.notify()
     return { ok: true }
+  }
+
+  get finishing() {
+    return this.draining
+  }
+
+  drain() {
+    if (!this.loop || this.stopping || this.draining || !this.engine) return
+    this.draining = true
+    const engine = this.engine
+    const running = engine.drain()
+    this.emit('info', `finishing: ${running.length ? `the stages of ${running.map((id) => `#${id}`).join(', ')} run to their end` : 'no stage runs'}; no new stages or tasks start; the conveyor stops after them`)
+    this.notify()
+    void engine.idle().then(() => this.stop())
   }
 
   async stop() {

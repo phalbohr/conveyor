@@ -163,6 +163,11 @@ function fakeRunner() {
     },
     cycles: 0,
     cycle: () => (runner.running ? (runner.cycles++, true) : false),
+    finishing: false,
+    drain: () => {
+      runner.finishing = true
+      for (const listener of listeners) listener()
+    },
   }
   return runner satisfies RunnerControl
 }
@@ -230,6 +235,22 @@ describe('StatusScreen as a control panel', () => {
     stdin.write('r')
     await vi.waitFor(() => expect(lastFrame()).toContain('Board read again at'), { timeout: 5_000 })
     expect(loads).toBe(2)
+  })
+
+  it('finishes the running stages on the first s and stops at once on the second', async () => {
+    const runner = fakeRunner()
+    runner.running = true
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} runner={runner} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('s')
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('Finishing: the running stages end'), { timeout: 5_000 })
+    expect(runner.finishing).toBe(true)
+    expect(runner.running).toBe(true)
+    await settle()
+    stdin.write('s')
+    await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })
+    expect(runner.running).toBe(false)
   })
 
   it('starts a conveyor cycle on r while the conveyor runs', async () => {
@@ -404,6 +425,9 @@ describe('StatusScreen as the hub', () => {
     await settle()
     stdin.write('o')
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('s')
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('Finishing: the running stages end'), { timeout: 5_000 })
     await settle()
     stdin.write('s')
     await vi.waitFor(() => expect(lastFrame()).toContain('The conveyor stopped.'), { timeout: 5_000 })

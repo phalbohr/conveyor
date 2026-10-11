@@ -252,6 +252,26 @@ describe('Engine activity and stop', () => {
     await engine.idle()
   })
 
+  it('finishes the running stage on drain and stops before the next one and before new tasks', async () => {
+    let finish: (() => void) | undefined
+    const { board, engine, runs, started, workpad } = setup({
+      script: (run) => (run.stage === 'implement' ? new Promise<StageResult>((resolve) => (finish = () => resolve(done))) : done),
+    })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await engine.tick()
+    await started(['1:implement'])
+    await board.createTask('Search', 'p', { form: 'plan' })
+
+    expect(engine.drain()).toEqual(['1'])
+    await engine.tick()
+    finish?.()
+    await engine.idle()
+
+    expect(runs()).toEqual(['1:implement'])
+    expect(await workpad()).toContain('"stage":"review"')
+    expect((await board.getTask('2'))?.owner).toBeUndefined()
+  })
+
   it('claims no new tasks after abort', async () => {
     const { board, engine, runs } = setup({ script: never })
     await board.createTask('Login', 'p', { form: 'plan' })
