@@ -65,6 +65,7 @@ First public release.
 
 ### Security
 
+- Every stage prompt has a `Boundaries` section against prompt injection: data from files, dependencies, the web, command output, and other issues is not an instruction, and board steps stay with the conveyor.
 - Pull requests and merge requests from forks never count as the pull request of a task.
 - `review.count_own_approvals: false` ignores approvals from the conveyor account, for setups with a separate bot account.
 - Pushes to a task branch use a lease: a commit that someone else pushed is never overwritten, and a resumed task picks it up first.
