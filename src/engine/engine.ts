@@ -127,7 +127,8 @@ export class Engine {
   private readonly halt = new AbortController()
   private readonly held = new Set<string>()
   private draining = false
-  private baseRed?: { sha: string; fix: string; failed: string[] }
+  private baseRed?: { sha: string; fix: string; failed: string[]; repairing?: boolean }
+  private readonly verifying = new Map<string, string>()
   private readonly limited = new Map<string, string>()
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
@@ -475,6 +476,7 @@ export class Engine {
 
     if (state.landing === 'success' && state.verify && !(await this.verifyBase(run))) return
     if (state.broken) {
+      this.verifying.set(state.broken, id)
       const repair = config.stages.slice(mergeIndex + 1).filter((stage) => stage.when === 'failure' || stage.when === 'always')
       const resumeRepair = state.stage ? repair.findIndex((stage) => stage.name === state.stage) : 0
       if (!state.stage) await workspaces.reset(id)
@@ -696,7 +698,10 @@ export class Engine {
           const merged = await board.mergePullRequest(id, config.merge_method, pull.headSha)
           if (!merged.ok) error = merged.error
           const sha = merged.ok ? await board.mergeCommit(id).catch(() => undefined) : undefined
-          if (sha) state.verify = { sha, since: new Date().toISOString() }
+          if (sha) {
+            state.verify = { sha, since: new Date().toISOString() }
+            this.verifying.set(sha, id)
+          }
         }
       } finally {
         await board.release(MERGE_LOCK)
@@ -739,6 +744,7 @@ export class Engine {
     const { id, config, state } = run
     const verify = state.verify
     if (!verify) return true
+    this.verifying.set(verify.sha, id)
     const checks = await board.commitChecks(verify.sha).catch(() => 'pending' as const)
     if (checks === 'pending' || (checks === 'none' && Date.now() - Date.parse(verify.since) < CHECKS_GRACE)) {
       state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
@@ -747,7 +753,10 @@ export class Engine {
       return false
     }
     delete state.verify
-    if (checks !== 'failure') return true
+    if (checks !== 'failure') {
+      this.verifying.delete(verify.sha)
+      return true
+    }
     this.log(`task ${id}: the CI of the base branch failed after the merge at ${verify.sha.slice(0, 7)}`)
     const names = config.stages.map((stage) => stage.name)
     const repair = config.stages.slice(names.indexOf('merge') + 1).some((stage) => stage.when === 'failure' || stage.when === 'always')
@@ -756,6 +765,7 @@ export class Engine {
       state.broken = verify.sha
       return true
     }
+    this.verifying.delete(verify.sha)
     const text = `**The base branch CI failed after this task was merged** (commit \`${verify.sha.slice(0, 7)}\`).\n\nReply \`/fix_from: implement <notes>\` to fix it in a follow-up pull request from the latest base branch, or reply with any comment to finish the task as it is.`
     const comment = await board.addComment(id, agentComment('error', text))
     state.followUp = true
@@ -809,8 +819,14 @@ export class Engine {
       if (checks === 'success') this.baseRed = undefined
       return
     }
-    if (this.baseRed?.sha === sha) return
+    if (this.baseRed?.sha === sha && (!this.baseRed.repairing || this.verifying.has(sha))) return
     const failed = await board.failedChecks(sha).catch(() => [])
+    const owner = this.verifying.get(sha)
+    if (owner) {
+      this.baseRed = { sha, fix: owner, failed, repairing: true }
+      this.log(`the base branch CI fails at ${sha.slice(0, 7)} after the merge of task #${owner}; it repairs the base, and other tasks do not merge until it is green`)
+      return
+    }
     const open = async () => (await board.listTasks()).find((task) => task.body.includes(BASE_FIX) && !task.closed && task.state !== 'done')
     let fix = (await open())?.id
     if (!fix) {

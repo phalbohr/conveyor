@@ -594,3 +594,21 @@ describe('draft and foreign pull requests', () => {
     expect(stageRuns(harness).map((run) => run.stage)[0]).toBe('plan')
   })
 })
+
+describe('a red base after a merge', () => {
+  it('lets the merged task repair the base instead of opening a second fix task', async () => {
+    const { board, harness, cycle, expireRetry } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    board.baseSha = 'merged-1'.padEnd(40, '0')
+    board.headChecks = 'pending'
+
+    await cycle()
+    board.headChecks = 'failure'
+    await expireRetry()
+    await cycle()
+    await cycle()
+
+    expect(stageRuns(harness).some((run) => run.stage === 'fix-ci')).toBe(true)
+    expect((await board.listTasks()).some((task) => task.title.startsWith('Fix the CI of the base branch'))).toBe(false)
+  })
+})
