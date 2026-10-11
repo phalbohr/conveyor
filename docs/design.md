@@ -188,7 +188,7 @@ Every stage prompt carries a fixed section `Boundaries` right after the stage in
 
 ## Team notes
 
-Every stage prompt quotes, under `Notes from the team`, the last 10 trusted human comments on the issue since the workpad was created (the claim), without the conveyor's own comments and without bare `/approve`, `/continue`, or `/fresh`; each is cut at 2000 characters. They count as instructions for the task, a newer one over an older one.
+Every stage prompt quotes, under `Notes from the team`, the last 10 trusted human comments on the issue since the workpad was created (the claim), without the conveyor's own comments and without comments that start with a conveyor command (`/approve`, `/fix`, `/fix_from:`, `/rework`, `/continue`, `/fresh`), which reach the stage through their own sections; each is cut at 2000 characters. They count as instructions for the task, a newer one over an older one.
 
 ## Stage result contract
 

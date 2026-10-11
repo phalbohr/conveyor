@@ -1262,7 +1262,7 @@ function teamNotes(comments: Comment[]) {
   const pad = comments.find((comment) => comment.id === findWorkpad(comments)?.id)
   const since = pad?.createdAt ?? ''
   return comments
-    .filter((comment) => !isAgentComment(comment) && comment.createdAt >= since && !/^\/(approve|continue|fresh)(\s+[!#]?\d+)?\s*$/i.test(comment.body.trim()))
+    .filter((comment) => !isAgentComment(comment) && comment.createdAt >= since && !/^\/(approve|continue|fresh|fix|fix_from:?|rework)(\s|$)/i.test(comment.body.trim()))
     .slice(-10)
     .map((comment) => ({ author: comment.author, at: comment.createdAt.slice(0, 16).replace('T', ' '), text: comment.body.slice(0, 2000) }))
 }
