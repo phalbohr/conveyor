@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline'
 
 const STDERR_LIMIT = 64 * 1024
 const BUSY_CHECK = 30_000
-const BUSY_SHARE = 0.02
+const BUSY_SHARE = 0.05
 
 export type LinesResult = { code: number | null; stderr: string; aborted: boolean; error?: string }
 

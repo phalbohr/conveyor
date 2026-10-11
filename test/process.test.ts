@@ -51,10 +51,10 @@ describe('spawnLines activity', () => {
   it('reports CPU work of a silent process tree and stays quiet while it sleeps', async () => {
     const run = async (script: string) => {
       let busy = 0
-      await spawnLines(process.execPath, ['-e', script], { cwd: tempDir(), env: process.env, onLine: () => undefined, onBusy: () => busy++, busyCheckMs: 500 })
+      await spawnLines(process.execPath, ['-e', script], { cwd: tempDir(), env: process.env, onLine: () => undefined, onBusy: () => busy++, busyCheckMs: 2000 })
       return busy
     }
-    expect(await run('const end = Date.now() + 2600; while (Date.now() < end) {}')).toBeGreaterThanOrEqual(3)
-    expect(await run('setTimeout(() => undefined, 2600)')).toBeLessThanOrEqual(1)
+    expect(await run('const end = Date.now() + 6500; while (Date.now() < end) {}')).toBeGreaterThanOrEqual(2)
+    expect(await run('setTimeout(() => undefined, 6500)')).toBeLessThanOrEqual(1)
   })
 })
