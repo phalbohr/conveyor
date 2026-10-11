@@ -111,6 +111,13 @@ describe('CommandHarness', () => {
     expect(output.result).toMatchObject({ outcome: 'failed', summary: expect.stringContaining('artifact file is empty') })
   })
 
+  it('leaves the database migration banner out of a missing-result error and shows the output', async () => {
+    const { command } = agent(`console.error('Performing one time database migration, may take a few minutes...\\nsqlite-migration:done\\nDatabase migration complete.'); console.log('{"type":"text","text":"I could not finish the plan"}')`)
+    const output = await new CommandHarness({ command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(output.result.summary).not.toContain('migration')
+    expect(output.result.summary).toContain('I could not finish the plan')
+  })
+
   it('stops on abort', async () => {
     const { command } = agent(`setInterval(() => console.log('still working'), 100)`)
     const controller = new AbortController()

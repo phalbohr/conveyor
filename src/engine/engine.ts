@@ -415,6 +415,7 @@ export class Engine {
       this.log(`task ${id}: approved by ${verdict.approvers.join(', ')}`)
     }
 
+    let pendingPull: { merge?: 'land' | 'review'; summary: string } | undefined
     if (!state.landing && state.stage !== LAND) {
       const start = state.stage ?? (initial.form === 'idea' ? 'story' : initial.form === 'story' ? 'plan' : names[names.indexOf('plan') + 1])
       const chain = await this.runChain(run, config.stages.slice(names.indexOf(start ?? 'merge'), mergeIndex + 1), {
@@ -424,6 +425,17 @@ export class Engine {
       if (chain.status !== 'done') return
       delete state.review
       delete state.reviewMode
+      pendingPull = chain
+      if ((await workspaces.ahead(id).catch(() => 1)) === 0) {
+        await board.addComment(id, agentComment('note', 'Nothing to merge: the task branch has no changes against the base branch, so the conveyor opens no pull request.'))
+        this.log(`task ${id}: nothing to merge; the branch has no changes against the base branch`)
+        state.landing = 'success'
+        delete state.stage
+      }
+    }
+
+    if (!state.landing && state.stage !== LAND && pendingPull) {
+      const chain = pendingPull
       const task = (await board.getTask(id)) ?? initial
       const part = state.parts ? { index: (state.part ?? 0) + 1, total: state.parts.length, title: state.parts[state.part ?? 0] ?? '' } : undefined
       const opened = await board.openPullRequest(

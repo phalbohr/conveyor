@@ -13,6 +13,8 @@ export type CommandDefinition = {
   interactive?: string[]
 }
 
+const NOISE = /^(Performing one time database migration|sqlite-migration:|Database migration complete)/
+
 export class CommandHarness implements Harness {
   constructor(
     private readonly definition: CommandDefinition,
@@ -43,7 +45,8 @@ export class CommandHarness implements Harness {
 
       if (exit.aborted) return { result: failed('stage aborted'), usage: NO_USAGE }
       if (!existsSync(result)) {
-        const reason = exit.error ?? (exit.stderr.trim() || tail.join('\n') || `${this.definition.command} exited with code ${exit.code}`)
+        const stderr = exit.stderr.split('\n').filter((line) => !NOISE.test(line)).join('\n').trim()
+        const reason = exit.error ?? ([stderr, tail.join('\n')].filter(Boolean).join('\n') || `${this.definition.command} exited with code ${exit.code}`)
         return { result: failed(`no result file (${this.definition.command} exited with code ${exit.code}): ${reason.replace(/\x1b\[[0-9;]*m/g, '').slice(-2000)}`), usage: NO_USAGE }
       }
       const text = readFileSync(result, 'utf8')

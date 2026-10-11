@@ -13,6 +13,7 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- A task branch without changes against the base branch finishes the task with a note instead of failing to open a pull request in a loop; a missing-result error shows the harness output without the Kilo/OpenCode database migration banner.
 - The control screen shows dates as `11.10. 18:24` and a 24-hour clock.
 - Soft stop: the first `s` lets running stages finish and starts nothing new, then stops; a second `s` stops at once.
 - Merge only on the latest base branch: a branch that fell behind is rebased and tested again before merge; a rebase conflict sends the task back to the merge stage.

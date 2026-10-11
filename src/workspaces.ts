@@ -14,6 +14,7 @@ export interface Workspaces {
   commitAll(taskId: string, message: string): Promise<boolean>
   reset(taskId: string): Promise<void>
   syncBase(taskId: string): Promise<'current' | 'rebased' | 'conflict'>
+  ahead(taskId: string): Promise<number>
   deleteBranch(taskId: string): Promise<void>
   push(taskId: string): Promise<string>
   remove(taskId: string): Promise<void>
@@ -87,6 +88,11 @@ export class GitWorkspaces implements Workspaces {
     if ((await this.tryGit(path, 'rebase', '--quiet', base)) !== undefined) return 'rebased' as const
     await this.tryGit(path, 'rebase', '--abort')
     return 'conflict' as const
+  }
+
+  async ahead(taskId: string) {
+    await this.git(this.options.repo, 'fetch', '--quiet', 'origin')
+    return Number(await this.git(this.path(taskId), 'rev-list', '--count', `${await this.baseRef()}..HEAD`))
   }
 
   async deleteBranch(taskId: string) {

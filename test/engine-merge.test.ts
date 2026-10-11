@@ -500,3 +500,18 @@ describe('the base branch after the merge', () => {
     expect((await board.getTask('1'))?.state).toBe('done')
   })
 })
+
+describe('a task without changes', () => {
+  it('finishes without a pull request when the branch has no changes against the base', async () => {
+    const { board, workspaces, cycle } = setup({ mode: 'ai' })
+    workspaces.aheadBy = 0
+    await board.createTask('Already done', 'p', { form: 'plan' })
+
+    await cycle()
+
+    expect(board.pullTitles).toEqual([])
+    expect(board.merges).toEqual([])
+    expect((await board.getTask('1'))?.state).toBe('done')
+    expect((await board.listComments('1')).some((comment) => comment.body.includes('Nothing to merge'))).toBe(true)
+  })
+})

@@ -46,6 +46,12 @@ export class FakeWorkspaces implements Workspaces {
 
   syncs: ('current' | 'rebased' | 'conflict')[] = []
 
+  aheadBy = 1
+
+  async ahead() {
+    return this.aheadBy
+  }
+
   async syncBase() {
     return this.syncs.shift() ?? 'current'
   }

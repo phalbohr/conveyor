@@ -191,6 +191,7 @@ const unavailableWorkspaces = {
   commitAll: () => Promise.resolve(false),
   reset: () => Promise.reject(new Error('no workspace in a live session')),
   syncBase: () => Promise.reject(new Error('no workspace in a live session')),
+  ahead: () => Promise.reject(new Error('no workspace in a live session')),
   deleteBranch: () => Promise.resolve(),
   push: () => Promise.reject(new Error('no workspace in a live session')),
   remove: () => Promise.resolve(),

@@ -370,7 +370,7 @@ If the board read fails, running stages continue; the next cycle tries again.
 
 ## Merge and dependencies
 
-After the `merge` stage the CLI pushes the task branch and opens a pull request assigned to the conveyor user. The body says `Closes #N` only when the CLI closes the issue anyway (`close_on_done: true` and the last part); then GitHub shows the pull request under Development and closes the issue on merge into the default branch. Otherwise it says `Part of #N`, because GitHub links pull requests to an issue under Development only as closing references.
+After the `merge` stage the CLI pushes the task branch and opens a pull request assigned to the conveyor user; a branch without commits against the base branch opens none, and the task is done with a `Nothing to merge` note. The body says `Closes #N` only when the CLI closes the issue anyway (`close_on_done: true` and the last part); then GitHub shows the pull request under Development and closes the issue on merge into the default branch. Otherwise it says `Part of #N`, because GitHub links pull requests to an issue under Development only as closing references.
 
 | Merge mode | After the merge stage |
 |---|---|
