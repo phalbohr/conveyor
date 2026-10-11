@@ -59,3 +59,19 @@ describe('GitHub blockers', () => {
     await expect(new GitHubBoard('acme/app', failing).addBlocker('5', '4')).resolves.toBeUndefined()
   })
 })
+
+describe('pull requests from forks', () => {
+  it('ignores a fork pull request with the task branch name on GitHub', async () => {
+    const pull = (number: number, cross: boolean) => ({ number, url: `https://example.test/pull/${number}`, headRefOid: 'a'.repeat(40), state: 'OPEN', mergeable: 'MERGEABLE', isCrossRepository: cross, statusCheckRollup: [], reviews: [], comments: [] })
+    const { run } = recorder((args) => (args[0] === 'pr' ? JSON.stringify([pull(9, true), pull(4, false)]) : '[[]]'))
+    expect((await new GitHubBoard('acme/app', run).pullRequest('5'))?.number).toBe('4')
+    const forkOnly = recorder((args) => (args[0] === 'pr' ? JSON.stringify([pull(9, true)]) : '[[]]'))
+    expect(await new GitHubBoard('acme/app', forkOnly.run).pullRequest('5')).toBeUndefined()
+  })
+
+  it('ignores a fork merge request with the task branch name on GitLab', async () => {
+    const { run, calls } = recorder((args) => (args[1]?.includes('merge_requests?source_branch') ? JSON.stringify([{ iid: 9, source_project_id: 2, target_project_id: 1 }]) : '[]'))
+    expect(await new GitLabBoard('acme/app', run, { retryDelay: 0 }).pullRequest('5')).toBeUndefined()
+    expect(calls.some((args) => args.some((arg) => arg.includes('merge_requests/9')))).toBe(false)
+  })
+})

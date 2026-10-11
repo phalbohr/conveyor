@@ -27,9 +27,14 @@ export function acquireRunLock(home: string, project: string): { ok: true; relea
   if (existsSync(file)) {
     const pid = Number(readFileSync(file, 'utf8'))
     if (Number.isInteger(pid) && pid > 0 && alive(pid)) return { ok: false, pid }
+    rmSync(file, { force: true })
   }
   mkdirSync(dir, { recursive: true })
-  writeFileSync(file, String(process.pid))
+  try {
+    writeFileSync(file, String(process.pid), { flag: 'wx' })
+  } catch {
+    return { ok: false, pid: Number(readFileSync(file, 'utf8')) || 0 }
+  }
   return {
     ok: true,
     release: () => {

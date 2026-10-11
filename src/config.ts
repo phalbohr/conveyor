@@ -19,6 +19,8 @@ const waiting = z
 
 const harness = z.string().regex(/^[a-z][a-z0-9-]*$/, 'harness names use lowercase letters, digits, and hyphens')
 const name = z.string().min(1)
+const model = z.string().regex(/^[\w.:/@+][\w.:/@+-]*$/, 'a model name: letters, digits, and . : / @ + - (not first)')
+const effort = z.string().regex(/^\w[\w-]*$/, 'an effort: letters, digits, and -')
 const count = z.int().positive()
 const store = z.enum(['board', 'repo', 'path'])
 const write = z.enum(['replace', 'append'])
@@ -27,8 +29,8 @@ export const PERMISSION_MODES = ['bypassPermissions', 'auto', 'acceptEdits', 'do
 
 const stageSettings = z.strictObject({
   harness: harness.optional(),
-  model: name.optional(),
-  effort: name.optional(),
+  model: model.optional(),
+  effort: effort.optional(),
 })
 
 const stageEntry = z.strictObject({
@@ -85,7 +87,7 @@ const teamSchema = z.strictObject({
     })
     .prefault({}),
   defaults: z
-    .strictObject({ harness: harness.default('claude'), model: name.default('sonnet'), effort: name.default('medium') })
+    .strictObject({ harness: harness.default('claude'), model: model.default('sonnet'), effort: effort.default('medium') })
     .prefault({}),
   triage: stageSettings.prefault({}),
   stages: z.record(z.string(), stageEntry).default({}),
@@ -114,7 +116,7 @@ const teamSchema = z.strictObject({
   language: z.strictObject({ docs: name.default('English') }).prefault({}),
   merge_method: z.enum(['merge', 'squash', 'rebase']).default('merge'),
   close_on_done: z.boolean().default(false),
-  review: z.strictObject({ approvals: count.default(1) }).prefault({}),
+  review: z.strictObject({ approvals: count.default(1), count_own_approvals: z.boolean().default(true) }).prefault({}),
   harnesses: z.record(harness, harnessOverride).default({}),
 })
 

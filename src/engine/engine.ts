@@ -602,7 +602,7 @@ export class Engine {
       this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
       conversation = undefined
       await workspaces
-        .commitAll(id, `${stage.name}: ${(output.result.summary.split('\n')[0] ?? '').slice(0, 72)}`)
+        .commitAll(id, `${stage.name}: ${((this.options.redact ?? ((text: string) => redactSecrets(text)))(output.result.summary).split('\n')[0] ?? '').slice(0, 72)}`)
         .catch((error: unknown) => this.log(`task ${id}: commit failed: ${(error as Error).message}`))
       await workspaces
         .push(id)
@@ -778,7 +778,8 @@ export class Engine {
   private async chooseSource(run: TaskRun, comments: Comment[], waiting: WorkpadState['waiting']): Promise<boolean> {
     const { board } = this.options
     const { id, state } = run
-    const foreign = (await board.linkedPulls(id).catch(() => [])).filter((pull) => pull.branch !== taskBranch(id))
+    const linked = (await board.linkedPulls(id).catch(() => [])).filter((pull) => pull.branch !== taskBranch(id))
+    const foreign = await this.trust.only(linked)
     if (foreign.length === 0) {
       state.source = BASE_SOURCE
       return true
@@ -790,8 +791,8 @@ export class Engine {
         state.source = BASE_SOURCE
         return true
       }
+      const picked = choice ? (choice[2] ? foreign.find((pull) => pull.number === choice[2]) : foreign[0]) : undefined
       if (choice) {
-        const picked = foreign.find((pull) => pull.number === choice[2]) ?? foreign[0]
         if (picked) {
           state.source = picked.branch
           await board.addComment(id, agentComment('note', `The conveyor continues the work of ${picked.url} (branch \`${picked.branch}\`) in its branch \`${taskBranch(id)}\` and opens its own pull request. Close ${picked.url} when that one is merged.`))
@@ -800,7 +801,8 @@ export class Engine {
       }
     }
     const list = foreign.map((pull) => `- ${pull.url} (branch \`${pull.branch}\`${pull.draft ? ', draft' : ''})`).join('\n')
-    const text = `**This task already has a linked pull request:**\n\n${list}\n\nThe conveyor does not start a second line of work on its own. Reply:\n\n- \`/continue\` (or \`/continue <number>\`) to continue that work: the conveyor starts its branch \`${taskBranch(id)}\` from that branch and opens its own pull request;\n- \`/fresh\` to start from the base branch and ignore it;\n- or leave the task to a human: press \`x\` on it in the control screen and choose \`d\` (draft), or close it.`
+    const missing = waiting?.stage === SOURCE_STAGE ? repliesSince(comments, waiting.commentId).map((comment) => comment.body.trim().match(/^\/continue\s+[!#]?(\d+)/i)?.[1]).filter(Boolean).at(-1) : undefined
+    const text = `${missing && !foreign.some((pull) => pull.number === missing) ? `There is no linked pull request ${missing}. ` : ''}**This task already has a linked pull request:**\n\n${list}\n\nThe conveyor does not start a second line of work on its own. Reply:\n\n- \`/continue\` (or \`/continue <number>\`) to continue that work: the conveyor starts its branch \`${taskBranch(id)}\` from that branch and opens its own pull request;\n- \`/fresh\` to start from the base branch and ignore it;\n- or leave the task to a human: press \`x\` on it in the control screen and choose \`d\` (draft), or close it.`
     const comment = await board.addComment(id, agentComment('questions', text))
     state.waiting = { kind: 'questions', stage: SOURCE_STAGE, commentId: comment.id, since: new Date().toISOString() }
     await board.setState(id, 'needs-input')
@@ -827,7 +829,8 @@ export class Engine {
       this.log(`the base branch CI fails at ${sha.slice(0, 7)} after the merge of task #${owner}; it repairs the base, and other tasks do not merge until it is green`)
       return
     }
-    const open = async () => (await board.listTasks()).find((task) => task.body.includes(BASE_FIX) && !task.closed && task.state !== 'done')
+    const me = (this.me ??= await board.user())
+    const open = async () => (await board.listTasks()).find((task) => task.body.includes(BASE_FIX) && task.author === me && !task.closed && task.state !== 'done')
     let fix = (await open())?.id
     if (!fix) {
       if (!(await this.lock(BASE_FIX_LOCK, LOCK_TTL))) return
@@ -973,7 +976,7 @@ export class Engine {
         ...reviews.filter((review) => review.state === 'approved').map((review) => review.author),
         ...human.filter((comment) => isCommand(comment.body, 'approve')).map((comment) => comment.author),
       ]),
-    ]
+    ].filter((author) => config.review.count_own_approvals || author !== this.me)
     return { kind: pull?.state === 'open' && approvers.length >= config.review.approvals ? 'merge' : 'wait', pull, approvers, feedback }
   }
 
@@ -1213,7 +1216,7 @@ export class Engine {
   }
 
   private sorted(tasks: Task[], me: string) {
-    const rank = (task: Task) => (task.body.includes(BASE_FIX) ? -1 : task.assignees.includes(me) ? 0 : 1)
+    const rank = (task: Task) => (task.body.includes(BASE_FIX) && task.author === me ? -1 : task.assignees.includes(me) ? 0 : 1)
     const started = (task: Task) => (task.state && task.state !== 'backlog' ? 0 : 1)
     return [...tasks].sort(
       (a, b) =>

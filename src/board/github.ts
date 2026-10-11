@@ -54,6 +54,7 @@ type GitHubPull = {
   state: 'OPEN' | 'MERGED' | 'CLOSED'
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
   isDraft?: boolean
+  isCrossRepository?: boolean
   statusCheckRollup: Check[] | null
   reviews: { state: string; body: string; submittedAt: string; author: { login: string } | null }[]
   comments: { body: string; createdAt: string; author: { login: string } | null }[]
@@ -65,7 +66,7 @@ type ProjectMirror = { projectId: string; fieldId: string; options: Map<string, 
 export type GitHubBoardOptions = { projectNumber?: number; baseBranch?: string; warn?: (message: string) => void }
 
 const PROJECT_FIELD = 'Conveyor'
-const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,isDraft,statusCheckRollup,reviews,comments'
+const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,isDraft,isCrossRepository,statusCheckRollup,reviews,comments'
 
 const LOCK_PREFIX = 'conveyor-lock/'
 const WRITE_PERMISSIONS = ['admin', 'write']
@@ -265,8 +266,8 @@ export class GitHubBoard implements Board {
   }
 
   async pullRequest(id: string) {
-    const output = await this.gh(['pr', 'list', '-R', this.project, '--head', `conveyor/${id}`, '--state', 'all', '--limit', '1', '--json', PULL_FIELDS])
-    const pull = (JSON.parse(output) as GitHubPull[])[0]
+    const output = await this.gh(['pr', 'list', '-R', this.project, '--head', `conveyor/${id}`, '--state', 'all', '--limit', '20', '--json', PULL_FIELDS])
+    const pull = (JSON.parse(output) as GitHubPull[]).find((candidate) => !candidate.isCrossRepository)
     if (!pull) return undefined
     const inline = await this.api<{ path: string; line: number | null; body: string; user: { login: string } | null }[][]>([
       '--paginate',
@@ -293,19 +294,19 @@ export class GitHubBoard implements Board {
   }
 
   async mergeCommit(id: string) {
-    const output = await this.gh(['pr', 'list', '-R', this.project, '--head', `conveyor/${id}`, '--state', 'merged', '--limit', '1', '--json', 'mergeCommit'])
-    return (JSON.parse(output) as { mergeCommit: { oid: string } | null }[])[0]?.mergeCommit?.oid
+    const output = await this.gh(['pr', 'list', '-R', this.project, '--head', `conveyor/${id}`, '--state', 'merged', '--limit', '20', '--json', 'mergeCommit,isCrossRepository'])
+    return (JSON.parse(output) as { mergeCommit: { oid: string } | null; isCrossRepository: boolean }[]).find((pull) => !pull.isCrossRepository)?.mergeCommit?.oid
   }
 
   async linkedPulls(id: string): Promise<LinkedPull[]> {
     const [owner, name] = this.project.split('/')
-    const found = await this.graphql<{ repository: { issue: { closedByPullRequestsReferences: { nodes: { number: number; url: string; headRefName: string; isDraft: boolean; state: string }[] } } | null } }>(
-      'query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issue(number: $number) { closedByPullRequestsReferences(first: 20, includeClosedPrs: false) { nodes { number url headRefName isDraft state } } } } }',
+    const found = await this.graphql<{ repository: { issue: { closedByPullRequestsReferences: { nodes: { number: number; url: string; headRefName: string; isDraft: boolean; state: string; isCrossRepository: boolean; author: { login: string } | null }[] } } | null } }>(
+      'query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issue(number: $number) { closedByPullRequestsReferences(first: 20, includeClosedPrs: false) { nodes { number url headRefName isDraft state isCrossRepository author { login } } } } } }',
       { owner, name, number: Number(id) },
     )
     return (found.repository.issue?.closedByPullRequestsReferences.nodes ?? [])
-      .filter((pull) => pull.state === 'OPEN')
-      .map((pull) => ({ number: String(pull.number), url: pull.url, branch: pull.headRefName, draft: pull.isDraft }))
+      .filter((pull) => pull.state === 'OPEN' && !pull.isCrossRepository)
+      .map((pull) => ({ number: String(pull.number), url: pull.url, branch: pull.headRefName, draft: pull.isDraft, author: pull.author?.login ?? '' }))
   }
 
   async baseHead() {

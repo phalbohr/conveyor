@@ -28,3 +28,13 @@ describe('conveyor CLI', () => {
     expect(result.stderr).toContain('--nope')
   })
 })
+
+describe('issue arguments', () => {
+  it('accepts only bare issue numbers', async () => {
+    for (const command of ['attach', 'release', 'reset']) {
+      const result = await runCli([command, '../12'])
+      expect(result.code).toBe(1)
+      expect(result.stderr).toContain('is not an issue number')
+    }
+  })
+})

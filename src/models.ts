@@ -86,7 +86,7 @@ export class ModelCache {
     this.catalogs[harness] = catalog
     if (!this.file) return
     mkdirSync(dirname(this.file), { recursive: true })
-    writeFileSync(this.file, JSON.stringify(this.catalogs))
+    writeFileSync(this.file, JSON.stringify(this.catalogs), { mode: 0o600 })
   }
 }
 

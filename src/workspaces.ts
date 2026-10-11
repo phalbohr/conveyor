@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import type { Config } from './config.js'
+import { childEnv } from './harness/harness.js'
 import { spawnLines } from './harness/process.js'
 import { createRun } from './run.js'
 
@@ -22,19 +23,25 @@ export interface Workspaces {
 }
 
 export const taskBranch = (taskId: string) => `conveyor/${taskId}`
+const leaseRef = (taskId: string) => `refs/conveyor/pushed/${taskId}`
 
 export class GitWorkspaces implements Workspaces {
   constructor(private readonly options: { repo: string; root: string; base: () => Promise<string>; hooks: () => Hooks }) {}
 
   async prepare(taskId: string, from?: string) {
     const path = this.path(taskId)
-    if (existsSync(path)) return { path, created: false }
+    if (existsSync(path)) {
+      await this.catchUp(taskId)
+      return { path, created: false }
+    }
 
     await this.git(this.options.repo, 'fetch', '--quiet', 'origin')
     const exists = async (ref: string) => (await this.tryGit(this.options.repo, 'rev-parse', '--verify', '--quiet', ref)) !== undefined
     const remote = `refs/remotes/origin/${taskBranch(taskId)}`
     const source = from ? `refs/remotes/origin/${from}` : undefined
     const start = (await exists(remote)) ? remote : source && (await exists(source)) ? source : await this.baseRef()
+    if (start === remote) await this.git(this.options.repo, 'update-ref', leaseRef(taskId), remote)
+    else await this.tryGit(this.options.repo, 'update-ref', '-d', leaseRef(taskId))
     mkdirSync(this.options.root, { recursive: true, mode: 0o700 })
     await this.git(this.options.repo, 'worktree', 'add', '--quiet', '-B', taskBranch(taskId), path, start)
 
@@ -82,6 +89,15 @@ export class GitWorkspaces implements Workspaces {
     await this.push(taskId)
   }
 
+  private async catchUp(taskId: string) {
+    const path = this.path(taskId)
+    if ((await this.tryGit(this.options.repo, 'fetch', '--quiet', 'origin')) === undefined) return
+    const remote = `refs/remotes/origin/${taskBranch(taskId)}`
+    if ((await this.tryGit(path, 'rev-parse', '--verify', '--quiet', remote)) === undefined) return
+    if ((await this.tryGit(path, 'merge-base', '--is-ancestor', 'HEAD', remote)) === undefined) return
+    if ((await this.tryGit(path, 'merge', '--ff-only', '--quiet', remote)) !== undefined) await this.tryGit(this.options.repo, 'update-ref', leaseRef(taskId), remote)
+  }
+
   async syncBase(taskId: string) {
     const path = this.path(taskId)
     await this.git(this.options.repo, 'fetch', '--quiet', 'origin')
@@ -99,10 +115,13 @@ export class GitWorkspaces implements Workspaces {
 
   async deleteBranch(taskId: string) {
     await this.tryGit(this.options.repo, 'push', '--quiet', 'origin', '--delete', taskBranch(taskId))
+    await this.tryGit(this.options.repo, 'update-ref', '-d', leaseRef(taskId))
   }
 
   async push(taskId: string) {
-    await this.git(this.path(taskId), 'push', '--quiet', '--force', 'origin', `HEAD:refs/heads/${taskBranch(taskId)}`)
+    const known = (await this.tryGit(this.options.repo, 'rev-parse', '--verify', '--quiet', leaseRef(taskId))) ?? ''
+    await this.git(this.path(taskId), 'push', '--quiet', `--force-with-lease=refs/heads/${taskBranch(taskId)}:${known}`, 'origin', `HEAD:refs/heads/${taskBranch(taskId)}`)
+    await this.git(this.options.repo, 'update-ref', leaseRef(taskId), await this.git(this.path(taskId), 'rev-parse', 'HEAD'))
     return this.git(this.path(taskId), 'rev-parse', 'HEAD')
   }
 
@@ -134,7 +153,7 @@ export class GitWorkspaces implements Workspaces {
     if (!script) return
     const result = await spawnLines('sh', ['-c', script], {
       cwd: path,
-      env: process.env,
+      env: childEnv(process.env),
       signal: AbortSignal.timeout(hooks.timeout),
       onLine: () => undefined,
     })

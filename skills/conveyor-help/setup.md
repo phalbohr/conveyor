@@ -32,9 +32,9 @@ Ask only about the gates whose stage runs: `idea_to_story` when `pickup_from` is
 
 | Mode | What happens |
 |---|---|
-| `interactive` | The agent asks questions in issue comments while it works and asks for approval of the result; the task waits in `needs-input` until a human replies. |
-| `smart` | The agent asks or requests approval only when the criteria in `smart/idea-story.md` or `smart/story-plan.md` say so. Offer to review those criteria with the user. |
-| `autonomous` | The agent decides alone and goes on. |
+| `interactive` | The stage asks questions in issue comments while it works and asks for approval of the result; the task waits in `needs-input` until a human replies. |
+| `smart` | The stage asks or requests approval only when the criteria in `smart/idea-story.md` or `smart/story-plan.md` say so. Offer to review those criteria with the user. |
+| `autonomous` | The stage decides alone and goes on. |
 
 ## 3. The stage list — `stages`
 
@@ -48,8 +48,8 @@ Offer: keep the list; add a stage (common: `polish` for cleanup, `review-2` as a
 
 - **Harness**: `claude`, `codex`, or a configured harness (`opencode`, `kilocode`, `pi`, `openhands`, `agent-zero` presets, or any `harnesses` entry). Self-hosted models run through `opencode`, `kilocode`, `pi`, or `openhands`.
 - **Model**: run `conveyor models <harness>` and offer its models by version and name (for example `claude-opus-5-5 — Opus 5.5`). Claude aliases (`opus`, `sonnet`, `haiku`, `fable`) always mean the newest version; a full name such as `claude-opus-5-5` pins a version, which suits a team configuration.
-- **Effort**: the efforts that `conveyor models` lists for that model or harness. For `opencode` and `kilocode` the effort goes to the provider as `--variant`; a self-hosted reasoning model behind LiteLLM may accept only `low` and `medium` (`high` can return HTTP 400), and `medium` keeps its reasoning short; check that the stage does not inherit an effort such as `max` from `defaults`.
-- **Permissions** (claude stages, `stages.<name>.permission_mode`): `bypassPermissions` (default, every tool without asking), `auto`, `acceptEdits`, or `dontAsk`; with a limiting mode, allow rules come from the repository's `.claude/settings.json`. Codex stages: `sandbox` (`workspace-write` default, or `full-access`) and `network` (`false` default).
+- **Effort**: the efforts that `conveyor models` lists for that model or harness. For `opencode` and `kilocode` the effort goes to the provider as `--variant`; some servers accept only some effort values (for example `low` and `medium`), and `medium` keeps the reasoning of a self-hosted model short; check that the stage does not inherit an effort such as `max` from `defaults`.
+- **Permissions** (claude stages, `stages.<name>.permission_mode`): `bypassPermissions` (default, every tool without asking), `auto`, `acceptEdits`, or `dontAsk`; with a limiting mode, allow rules come from the repository's `.claude/settings.json`. Codex stages: `sandbox` (`workspace-write` default, or `full-access`) and `network` (`false` default), set with `conveyor config set stages.<name>.sandbox full-access` or in the settings editor.
 
 Common split: strong models for `story`, `plan`, and `review`; a fast model for `implement`; the cheapest model for `merge`. An empty value inherits from `defaults` (`conveyor config set stages.<name>.model ""`).
 
@@ -63,7 +63,7 @@ Go through every stage in the chain. For each, read its file and tell the user i
 - **Write it together now**: ask what the stage must achieve, what it must not do, and when it is done; draft the file; show it; save after approval;
 - **Later**: the stage stays without instructions, and `conveyor run` and the status screen warn about it.
 
-A description can use `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.plan }}`, `{{ stage }}`, `{{ attempt }}`, `{{ review }}`, `{{ language.docs }}`, `{{ formats.story }}`, and a frontmatter `skills: [name]` (claude stages only). An unknown variable stops the stage, so use only these, and wrap an artifact that may be missing: `{% if artifacts.plan %}{{ artifacts.plan }}{% endif %}`.
+A description can use `{{ issue.id }}`, `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.plan }}`, `{{ stage }}`, `{{ attempt }}` (0 on the first run), `{{ review }}`, `{{ language.docs }}`, `{{ formats.story }}`, and a frontmatter `skills: [name]` (claude stages only). An unknown variable stops the stage, so use only these, and wrap an artifact that may be missing: `{% if artifacts.plan %}{{ artifacts.plan }}{% endif %}`.
 
 ## 6. Merge — `board.base_branch`, `transitions.merge`, `merge_method`, `review.approvals`, `close_on_done`
 
@@ -74,6 +74,8 @@ A description can use `{{ issue.title }}`, `{{ issue.body }}`, `{{ artifacts.pla
 | `human` | The pull request waits in `conveyor::review`; it merges after `/approve` or an Approve review from `review.approvals` distinct people (with `2`, one `/approve` is not enough). |
 | `smart` | The merge stage decides by `smart/merge.md` (offer to review it): risky changes go to review as with `human`, the rest merges. |
 | `ai` | The conveyor merges without a human, after blockers are closed and CI is green. `review.approvals` is not used. If branch protection on the base branch requires approvals the token cannot bypass, the merge fails and the task goes to needs-input; choose `human` there. |
+
+`review.count_own_approvals` (default `true`): when the conveyor runs as a separate bot account, set it to `false`, so a harness cannot approve its own work with `/approve` from that account. Keep `true` when the conveyor runs as your own account and you approve with it.
 
 `merge_method`: `merge` (merge commit), `squash` (one commit per task), or `rebase`. Ask about `review.approvals` only for `human` and `smart`. Branch protection on the board still applies on top.
 
@@ -93,7 +95,7 @@ Triage gives new tasks a priority (1–4) and "blocked by" links before anyone c
 Offer the defaults; change them only when the user has a reason.
 
 - `timeouts.stage` (default `60m`, at least `1m`): the longest run of one stage; then the attempt fails and retries.
-- `timeouts.stall` (default `5m`; `0` = off, otherwise at least `1m`): a stage with no agent output and, for command harnesses, no CPU work for this long fails and retries. A slow self-hosted model may need `15m`.
+- `timeouts.stall` (default `5m`; `0` = off, otherwise at least `1m`): a stage with no harness output and, for command harnesses, no CPU work for this long fails and retries. A slow self-hosted model may need `15m`.
 - `timeouts.heartbeat` (default `30m`, at least `1m`): a running task writes a heartbeat into its workpad every third of this value; another workstation releases a claim whose last heartbeat is older. Warn the user before lowering it: a short value lets other workstations take over tasks that still run, so tasks hang or run twice. `0` is rejected.
 - `timeouts.waiting` (default `4d`, at least `1d`; `2wd` means working days): a task that waits this long for its owner (needs-input, queued, review) is released.
 - `retry.max_attempts` (default `5`): failed attempts before the stage asks a human; `retry.max_backoff` (default `5m`): pauses double up to this.
@@ -114,7 +116,11 @@ Personal and never committed:
 
 ## 10. The board view
 
-`conveyor init` creates the `conveyor::*`, `form::*`, and `stage::*` labels and, on GitHub, sets up the board: the project linked to the repository, or a new one it creates and links, with the `Conveyor` field and `board.github_project` written. With several linked projects, help the user choose and run `conveyor config set board.github_project <number>`, then `conveyor board update`. Then the user picks the Board layout and "Column by: Conveyor" once in the project. After an update of the conveyor or a new stage, `conveyor board check` lists what the board lacks and `conveyor board update` adds it (never changes or deletes); offer this when the start log or the control screen reports a board difference. The board itself is set up once by a human. Columns: Backlog, Needs input, Queued, In progress, Review, Done. GitHub: create a project, `conveyor config set board.github_project <number>`, start the conveyor (it adds the field `Conveyor` with one option per state), then in a Board view choose `Conveyor` under "Column by". GitLab: Issues → Boards, add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
+Columns: Backlog, Needs input, Queued, In progress, Review, Done. `conveyor init` creates the `conveyor::*`, `form::*`, and `stage::*` labels.
+
+- GitHub: `init` sets up the board: the project linked to the repository, or a new one it creates and links, with the `Conveyor` field (one option per state) and `board.github_project` written. With several linked projects, help the user choose, run `conveyor config set board.github_project <number>`, then `conveyor board update` to add the `Conveyor` field. Then the user picks the Board layout and "Column by: Conveyor" once in the project (GitHub has no API for views).
+- GitLab: the user opens Issues → Boards and adds one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
+- After an update of the conveyor or a new stage, `conveyor board check` lists what the board lacks and `conveyor board update` (or `k`, Enter on the control screen) adds it (never changes or deletes); offer this when the start log or the control screen reports a board difference.
 
 ## Finish
 

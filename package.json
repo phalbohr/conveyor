@@ -1,7 +1,7 @@
 {
   "name": "@phalbohr/conveyor",
   "version": "0.1.0",
-  "description": "Configurable development conveyor: agents move kanban tasks from idea to merge",
+  "description": "Configurable development conveyor: coding harnesses move kanban tasks from idea to merge",
   "keywords": [
     "ai-agents",
     "claude-code",

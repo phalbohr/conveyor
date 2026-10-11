@@ -290,3 +290,11 @@ pickup_from: anywhere
     ).toHaveLength(2)
   })
 })
+
+describe('model and effort names', () => {
+  it('rejects values that look like options or break quoting', () => {
+    expect(errors(`${BOARD}stages:\n  implement: {model: "--dangerous"}\n`).join()).toContain('a model name')
+    expect(errors(`${BOARD}stages:\n  implement: {effort: 'high" -c x="y'}\n`).join()).toContain('an effort')
+    expect(load(`${BOARD}stages:\n  implement: {model: litellm/qwen3-coder, effort: high}\n`).ok).toBe(true)
+  })
+})

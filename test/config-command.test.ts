@@ -18,7 +18,7 @@ describe('conveyor config', () => {
     expect(fields.every((field) => field.help)).toBe(true)
     const text = (await cli('config', 'list')).stdout
     expect(text).toContain('transitions.merge = human [human|ai|smart]')
-    expect(text).toContain('agent CLI that runs the stage')
+    expect(text).toContain('harness that runs the stage')
   })
 
   it('gets and sets a value', async () => {

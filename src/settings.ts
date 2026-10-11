@@ -23,5 +23,5 @@ export function linkSettings(cwd: string, home: string, settings: string) {
   const registry = readRegistry(home)
   registry[cwd] = settings
   mkdirSync(dirname(registryPath(home)), { recursive: true })
-  writeFileSync(registryPath(home), stringify(registry))
+  writeFileSync(registryPath(home), stringify(registry), { mode: 0o600 })
 }

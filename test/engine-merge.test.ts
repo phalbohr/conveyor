@@ -136,6 +136,18 @@ describe('merge mode human', () => {
     expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: false })
   })
 
+  it('ignores approvals from the conveyor account when count_own_approvals is off', async () => {
+    const { board, cycle } = setup({ config: 'review: {count_own_approvals: false}' })
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    await board.addComment('1', '/approve')
+    await cycle()
+    expect(board.merges).toEqual([])
+    await board.addCommentAs('alice', '1', '/approve')
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+  })
+
   it('merges after a /approve comment on the pull request', async () => {
     const { board, cycle } = setup()
     await board.createTask('Add login', 'p', { form: 'plan' })
@@ -517,6 +529,16 @@ describe('a task without changes', () => {
 })
 
 describe('a red base branch', () => {
+  it('does not take an issue of someone else with the hidden marker as the fix task', async () => {
+    const { board, cycle } = setup({ mode: 'ai' })
+    board.headChecks = 'failure'
+    await board.createTaskAs('alice', 'Looks like a fix', '<!-- conveyor:base-fix -->', { state: 'backlog' })
+    await cycle()
+    const fixes = (await board.listTasks()).filter((task) => task.title.startsWith('Fix the CI of the base branch'))
+    expect(fixes).toHaveLength(1)
+    expect(fixes[0]?.author).toBe('me')
+  })
+
   it('creates one fix task, merges it first, and holds the other merges until the base is green', async () => {
     const { board, harness, cycle, expireRetry } = setup({ mode: 'ai' })
     board.headChecks = 'failure'
@@ -559,7 +581,7 @@ describe('draft and foreign pull requests', () => {
   it('asks before working next to a linked pull request and continues it on /continue', async () => {
     const { board, workspaces, harness, cycle } = setup({ mode: 'ai' })
     await board.createTask('Add login', 'p', { form: 'plan' })
-    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: true }])
+    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: true, author: 'me' }])
 
     await cycle()
     expect(stageRuns(harness)).toEqual([])
@@ -573,10 +595,28 @@ describe('draft and foreign pull requests', () => {
     expect(board.merges).toHaveLength(1)
   })
 
+  it('ignores a linked pull request of an outsider and answers an unknown number', async () => {
+    const { board, harness, cycle } = setup({ mode: 'ai' })
+    board.outsiders.add('mallory')
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    board.linkedPullsOf.set('1', [{ number: '6', url: 'https://example.test/pull/6', branch: 'evil', draft: false, author: 'mallory' }])
+    await cycle()
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['implement', 'merge'])
+
+    const second = setup({ mode: 'ai' })
+    await second.board.createTask('Add search', 'p', { form: 'plan' })
+    second.board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-search', draft: false, author: 'me' }])
+    await second.cycle()
+    await second.board.addComment('1', '/continue 99')
+    await second.cycle()
+    expect((await second.board.listComments('1')).at(-1)?.body).toContain('There is no linked pull request 99.')
+    expect(stageRuns(second.harness)).toEqual([])
+  })
+
   it('starts from the base branch on /fresh', async () => {
     const { board, workspaces, harness, cycle } = setup({ mode: 'ai' })
     await board.createTask('Add login', 'p', { form: 'plan' })
-    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: false }])
+    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: false, author: 'me' }])
     await cycle()
     await board.addComment('1', '/fresh')
     await cycle()
@@ -587,7 +627,7 @@ describe('draft and foreign pull requests', () => {
   it('starts a story at plan after the answer, although the form label is gone', async () => {
     const { board, harness, cycle } = setup({ mode: 'ai', plan: 'autonomous', config: 'pickup_from: story' })
     await board.createTask('Add login', 'a story', { form: 'story' })
-    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: false }])
+    board.linkedPullsOf.set('1', [{ number: '5', url: 'https://example.test/pull/5', branch: '1-add-login', draft: false, author: 'me' }])
     await cycle()
     await board.addComment('1', '/fresh')
     await cycle()

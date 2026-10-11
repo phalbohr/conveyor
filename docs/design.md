@@ -1,24 +1,24 @@
 # Conveyor — Design
 
-A configurable development conveyor. Tasks live on a kanban board (GitHub or GitLab). Agents from different harnesses move each task through stages up to merge and beyond. Several workstations run at the same time.
+A configurable development conveyor. Tasks live on a kanban board (GitHub or GitLab). Coding harnesses move each task through stages up to merge and beyond. Several workstations run at the same time.
 
 ## Principles
 
 1. One run advances a task to the next gate and stops. Gates: a question to a human, approval of a result, merge.
 2. The board holds task state, not the process. Any authorized workstation can continue a task.
-3. The orchestrator is deterministic. Agents make decisions inside stages; the CLI controls stage order and transitions.
+3. The orchestrator is deterministic. Harnesses make decisions inside stages; the CLI controls stage order and transitions.
 4. Limits are personal. Each workstation counts only its own tasks.
-5. Agents never write to the board. A stage returns a structured result; the CLI writes labels, comments, and artifacts. The harness process never receives the board credential.
+5. Harnesses never write to the board. A stage returns a structured result; the CLI writes labels, comments, and artifacts. The harness process never receives the board credential.
 
 ## Components
 
 | Component | Responsibility |
 |---|---|
-| CLI `conveyor` (TypeScript + Ink) | init, settings TUI, board polling, task claim, stage execution, limits and token accounting |
+| CLI `conveyor` (TypeScript + Ink) | init, control screen, settings editor, board polling, task claim, stage execution, limits and token accounting |
 | Board adapters | `github` via `gh`, `gitlab` via `glab`: labels, comments, links, branches, PR/MR. The GitLab adapter reads tasks and open blockers with one GraphQL query, retries transient network errors (reads always, writes only when the connection was not established), and falls back to a `Blocked by: #N` line in the description on GitLab Free. |
-| Harness adapters | `claude`, `codex`, more later: run a stage, enforce the stage result schema, collect token usage |
+| Harness adapters | `claude`, `codex`, and a command adapter for the presets and any other CLI: run a stage, enforce the stage result schema, collect token usage |
 | Workspace manager | one git worktree per task, lifecycle hooks, cleanup of closed tasks |
-| Templates | default `stages/*.md`, `smart/*.md`, `triage.md`, copied on init |
+| Templates | default `stages/*.md`, `smart/*.md`, `live/*.md`, `formats/story.md`, `triage.md`, copied on init |
 
 ## Entry point
 
@@ -32,11 +32,18 @@ Commands:
 
 | Command | Action |
 |---|---|
-| `conveyor` | settings TUI |
-| `conveyor run` | work loop: poll the board, claim tasks within limits |
-| `conveyor new` | live dialog in the terminal; result is a new task on the board. `--write` opens a template (title, form, text) in `$VISUAL`/`$EDITOR`; `--title` creates the task at once |
-| `conveyor attach <issue>` | answer the questions of a `needs-input` task in the terminal |
-| `conveyor release <issue>` | release the task claim manually |
+| `conveyor` | control screen: start and stop the conveyor, log, board panel, tasks, usage, help |
+| `conveyor init` | create settings (`--path`), or link existing ones (`--use`); `--provider` and `--project` when `origin` is not detected |
+| `conveyor run` | work loop: poll the board, claim tasks within limits; in a terminal it opens the control screen; `--once` runs one cycle |
+| `conveyor settings` | settings editor for team, stage, and personal settings |
+| `conveyor config list\|get\|set` | read and change settings from scripts; `set` validates before it saves |
+| `conveyor config stage add\|remove\|move` | add (`--after-merge --when …`), remove, or move a stage |
+| `conveyor models [harness]` | models and efforts of each harness (`--refresh` asks at once) |
+| `conveyor board check\|update` | compare the board with this version; `update` adds what is missing |
+| `conveyor skill install` | install the `conveyor-help` skill (`--project` into the repository) |
+| `conveyor new` | live harness session in the terminal; result is a new task on the board. `--write` opens a template (title, form, text) in `$VISUAL`/`$EDITOR`; `--title` (with `--form`, `--body`) creates the task at once |
+| `conveyor attach <issue>` | answer the questions of a `needs-input` task in a live harness session |
+| `conveyor release <issue>` | release the task claim manually (`--force` for private tasks of others) |
 | `conveyor reset <issue> [--form]` | start a task over: stop it, close its PR/MR, delete its branch and workspace, clear the workpad, return it to Backlog with a form |
 
 ## Language and formats
@@ -56,9 +63,10 @@ Commands:
 
 - `conveyor new`, `conveyor attach <issue>`, the task harness session (`h` on a task), and the help session (`a` on the help screen) start a normal interactive session of a harness in the terminal. All of them use the personal `live: {harness, model, effort}` from `local.yaml`; a missing value comes from `defaults`.
 - `claude` and `codex` start with `--model` and the effort; a command harness starts with its `interactive` args (placeholders `{prompt}`, `{model}`, `{effort}`, `{workspace}`). The `opencode` and `kilocode` presets have `interactive: [--model, "{model}", --prompt, "{prompt}"]`; a harness without `interactive` cannot run live sessions, and the CLI says so. A session that exits with a non-zero code reports the code and points to `live.harness` and `live.model`.
-- The session instructions are strict templates in `live/new.md` and `live/attach.md` (package defaults if missing). The agent writes its result to a temporary file; the CLI reads it after the session ends and writes to the board.
+- The session instructions are strict templates in `live/new.md`, `live/attach.md`, and `live/task.md` (package defaults if missing). The harness writes its result to a temporary file; the CLI reads it after the session ends and writes to the board.
 - `new`: the result has frontmatter `title` and `form` (`idea`, `story`, or `plan`) and the task text. The CLI creates the task with `conveyor::backlog` and that `form::` label.
-- `attach`: the result is the decision of the human. The CLI posts it as a normal comment without the agent marker, so the next `run` cycle resumes the stage.
+- `attach`: the result is the decision of the human. The CLI posts it as a normal comment without the conveyor marker, so the next `run` cycle resumes the stage.
+- task session (`h`): the result is an optional comment. When the file is not empty, the CLI posts it on the issue as notes from a live session.
 - The session environment has no board credentials. Interactive sessions use the full personal setup of the harness, because a human supervises them.
 
 ## Settings layout
@@ -72,6 +80,7 @@ Commands:
   triage.md            triage instructions
   live/new.md          instructions for `conveyor new`
   live/attach.md       instructions for `conveyor attach`
+  live/task.md         instructions for the live harness session on a task (`h`)
   formats/story.md     story structure for the story stage and `conveyor new`
 ```
 
@@ -134,7 +143,7 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 ## Artifacts
 
 - Each artifact (idea, story, plan) has its own storage: `board`, `repo` (file in the project repository, committed on the task branch), `path` (any local directory, also outside the repository).
-- On the board, idea and story live in the issue body; plan and custom artifacts live in one agent comment per kind, updated in place.
+- On the board, idea and story live in the issue body; plan and custom artifacts live in one conveyor comment per kind, updated in place.
 - Files in `repo` and `path` storage are named `<issue>-<kind>.md`.
 - `write: replace` overwrites the previous artifact text in place (idea → story in the same issue body). `write: append` adds to it.
 - Private artifacts: the team allows them with `allow_private: true`. A member then overrides the storage in `local.yaml`. A private artifact is visible only to its owner.
@@ -142,13 +151,13 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 
 ## Stages
 
-- `stages` is an open ordered list. Remove a line to disable a stage. Several reviewers are several lines (`review`, `review-2`, ...).
+- `stages` is an open ordered list. Remove the line of a custom stage to disable it; `story`, `plan`, and `merge` cannot be disabled: the CLI adds them back when their lines are missing. Several reviewers are several lines (`review`, `review-2`, ...).
 - Reserved stages: `story`, `plan`, `merge`. They are bound to `pickup_from` and `transitions`.
 - Custom stages (`optimize`, `polish`, `fix-ci`, ...) have any name and their own harness, model, and effort. Missing values come from `defaults`.
 - Allowed positions of custom stages: between `plan` and `merge`, and after `merge`.
 - Post-merge stages have `when: success | failure | always` (default `success`, as `on_success` in GitLab CI). Example: `fix-ci` runs only if merge or the pipeline failed.
 - Init creates `stages/<stage>.md` for each stage; adding a stage later creates a stub file. A configured stage without a description (missing file, empty body, or the unchanged stub) gives a warning in `run`, on the status screen, and in the settings editor. Stage files that are not in `config.yaml` are listed as switched off and never warned about.
-- Stage files are strict templates. Variables: `issue` (id, title, body, labels, comments, blockers), `stage`, `attempt` (null on the first run), `artifacts` (idea, story, plan), `review` (feedback on rework). An unknown variable fails rendering; the stage does not start.
+- Stage files are strict templates. Variables: `issue` (id, title, body, state, assignees, priority, blockers: the number of open blockers), `stage`, `attempt` (0 on the first run), `artifacts` (idea, story, plan), `review` (feedback on fix and rework; empty otherwise), `language.docs`, `formats.story`. An unknown variable fails rendering; the stage does not start.
 
 ## Stage skills and isolation
 
@@ -158,9 +167,9 @@ workspace: {root: "~/.conveyor/workspaces/{project}"}
 
   ```markdown
   ---
-  skills: [brainstorming, grilling]
+  skills: [my-skill, team:review]
   ---
-  Write the story from the idea. Use the grilling skill to clarify requirements.
+  Write the story from the idea. Use the my-skill skill to clarify requirements.
   ```
 
 - Before the stage runs, the CLI makes exactly these skills available in the session. `config.yaml` describes resources (harness, model, effort); stage files describe behavior and its dependencies.
@@ -196,9 +205,9 @@ The CLI maps the result to board writes:
 
 ## Workpad
 
-- Each task has one agent comment, the workpad. The CLI creates it on claim and replaces its body after each stage.
+- Each task has one conveyor comment, the workpad. The CLI creates it on claim and replaces its body after each stage.
 - Sections: plan, checklist, validation, notes, open questions.
-- Questions to humans and approval requests are separate comments, so the board sends notifications. All other agent output goes to the workpad.
+- Questions to humans and approval requests are separate comments, so the board sends notifications. All other stage output goes to the workpad.
 - The workpad update time is the heartbeat. During a long stage the CLI refreshes it at a fixed interval.
 - `triage` is not a task stage. It is a loop action that orders tasks and sets dependencies. It runs at the start of a `run` cycle when the board has new tasks.
 
@@ -225,15 +234,15 @@ Merge:
 | Mode | Behavior |
 |---|---|
 | `human` | the task always goes to a human for review |
-| `ai` | the agent merges |
-| `smart` | the agent decides per `smart/merge.md` |
+| `ai` | the CLI lands the pull request |
+| `smart` | the merge stage decides per `smart/merge.md` |
 
 Dialog channels:
 
-- primary: comments on the board; agent comments carry the marker `<!-- conveyor -->`;
-- live: `conveyor new`, `conveyor attach <issue>`.
+- primary: comments on the board; conveyor comments carry the marker `<!-- conveyor -->`;
+- live: `conveyor new`, `conveyor attach <issue>`, `h` on a task.
 
-A comment without the marker after an agent question is the answer. The task goes back to the queue without an explicit command.
+A comment without the marker after a conveyor question is the answer. The task goes back to the queue without an explicit command.
 
 ## Board states
 
@@ -295,11 +304,12 @@ Release deletes the lock branch, removes `claimed-by::<user>`, and posts a comme
 
 ## Candidate order
 
-1. Tasks from the resume queue.
-2. Tasks assigned to me, then unassigned tasks (if enabled).
-3. Inside each group: priority ascending (null last), then creation time (oldest first), then identifier.
+1. Tasks from the resume queue: my claimed tasks that can continue (answered, queued, or with a due retry).
+2. Then new tasks (unclaimed, or started and released), when no resumable task waits for a slot.
 
-Priority comes from the adapter: a GitHub Projects field, a `priority::<n>` label, or GitLab weight. Triage sets it.
+Inside each group: the base-fix task first, then tasks assigned to me, then started tasks, then priority ascending (none last), then creation time (oldest first), then identifier.
+
+Priority comes only from the `priority::<n>` label. Triage sets it.
 
 ## Cycle
 
@@ -315,7 +325,7 @@ If the configuration is invalid, steps 3 and 4 are skipped; reconciliation still
 Cycles run every `poll_interval`; `r` on the control screen starts one at once (or right after the running one). Stop modes of the control screen:
 
 - Soft (first `s`): the engine drains. Triage, claims, and the start of the next stage in a running chain stop; the running stages finish and their task saves the next stage in its workpad; the runner stops when no stage runs. Nothing is lost.
-- Hard (second `s`, `q`): the CLI kills the harness processes. The workspace keeps the files; the stage restarts from its beginning on the next start without a counted attempt.
+- Hard (second `s`, or `q` twice): the CLI kills the harness processes. The workspace keeps the files; the stage restarts from its beginning on the next start without a counted attempt.
 
 ## Reconciliation
 
@@ -381,7 +391,7 @@ After the `merge` stage the CLI pushes the task branch and opens a pull request 
 
 Linked work: before the first stage of a task the CLI asks the board for open pull/merge requests linked to the issue (GitHub `closedByPullRequestsReferences`, GitLab `related_merge_requests`) on branches other than `conveyor/<issue>`. With any, it asks in the issue (`/continue [number]`, `/fresh`) and waits; `/continue` starts the task branch from that branch. Draft pull/merge requests are never merged; landing waits until they are ready.
 
-Base guard: every cycle the CLI reads the checks of the base branch head. When they fail at the merge commit of a task that verifies or repairs the base after its merge, that task is the fixer and no task is created. Otherwise it creates (under the lock `conveyor-lock/base-fix`) one task `Fix the CI of the base branch <name>` with the failing check names, `form::plan`, priority 1, and a hidden marker, and orders it before all candidates. While the base is red, stage prompts of other tasks name the fix task and tell the agent not to fix failures that also occur on the base, and landing of other tasks waits. When the base head is green again, landing continues; the up-to-date check rebases the waiting branches and their CI runs again.
+Base guard: every cycle the CLI reads the checks of the base branch head. When they fail at the merge commit of a task that verifies or repairs the base after its merge, that task is the fixer and no task is created. Otherwise it creates (under the lock `conveyor-lock/base-fix`) one task `Fix the CI of the base branch <name>` with the failing check names, `form::plan`, priority 1, and a hidden marker, and orders it before all candidates. While the base is red, stage prompts of other tasks name the fix task and tell the harness not to fix failures that also occur on the base, and landing of other tasks waits. When the base head is green again, landing continues; the up-to-date check rebases the waiting branches and their CI runs again.
 
 Landing is a deterministic CLI step, retried every minute while it waits:
 
@@ -398,7 +408,7 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 | the pull request is merged by a human | post-merge stages, then `done` |
 | a comment starting with `/rework` | rework: close the pull request, reset the branch, restart after `plan` |
 | a "Request changes" review or a comment starting with `/fix` | fix on the existing branch from the `plan` stage; the pull request stays open |
-| a comment `/fix_from: <stage>` | fix on the existing branch from the named stage (`plan` … `merge`) |
+| a comment `/fix_from: <stage>` | fix on the existing branch from the named stage (any stage up to `merge`, `story` included) |
 | enough distinct approvers: "Approve" reviews plus authors of comments starting with `/approve` | landing |
 
 - The text after a command and the review comments become the feedback for the stages. Fix and rework keep the plan artifact; fix also keeps the workpad.
@@ -413,13 +423,13 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 
 - Runs at the start of a cycle when unclaimed tasks in `idea`, `story`, or `plan` have no priority.
 - One workstation at a time: lock `conveyor-lock/triage`.
-- The agent gets all open conveyor tasks (title, state, priority, the start of the body) with new tasks marked. It returns JSON: a priority 1–4 per new task and `blocked_by` lists. The CLI sets `priority::<n>` labels and native "blocked by" links.
-- New tasks the agent left out get priority 3, so the triage does not repeat every cycle.
+- The triage harness gets all open conveyor tasks (title, state, priority, the start of the body) with new tasks marked. It returns JSON: a priority 1–4 per new task and `blocked_by` lists. The CLI sets `priority::<n>` labels and native "blocked by" links.
+- New tasks the triage left out get priority 3, so the triage does not repeat every cycle.
 - A failed triage waits `retry.max_backoff` before the next attempt. No triage runs over the daily token limit.
 
 ## Rework
 
-- Trigger: the PR/MR review has "changes requested", or a human sets `conveyor::rework`.
+- Trigger: a comment starting with `/rework`, or a human sets `conveyor::rework`. A "changes requested" review is a fix from `plan`, not a rework.
 - The task restarts: the CLI closes the PR/MR, resets the branch `conveyor/<issue>` to the base branch, and clears the workpad.
 - Execution starts again at the first stage after `plan`. The template variable `review` holds the review feedback.
 - A stage may return `needs_input` if the plan must change.
@@ -445,7 +455,7 @@ Other harnesses run through a generic command adapter. Built-in presets:
 - Placeholders in `args` and `env`: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{artifact}`, `{temp}` (a temporary directory of the run, deleted after it).
 - The `opencode` preset sets `OPENCODE_DB: {temp}/opencode.db` and the `kilocode` preset `KILO_DB: {temp}/kilo.db`: both keep one SQLite database per user, and parallel runs on it fail with "database is locked". Each stage gets its own database; live sessions keep the user's own.
 - Live sessions use `interactive` instead of `args` and skip `env` values with `{result}`, `{artifact}`, or `{temp}`.
-- Result contract: the CLI appends the result schema to the prompt and asks the agent to write the result JSON to the file in `CONVEYOR_RESULT`. No result file means a failed stage. The artifact text goes as plain text to the file in `CONVEYOR_ARTIFACT` (`artifact.md` in the temporary directory), and the JSON sets only `artifact.kind`: self-hosted models often break the JSON when they escape a long Markdown plan as a string, or write no result at all. After the run, a non-empty artifact file fills `artifact.content`; an empty or missing file keeps `artifact.content` from the JSON; an artifact with neither fails the stage with a clear reason.
+- Result contract: the CLI appends the result schema to the prompt and asks the harness to write the result JSON to the file in `CONVEYOR_RESULT`. No result file means a failed stage. The artifact text goes as plain text to the file in `CONVEYOR_ARTIFACT` (`artifact.md` in the temporary directory), and the JSON sets only `artifact.kind`: self-hosted models often break the JSON when they escape a long Markdown plan as a string, or write no result at all. After the run, a non-empty artifact file fills `artifact.content`; an empty or missing file keeps `artifact.content` from the JSON; an artifact with neither fails the stage with a clear reason.
 - `--format json` makes OpenCode and Kilo print one event per step; in their default format they print nothing until the end when the output is not a terminal. `--variant` passes the stage effort as the provider's reasoning effort.
 - Every output line counts as a progress event for stall detection. A model that streams one long answer prints nothing, so every 30 seconds the CLI also reads the CPU time of the harness process group (`ps`); at least 5% of the interval counts as activity too (streaming uses about 8%, waiting about 1%). An endless loop that keeps working ends at `timeouts.stage`. Token usage and subscription windows are not available; self-hosted models use the daily token limit of their router.
 - The `opencode` and `kilocode` presets are verified with real runs; the other presets come from the tools' documentation.
@@ -459,7 +469,7 @@ Codex stages accept two options:
 | `sandbox` | `workspace-write`, `full-access` | `workspace-write` |
 | `network` | `true`, `false` (only with `workspace-write`) | `false` |
 
-- In `workspace-write` codex cannot write to `.git` (verified on macOS), so the agent cannot commit. `full-access` removes the sandbox, like `bypassPermissions` for claude.
+- In `workspace-write` codex cannot write to `.git` (verified on macOS), so the harness cannot commit. `full-access` removes the sandbox, like `bypassPermissions` for claude.
 - In every mode the CLI commits the remaining workspace changes after each stage (`<stage>: <summary>`) and pushes the task branch.
 - These options are an error on non-codex stages.
 
@@ -467,22 +477,6 @@ Claude stages accept `permission_mode`: `bypassPermissions` (default), `auto`, `
 
 Stage instructions for `claude` can use Dynamic Workflows for parallel work (for example a reviewer panel). This is a stage capability, not the orchestration layer.
 
-## Spike: Workflow in headless mode (2026-10-03)
-
-Verified on Claude Code 2.1.288:
-
-- `claude -p ... --allowedTools Workflow` runs a Workflow without interactive permission prompts;
-- a script from any file via `scriptPath` works, so the CLI can ship its own scripts;
-- `args` reach the script;
-- per-`agent()` `model` works (haiku and sonnet in one run);
-- the process waits for the workflow and emits two `result` events: the first after launch, the second with the outcome. Use the last one;
-- overhead: about 58k context tokens per subagent caused by the user's global settings (CLAUDE.md, plugins, hooks). Harnesses must run with a minimal settings set.
-
 ## Prior art
 
-[openai/symphony](https://github.com/openai/symphony) (Apache 2.0): a single-orchestrator daemon that runs Codex per tracker issue. Conveyor takes from it: reconciliation, stage and stall timeouts, retry with backoff, per-task workspaces with hooks, per-cycle config validation and reload, credential isolation (agents do not write to the board), the workpad comment, the rework flow, deterministic candidate order, and strict prompt templates. Conveyor differs: deterministic stages with per-stage harness, idea → story → plan with interaction modes, peer workstations with atomic claim, personal limits, triage and dependency-ordered merge.
-
-## Delivery
-
-1. Now: a single npm package with the CLI and the templates. `conveyor new` and `conveyor attach` start an interactive harness session in the terminal with the stage instructions.
-2. Later: a Claude Code plugin in the same repository, published as a plugin marketplace. Its skills call `conveyor ... --json` and hold no own logic. Every CLI command supports `--json` from the start.
+[openai/symphony](https://github.com/openai/symphony) (Apache 2.0): a single-orchestrator daemon that runs Codex per tracker issue. Conveyor takes from it: reconciliation, stage and stall timeouts, retry with backoff, per-task workspaces with hooks, per-cycle config validation and reload, credential isolation (harnesses do not write to the board), the workpad comment, the rework flow, deterministic candidate order, and strict prompt templates. Conveyor differs: deterministic stages with per-stage harness, idea → story → plan with interaction modes, peer workstations with atomic claim, personal limits, triage and dependency-ordered merge.

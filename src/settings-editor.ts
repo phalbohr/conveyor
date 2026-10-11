@@ -31,9 +31,9 @@ const BOOLEAN = ['true', 'false']
 
 const GATE = ['interactive', 'autonomous', 'smart']
 const gateHelp = (gate: string) => ({
-  interactive: `the agent asks questions and waits for your approval of the ${gate}`,
-  autonomous: `the agent writes the ${gate} alone, without questions or approval`,
-  smart: `the agent asks only in the cases listed in smart/${gate === 'story' ? 'idea-story' : 'story-plan'}.md`,
+  interactive: `the stage asks questions and waits for your approval of the ${gate}`,
+  autonomous: `the stage writes the ${gate} alone, without questions or approval`,
+  smart: `the stage asks only in the cases listed in smart/${gate === 'story' ? 'idea-story' : 'story-plan'}.md`,
 })
 const STAGE_KEYS: Record<string, string> = { permission_mode: 'permissionMode' }
 const BUILT_IN_DEFAULTS: Record<string, string> = { harness: 'claude', model: 'sonnet', effort: 'medium' }
@@ -46,9 +46,9 @@ const TEAM: Spec[] = [
     options: ['idea', 'story', 'plan'],
     help: 'earliest form:: label the conveyor takes',
     optionHelp: {
-      idea: 'takes form::idea, story, and plan; agents write the story and the plan',
-      story: 'takes form::story and plan; agents write the plan',
-      plan: 'takes form::plan only; agents start with implementation',
+      idea: 'takes form::idea, story, and plan; the conveyor writes the story and the plan',
+      story: 'takes form::story and plan; the conveyor writes the plan',
+      plan: 'takes form::plan only; the conveyor starts with implementation',
     },
   },
   { key: 'transitions.idea_to_story', label: 'Gate idea → story', kind: 'select', options: GATE, help: 'who decides when an idea becomes a story', optionHelp: gateHelp('story') },
@@ -75,9 +75,10 @@ const TEAM: Spec[] = [
     optionHelp: { false: 'done issues stay open until a human closes them, e.g. after a sprint review', true: 'the conveyor closes the issue when the task is done' },
   },
   { key: 'review.approvals', label: 'Approvals for merge', kind: 'number', help: 'distinct people who approve before the conveyor merges' },
+  { key: 'review.count_own_approvals', label: 'Count approvals of the conveyor account', kind: 'boolean', options: BOOLEAN, help: 'false when the conveyor runs as a separate bot account: then a harness cannot approve its own work with /approve' },
   { key: 'language.docs', label: 'Documentation language', kind: 'text', help: 'language of everything the team sees' },
   { key: 'timeouts.stage', label: 'Stage timeout', kind: 'text', fallback: '60m', help: 'longest run of one stage before it fails and retries, e.g. 60m' },
-  { key: 'timeouts.stall', label: 'Stall timeout (0 = off)', kind: 'text', fallback: '5m', help: 'a stage with no agent output for this long fails and retries' },
+  { key: 'timeouts.stall', label: 'Stall timeout (0 = off)', kind: 'text', fallback: '5m', help: 'a stage with no harness output for this long fails and retries' },
   {
     key: 'timeouts.heartbeat',
     label: 'Heartbeat timeout',
@@ -93,7 +94,7 @@ const TEAM: Spec[] = [
 ]
 
 const PERSONAL: Spec[] = [
-  { key: 'limits.running', label: 'Tasks running at once', kind: 'number', help: 'stages this machine runs in parallel' },
+  { key: 'limits.running', label: 'Tasks running at once', kind: 'number', help: 'tasks this workstation runs at once' },
   { key: 'limits.awaiting_me', label: 'Tasks waiting for my answer', kind: 'number', help: 'no new tasks while this many wait for you' },
   { key: 'limits.awaiting_review', label: 'Tasks waiting for my review', kind: 'number', help: 'no new tasks while this many wait for your review' },
   { key: 'limits.daily_tokens', label: 'Daily token limit (0 = off)', kind: 'number', help: 'no new tasks after this many tokens a day' },
@@ -107,12 +108,12 @@ const PERSONAL: Spec[] = [
 
 const PREFIX_HELP: Record<string, string> = {
   defaults: 'used by stages and triage without their own value',
-  triage: 'agent that orders new tasks and sets blockers',
+  triage: 'harness that orders new tasks and sets blockers',
   live: 'my live sessions: help (a), task harness (h), new, attach; empty = defaults',
 }
 
 const STAGE_HELP: Record<string, string> = {
-  harness: 'agent CLI that runs the stage',
+  harness: 'harness that runs the stage',
   model: 'model name for that harness',
   effort: 'reasoning effort',
   when: 'after merge: run on success, failure, or always',
@@ -214,7 +215,7 @@ export class SettingsDocument {
     fields.push(...PERSONAL.map((spec) => this.field('Personal', 'local', spec)))
     const live = PREFIX_HELP.live ?? ''
     fields.push(
-      this.field('Personal', 'local', { key: 'live.harness', label: 'Live session harness', kind: 'select', options: harnesses, help: live }),
+      this.field('Personal', 'local', { key: 'live.harness', label: 'Live session harness', kind: 'select', options: harnesses.filter((name) => name === 'claude' || name === 'codex' || config?.harnesses[name]?.interactive), help: live }),
       ...this.modelFields('live', 'Live session ', config?.live.harness ?? 'claude', config?.live.model ?? '', { model: live, effort: live }).map((spec) => this.field('Personal', 'local', spec)),
     )
     return fields

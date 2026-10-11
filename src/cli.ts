@@ -40,7 +40,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
   let exitCode = 0
   const program = new Command()
     .name('conveyor')
-    .description('Configurable development conveyor: agents move kanban tasks from idea to merge')
+    .description('Configurable development conveyor: coding harnesses move kanban tasks from idea to merge')
     .option('--json', 'machine-readable output')
     .option('-V, --version', 'print the version')
     .exitOverride()
@@ -209,7 +209,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .description('answer the questions of a waiting task in a live harness session')
     .argument('<issue>', 'issue number on the board, for example 51')
     .action(async (issue: string) => {
-      exitCode = await attachCommand(context, issue)
+      exitCode = validIssue(context, issue) ? await attachCommand(context, issue) : 1
     })
 
   program
@@ -218,7 +218,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .argument('<issue>', 'issue number on the board, for example 51')
     .option('--force', 'release a task with private artifacts of another member')
     .action(async (issue: string, options: { force?: boolean }) => {
-      exitCode = await releaseCommand(context, issue, options.force ?? false)
+      exitCode = validIssue(context, issue) ? await releaseCommand(context, issue, options.force ?? false) : 1
     })
 
   program
@@ -227,7 +227,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .argument('<issue>', 'issue number on the board, for example 51')
     .addOption(new Option('--form <form>', 'form to start again with; default: the form the conveyor took it with').choices(['idea', 'story', 'plan', 'none']))
     .action(async (issue: string, options: { form?: 'idea' | 'story' | 'plan' | 'none' }) => {
-      exitCode = await resetCommand(context, issue, options.form)
+      exitCode = validIssue(context, issue) ? await resetCommand(context, issue, options.form) : 1
     })
 
   try {
@@ -307,6 +307,12 @@ function report(context: Context, result: InitResult, json: boolean): number {
   context.stdout(`Settings: ${result.settings}\n${result.board.join('\n')}\n`)
   for (const warning of result.warnings) context.stderr(`warning: ${warning}\n`)
   return 0
+}
+
+function validIssue(context: Context, issue: string) {
+  if (/^\d+$/.test(issue)) return true
+  context.stderr(`${issue} is not an issue number; use the bare number, for example 51\n`)
+  return false
 }
 
 export function probesOf(context: Context): Probes {

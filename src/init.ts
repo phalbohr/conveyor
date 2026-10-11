@@ -84,7 +84,7 @@ function boardSteps(config: Config): string[] {
   }
   return [
     labels,
-    'Board: create a GitHub project, set board.github_project to its number (conveyor config set board.github_project <number>), start the conveyor, then choose the field Conveyor under "Column by" in a Board view.',
+    'Board: choose the GitHub project (conveyor config set board.github_project <number>), run conveyor board update to add the field Conveyor, then choose the field Conveyor under "Column by" in a Board view.',
   ]
 }
 

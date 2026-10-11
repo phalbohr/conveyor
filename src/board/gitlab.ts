@@ -47,6 +47,8 @@ type MergeRequest = {
   detailed_merge_status: string
   head_pipeline: { status: string } | null
   draft?: boolean
+  source_project_id?: number
+  target_project_id?: number
 }
 
 type Call = { code: number; stdout: string; stderr: string; status: number }
@@ -248,7 +250,7 @@ export class GitLabBoard implements Board {
 
   async pullRequest(id: string): Promise<PullRequest | undefined> {
     const listed = await this.json<MergeRequest[]>([`${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${id}`)}&state=all&order_by=created_at&sort=desc`])
-    const first = listed[0]
+    const first = listed.find((request) => request.source_project_id === request.target_project_id)
     if (!first) return undefined
     const request = await this.json<MergeRequest>([`${this.api}/merge_requests/${first.iid}`])
     const approvals = await this.json<{ approved_by: { user: { username: string } }[] }>([`${this.api}/merge_requests/${first.iid}/approvals`])
@@ -297,17 +299,18 @@ export class GitLabBoard implements Board {
   }
 
   async mergeCommit(id: string) {
-    const merged = await this.json<{ merge_commit_sha: string | null; squash_commit_sha: string | null }[]>([
+    const listed = await this.json<{ merge_commit_sha: string | null; squash_commit_sha: string | null; source_project_id: number; target_project_id: number }[]>([
       `${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${id}`)}&state=merged&order_by=updated_at&sort=desc`,
     ])
-    return merged[0]?.merge_commit_sha ?? merged[0]?.squash_commit_sha ?? undefined
+    const merged = listed.find((request) => request.source_project_id === request.target_project_id)
+    return merged?.merge_commit_sha ?? merged?.squash_commit_sha ?? undefined
   }
 
   async linkedPulls(id: string): Promise<LinkedPull[]> {
-    const related = await this.json<{ iid: number; web_url: string; source_branch: string; state: string; draft?: boolean }[]>([`${this.api}/issues/${id}/related_merge_requests`])
+    const related = await this.json<{ iid: number; web_url: string; source_branch: string; state: string; draft?: boolean; source_project_id: number; target_project_id: number; author: { username: string } }[]>([`${this.api}/issues/${id}/related_merge_requests`])
     return related
-      .filter((request) => request.state === 'opened')
-      .map((request) => ({ number: String(request.iid), url: request.web_url, branch: request.source_branch, draft: request.draft ?? false }))
+      .filter((request) => request.state === 'opened' && request.source_project_id === request.target_project_id)
+      .map((request) => ({ number: String(request.iid), url: request.web_url, branch: request.source_branch, draft: request.draft ?? false, author: request.author.username }))
   }
 
   async baseHead() {

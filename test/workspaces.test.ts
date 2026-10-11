@@ -100,6 +100,35 @@ describe('GitWorkspaces', () => {
     expect(git(workspace.path, 'status', '--porcelain')).toBe('')
   })
 
+  it('never overwrites a commit that someone else pushed to the task branch, and picks it up on resume', async () => {
+    const { project, seed } = repository()
+    const manager = workspaces(project)
+    const workspace = await manager.prepare('6')
+    git(workspace.path, 'config', 'user.email', 'test@example.com')
+    git(workspace.path, 'config', 'user.name', 'Test')
+    writeFileSync(join(workspace.path, 'work.txt'), 'first\n')
+    await manager.commitAll('6', 'work')
+    await manager.push('6')
+
+    git(seed, 'fetch', '--quiet', 'origin')
+    git(seed, 'switch', '--quiet', '-c', 'conveyor/6', 'origin/conveyor/6')
+    writeFileSync(join(seed, 'review.txt'), 'reviewer fix\n')
+    git(seed, 'add', '.')
+    git(seed, 'commit', '--quiet', '-m', 'reviewer fix')
+    git(seed, 'push', '--quiet', 'origin', 'conveyor/6')
+
+    writeFileSync(join(workspace.path, 'work.txt'), 'second\n')
+    await manager.commitAll('6', 'more work')
+    git(project, 'fetch', '--quiet', 'origin')
+    await expect(manager.push('6')).rejects.toThrow()
+    git(seed, 'fetch', '--quiet', 'origin')
+    expect(git(seed, 'log', '--format=%s', '-1', 'origin/conveyor/6')).toBe('reviewer fix')
+
+    git(workspace.path, 'reset', '--quiet', '--hard', 'HEAD~1')
+    await manager.prepare('6')
+    expect(readFileSync(join(workspace.path, 'review.txt'), 'utf8')).toBe('reviewer fix\n')
+  })
+
   it('runs after_create once in a new workspace', async () => {
     const { project } = repository()
     const manager = workspaces(project, { after_create: 'echo created >> hook.log' })

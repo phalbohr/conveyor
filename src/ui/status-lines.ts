@@ -184,7 +184,7 @@ export function helpLines(): Line[] {
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),
     row('● ○ in progress', '● running here with time and last harness activity: output or CPU work (yellow: quiet) · ○ waits or not running · pid N: another terminal'),
-    row('s while running', 'first s: running stages finish, nothing new starts, then the conveyor stops · second s: stop at once'),
+    row('s while running', 'first s: running stages finish, nothing new starts, then the conveyor stops · second s: stop at once · q twice: stop at once and quit'),
     row('live sessions', 'n, a, h, and a in help use live.harness and live.model from local.yaml (settings: Personal)'),
     row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h harness · x reset · i form::idea on/off (backlog) · Esc back'),
     row('part::2/3', 'the plan split the story into parts, one pull request each; the story is done after the last part merges'),
@@ -204,6 +204,6 @@ export function helpLines(): Line[] {
     row('this screen', 'b board in the browser · k board check (add what this version needs) · s start/stop the conveyor · u usage · o log · n new · a attach · l release · e settings · r reread the board and start a conveyor cycle now · h or ? help · q quit'),
     row('settings', '`e` here or `conveyor settings`: the help of the current row is shown under the list; ←→ switch options; s saves after validation'),
     row('scripting', '`conveyor config list|get|set`, `conveyor config stage add|remove|move`'),
-    row('agent help', '`conveyor skill install`, then ask your agent about the conveyor (skill conveyor-help)'),
+    row('skill help', '`conveyor skill install`, then ask your harness about the conveyor (skill conveyor-help)'),
   ]
 }

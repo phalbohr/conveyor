@@ -43,7 +43,7 @@ export type PullRequest = {
   comments: { author: string; body: string; createdAt: string }[]
 }
 
-export type LinkedPull = { number: string; url: string; branch: string; draft: boolean }
+export type LinkedPull = { number: string; url: string; branch: string; draft: boolean; author: string }
 
 export type MergeMethod = 'merge' | 'squash' | 'rebase'
 

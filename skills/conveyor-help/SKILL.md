@@ -31,10 +31,10 @@ When the user wants to go through the settings or set up the conveyor, follow `s
 1. Read the current values with `conveyor config list` or `conveyor config get <key>`.
 2. Tell the user which file each change touches: `config.yaml` is the team file (committed, applies to everyone); `local.yaml` is personal. Get the user's agreement for team changes.
 3. Apply changes through the CLI, which validates before it saves:
-   - `conveyor config set <key> <value>` (an empty value makes a stage setting inherit from `defaults`);
+   - `conveyor config set <key> <value>` (an empty value makes a stage setting inherit from `defaults`), also for codex `stages.<name>.sandbox` and `stages.<name>.network`;
    - `conveyor config stage add <name>` (before merge), `conveyor config stage add <name> --after-merge --when success|failure|always`, `conveyor config stage remove <name>`, `conveyor config stage move <name> up|down`.
    On an error, explain it and correct the value.
-4. For settings outside `conveyor config` (harness `command`/`args`/`env`, `hooks`, `artifacts`, codex `sandbox`/`network`), stage instructions (`stages/<name>.md`), smart criteria (`smart/*.md`), or formats, edit the files in the settings directory as `workflow.md` describes. Then run `conveyor --json` and check `"valid": true`.
+4. For settings outside `conveyor config` (harness `command`/`args`/`env`, `hooks`, `artifacts`), stage instructions (`stages/<name>.md`), smart criteria (`smart/*.md`), or formats, edit the files in the settings directory as `workflow.md` describes. Then run `conveyor --json` and check `"valid": true`.
 5. Finish with a summary: each changed key or file with its new value, and a reminder to commit the changed team files in `.conveyor/`.
 
 Change settings and files only. The conveyor itself writes to the board; start `conveyor run` only when the user asks for it.
