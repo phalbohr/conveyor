@@ -5,6 +5,7 @@ import type { Activity } from '../engine/engine.js'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
 import { BACKLOG, CELL_WIDTH, STATUS_COLUMNS, boardLines, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
+import { clock } from './time.js'
 import { taskLines, type Target, type TaskControl, type TaskDetail } from './task-lines.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
@@ -153,7 +154,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (key === 'r') {
         const cycle = runner?.cycle?.() ? ' The conveyor starts a cycle now: it picks up answers and due retries.' : ''
         setMessage({ text: `Reading the board again and checking it…${cycle}` })
-        refresh(true, () => setMessage({ text: `Board read again at ${new Date().toLocaleTimeString()}.${cycle}` }))
+        refresh(true, () => setMessage({ text: `Board read again at ${clock(new Date())}.${cycle}` }))
         if (panel === 'task' && opened) openTask(opened.id, opened.target)
       }
       if (current && control) {
@@ -359,7 +360,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
 }
 
 function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefined, opened: Opened | undefined, updated: Date | undefined) {
-  const time = updated ? ` · updated ${updated.toLocaleTimeString()}` : ''
+  const time = updated ? ` · updated ${clock(updated)}` : ''
   if (panel === 'task') {
     return `[↑↓] scroll · [c] comment · [b] browser · [h] harness · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
   }
@@ -405,7 +406,7 @@ function logLines(events: RunnerEvent[], project?: string): Line[] {
     { text: `Log · last ${LOG_LINES} events · full log ${file} · [o] or [Esc] back`, tone: 'title' },
     ...(events.length === 0 ? [{ text: '  no events yet: start the conveyor with s', tone: 'muted' as const }] : []),
     ...events.map((event): Line => ({
-      text: `${new Date(event.time).toLocaleTimeString()} ${event.text.split('\n')[0]}`,
+      text: `${clock(new Date(event.time))} ${event.text.split('\n')[0]}`,
       ...(event.level === 'error' ? { tone: 'error' as const } : event.level === 'warning' ? { tone: 'warning' as const } : {}),
     })),
   ]

@@ -1,13 +1,14 @@
 import { syncNotice } from '../settings-sync.js'
 import { undescribedNotice } from '../stage-catalog.js'
 import { boardCheckLines, needsAttention, type BoardCheck } from '../board-check.js'
+import { dateTime } from './time.js'
 import type { StatusSnapshot } from '../status.js'
 
 export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean; marked?: boolean }[]; cells?: [string, string]; cellWidth?: number; selected?: boolean }
 export const CELL_WIDTH = 28
 
 const row = (left: string, right: string): Line => ({ text: `  ${left.padEnd(CELL_WIDTH - 2)}${right}`, cells: [`  ${left}`, right] })
-const time = (iso: string) => new Date(iso).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+const time = dateTime
 const QUIET = 2 * 60_000
 const span = (ms: number) => {
   const minutes = Math.floor(ms / 60_000)

@@ -1,4 +1,5 @@
 import type { Comment, PullRequest, Task } from '../board/board.js'
+import { dateTime } from './time.js'
 import type { Line } from './status-lines.js'
 
 export type Target = 'issue' | 'pull'
@@ -20,7 +21,7 @@ export type TaskControl = {
   reset(id: string, form: 'idea' | 'story' | 'plan' | 'none'): Promise<string>
 }
 
-const time = (iso: string) => new Date(iso).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+const time = dateTime
 const text = (body: string, indent = '  '): Line[] => (body.trim() ? body.trim().split('\n').map((line) => ({ text: `${indent}${line}` })) : [{ text: `${indent}(empty)`, tone: 'muted' }])
 
 export function taskLines(detail: TaskDetail, target: Target): Line[] {
