@@ -184,6 +184,26 @@ describe('merge mode ai', () => {
     expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: false })
   })
 
+  it('waits for checks to start before it merges a pull request without checks', async () => {
+    const { board, cycle, expireRetry } = setup({ mode: 'ai' })
+    board.checks = 'none'
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect(await board.listComments('1').then((comments) => comments.find((c) => c.body.includes('conveyor:workpad'))?.body)).toContain('checksWait')
+
+    await expireRetry()
+    await cycle()
+    expect(board.merges).toEqual([])
+
+    const pad = (await board.listComments('1')).find((c) => c.body.includes('conveyor:workpad'))
+    if (pad) await board.updateComment(pad.id, pad.body.replace(/"since":"[^"]+"/, '"since":"2000-01-01T00:00:00.000Z"'))
+    await expireRetry()
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+  })
+
   it('waits for open blockers before merging', async () => {
     const { board, cycle, expireRetry } = setup({
       mode: 'ai',

@@ -163,7 +163,21 @@ export class GitLabBoard implements Board {
   }
 
   async setOwner(id: string, owner: string | undefined) {
+    const issue = await this.json<{ labels: string[]; assignees: { id: number; username: string }[] }>([`${this.api}/issues/${id}`])
+    const previous = issue.labels.find((name) => name.startsWith(OWNER_LABEL))?.slice(OWNER_LABEL.length)
     await this.replaceLabel(id, OWNER_LABEL, owner ? OWNER_LABEL + owner : undefined)
+    const kept = issue.assignees.filter(({ username }) => username !== previous || username === owner).map(({ id: user }) => user)
+    const added = owner && !issue.assignees.some(({ username }) => username === owner) ? [await this.userId(owner)] : []
+    const ids = [...kept, ...added]
+    if (ids.length === issue.assignees.length && added.length === 0) return
+    await this.json(['-X', 'PUT', `${this.api}/issues/${id}`, ...(ids.length ? ids.flatMap((user) => ['-f', `assignee_ids[]=${user}`]) : ['-f', 'assignee_ids=0'])])
+  }
+
+  private async userId(username: string) {
+    const users = await this.json<{ id: number }[]>([`users?username=${encodeURIComponent(username)}`])
+    const user = users[0]
+    if (!user) throw new Error(`GitLab user ${username} not found`)
+    return user.id
   }
 
   async setPriority(id: string, priority: number) {
@@ -224,7 +238,7 @@ export class GitLabBoard implements Board {
   async openPullRequest(id: string, title: string, body: string) {
     const existing = await this.pullRequest(id)
     if (existing?.state === 'open') return existing
-    await this.json(['-X', 'POST', `${this.api}/merge_requests`, '-f', `source_branch=conveyor/${id}`, '-f', `target_branch=${await this.baseBranch()}`, '-f', `title=${title}`, '-f', `description=${body}`])
+    await this.json(['-X', 'POST', `${this.api}/merge_requests`, '-f', `source_branch=conveyor/${id}`, '-f', `target_branch=${await this.baseBranch()}`, '-f', `title=${title}`, '-f', `description=${body}`, '-f', `assignee_id=${await this.userId(await this.user())}`])
     const opened = await this.pullRequest(id)
     if (!opened) throw new Error(`merge request for task ${id} not found after creation`)
     return opened

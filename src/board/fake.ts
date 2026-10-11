@@ -38,9 +38,11 @@ export class FakeBoard implements Board {
   private readonly comments = new Map<string, Comment & { taskId: string }>()
   private readonly locks = new Set<string>()
   private readonly pulls = new Map<string, PullRequest>()
+  checks: PullRequest['checks'] = 'success'
   readonly merges: { id: string; method: MergeMethod }[] = []
   readonly outsiders = new Set<string>()
   readonly pullTitles: string[] = []
+  readonly pullBodies: string[] = []
   readonly labels = new Set<string>()
   mergeError: string | undefined
   private nextId = 1
@@ -141,7 +143,10 @@ export class FakeBoard implements Board {
   }
 
   async setOwner(id: string, owner: string | undefined) {
+    const issue = this.issue(id)
+    const previous = issue.labels.find((label) => label.startsWith(OWNER_LABEL))?.slice(OWNER_LABEL.length)
     this.replaceLabel(id, OWNER_LABEL, owner ? OWNER_LABEL + owner : undefined)
+    issue.assignees = [...issue.assignees.filter((login) => login !== previous || login === owner), ...(owner && !issue.assignees.includes(owner) ? [owner] : [])]
   }
 
   async updateBody(id: string, body: string) {
@@ -193,7 +198,7 @@ export class FakeBoard implements Board {
     this.replaceLabel(id, PRIORITY_LABEL, PRIORITY_LABEL + priority)
   }
 
-  async openPullRequest(id: string, title: string) {
+  async openPullRequest(id: string, title: string, body = '') {
     const existing = this.pulls.get(id)
     if (existing?.state === 'open') return { ...existing }
     const pull: PullRequest = {
@@ -201,13 +206,14 @@ export class FakeBoard implements Board {
       url: `https://example.test/pull/${id}`,
       headSha: id.padStart(40, '0'),
       state: 'open',
-      checks: 'none',
+      checks: this.checks,
       mergeable: 'yes',
       feedback: [],
       reviews: [],
       comments: [],
     }
     this.pulls.set(id, pull)
+    this.pullBodies.push(body)
     this.pullTitles.push(title)
     return { ...pull }
   }

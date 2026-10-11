@@ -38,6 +38,14 @@ function setup(options: { config?: string; script?: (board: FakeBoard) => Script
 }
 
 describe('board labels', () => {
+  it('assigns the task to me', async () => {
+    const { board, cycle } = setup({ script: () => () => new Promise(() => undefined) })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    void cycle()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect((await board.getTask('1'))?.assignees).toEqual(['me'])
+  })
+
   it('takes a backlog task with a form, removes the form, and shows the running stage', async () => {
     const seen: string[] = []
     const { board, cycle, runs } = setup({

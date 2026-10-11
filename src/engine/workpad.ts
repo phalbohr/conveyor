@@ -25,6 +25,7 @@ export type WorkpadState = {
   parts?: string[]
   part?: number
   form?: 'idea' | 'story' | 'plan'
+  checksWait?: { sha: string; since: string }
 }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
@@ -53,6 +54,7 @@ const stateSchema = z.object({
   parts: z.array(z.string()).optional(),
   part: z.int().nonnegative().optional(),
   form: z.enum(['idea', 'story', 'plan']).optional(),
+  checksWait: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
 })
 
 const AGENT_MARKER = '<!-- conveyor'

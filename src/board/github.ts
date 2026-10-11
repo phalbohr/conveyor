@@ -195,8 +195,17 @@ export class GitHubBoard implements Board {
   }
 
   async setOwner(id: string, owner: string | undefined) {
+    const issue = await this.api<Issue>([`${this.repo}/issues/${id}`])
+    const previous = issue.labels.find(({ name }) => name.startsWith(OWNER_LABEL))?.name.slice(OWNER_LABEL.length)
     await this.replaceLabel(id, OWNER_LABEL, owner ? OWNER_LABEL + owner : undefined)
+    if (previous && previous !== owner && issue.assignees.some(({ login }) => login === previous)) {
+      await this.api(['-X', 'DELETE', `${this.repo}/issues/${id}/assignees`, '-f', `assignees[]=${previous}`])
+    }
+    if (owner && !issue.assignees.some(({ login }) => login === owner)) {
+      await this.api(['-X', 'POST', `${this.repo}/issues/${id}/assignees`, '-f', `assignees[]=${owner}`])
+    }
   }
+
 
   async updateBody(id: string, body: string) {
     await this.api(['-X', 'PATCH', `${this.repo}/issues/${id}`, '-f', `body=${body}`])
@@ -247,7 +256,7 @@ export class GitHubBoard implements Board {
     const existing = await this.pullRequest(id)
     if (existing?.state === 'open') return existing
     const base = await this.baseBranch()
-    await this.gh(['pr', 'create', '-R', this.project, '--head', `conveyor/${id}`, '--base', base, '--title', title, '--body', body])
+    await this.gh(['pr', 'create', '-R', this.project, '--head', `conveyor/${id}`, '--base', base, '--title', title, '--body', body, '--assignee', await this.user()])
     const opened = await this.pullRequest(id)
     if (!opened) throw new Error(`pull request for task ${id} not found after creation`)
     return opened

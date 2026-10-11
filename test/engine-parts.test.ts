@@ -9,9 +9,9 @@ import { UsageLedger } from '../src/usage.js'
 import { FakeWorkspaces, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
-function setup(script: (board: FakeBoard) => Script, merge = 'ai') {
+function setup(script: (board: FakeBoard) => Script, merge = 'ai', extra = '') {
   const settings = tempDir('conveyor-settings-')
-  writeFileSync(join(settings, 'config.yaml'), `board: {provider: github, project: acme/app}\npickup_from: story\ntransitions: {story_to_plan: autonomous, merge: ${merge}}\nstages:\n  implement: {}\n  merge: {}\n`)
+  writeFileSync(join(settings, 'config.yaml'), `board: {provider: github, project: acme/app}\npickup_from: story\ntransitions: {story_to_plan: autonomous, merge: ${merge}}\nstages:\n  implement: {}\n  merge: {}\n${extra}`)
   writeFileSync(join(settings, 'local.yaml'), 'limits: {awaiting_review: 10}\n')
   mkdirSync(join(settings, 'stages'))
   const board = new FakeBoard('me')
@@ -64,6 +64,7 @@ describe('a plan in parts', () => {
     await board.createTask('Big story', 'text', { form: 'story' })
     await cycle()
     expect(board.pullTitles).toEqual(['Big story (part 1/3: A)'])
+    expect(board.pullBodies[0]).toMatch(/^Part of #1, part 1 of 3: A\./)
     expect(board.labelsOf('1')).toContain('part::2/3')
     await cycle()
     await cycle()
@@ -97,5 +98,15 @@ describe('a plan in parts', () => {
     expect(board.merges).toHaveLength(1)
     expect((await board.getTask('1'))?.state).toBe('done')
     expect(board.labelsOf('1').some((label) => label.startsWith('part::'))).toBe(false)
+  })
+})
+
+describe('pull request references', () => {
+  it('closes the issue only from the last part when close_on_done is on', async () => {
+    const { board, cycle } = setup(() => (run) => (run.stage === 'plan' ? { outcome: 'done', summary: 'planned', parts: ['A', 'B'] } : { outcome: 'done', summary: 'ok' }), 'ai', 'close_on_done: true\n')
+    await board.createTask('Big story', 'text', { form: 'story' })
+    await cycle()
+    await cycle()
+    expect(board.pullBodies.map((body) => body.split('.')[0])).toEqual(['Part of #1, part 1 of 2: A', 'Closes #1, part 2 of 2: B'])
   })
 })

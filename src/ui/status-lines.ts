@@ -20,7 +20,7 @@ const percent = (value: number) => `${Math.round(value * 100)}%`
 export type StatusView = { column: number; open: boolean; focus: 'columns' | 'tasks'; task: number }
 export type ColumnTask = { id: string; title: string; url: string; detail: string; tone?: Line['tone']; form?: string; released?: boolean }
 
-export const STATUS_COLUMNS = ['backlog', 'in progress', 'needs input', 'review'] as const
+export const STATUS_COLUMNS = ['backlog', 'in progress', 'queued', 'needs input', 'review'] as const
 export const BACKLOG = 0
 
 export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[] {
@@ -31,7 +31,7 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
         : { id: task.id, title: task.title, url: task.url, detail: task.form ? `form::${task.form}` : 'no form', ...(task.form ? { form: task.form } : {}) },
     )
   }
-  const states = [['in-progress'], ['needs-input', 'queued'], ['review']][column - 1] ?? []
+  const states = [['in-progress'], ['queued'], ['needs-input'], ['review']][column - 1] ?? []
   return status.mine
     .filter((task) => states.includes(task.state))
     .map((task) => {
@@ -70,9 +70,10 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   const waiting = status.backlog.filter((task) => !task.released)
   const released = status.backlog.length - waiting.length
   const forms = [waiting.filter((task) => !task.form), ...(['idea', 'story', 'plan'] as const).map((form) => waiting.filter((task) => task.form === form))]
-  const counts = [limits.running, limits.awaitingMe, limits.awaitingReview]
+  const queued = status.mine.filter((task) => task.state === 'queued').length
+  const counts = [`${limits.running.used}/${limits.running.limit}`, `${queued}`, `${limits.awaitingMe.used}/${limits.awaitingMe.limit}`, `${limits.awaitingReview.used}/${limits.awaitingReview.limit}`]
   const columns = STATUS_COLUMNS.map((label, index) =>
-    index === BACKLOG ? `${label} ${forms.map((group) => group.length).join('|')}${released ? ` +${released} released` : ''}` : `${label} ${counts[index - 1]?.used}/${counts[index - 1]?.limit}`,
+    index === BACKLOG ? `${label} ${forms.map((group) => group.length).join('|')}${released ? ` +${released} released` : ''}` : `${label} ${counts[index - 1]}`,
   )
   lines.push({
     text: `my board: ${columns.join(' · ')}`,
@@ -178,6 +179,7 @@ export function helpLines(): Line[] {
     row('backlog 8|4|6|2', 'tasks of the whole board in Backlog: no form | form::idea | form::story | form::plan'),
     row('+3 released', 'started tasks nobody owns (after release): listed first in Backlog; the conveyor resumes them at their stage before new tasks'),
     row('in progress 1/3', 'my tasks in this column against my limit; needs input and review the same'),
+    row('queued 2', 'my answered tasks that wait for a free slot; they start before new tasks'),
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),
     row('● ○ in progress', '● running here with time and last harness activity: output or CPU work (yellow: quiet) · ○ waits or not running · pid N: another terminal'),

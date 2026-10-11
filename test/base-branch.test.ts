@@ -33,9 +33,10 @@ describe('base branch', () => {
   })
 
   it('opens merge requests into the configured base branch', async () => {
-    const { run, calls } = recorder(() => '[]')
+    const { run, calls } = recorder((args) => (args.some((arg) => arg.startsWith('users?')) ? '[{"id":7}]' : args.includes('user') ? '{"username":"me"}' : '[]'))
     await new GitLabBoard('acme/app', run, { baseBranch: 'develop', retryDelay: 0 }).openPullRequest('5', 'Task', 'body').catch(() => undefined)
     expect(calls.flat()).toContain('target_branch=develop')
+    expect(calls.flat()).toContain('assignee_id=7')
   })
 
   it('accepts branch names only', () => {

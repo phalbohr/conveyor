@@ -86,6 +86,7 @@ const triageSchema = z.object({
 const QUOTA_FRESH = 10 * 60_000
 const LAND = 'land'
 const LAND_WAIT = 60_000
+const CHECKS_GRACE = 5 * 60_000
 const MERGE_LOCK = 'merge'
 const LOCK_TTL = 10 * 60_000
 
@@ -413,7 +414,7 @@ export class Engine {
       await board.openPullRequest(
         id,
         part ? `${task.title} (part ${part.index}/${part.total}: ${part.title})` : task.title,
-        `Conveyor task #${id}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
+        `${config.close_on_done && (!part || part.index === part.total) ? 'Closes' : 'Part of'} #${id}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
       )
       if (chain.merge === 'review') {
         delete state.stage
@@ -616,6 +617,7 @@ export class Engine {
     let error: string | undefined
     if (!pull || pull.state === 'closed') error = 'the pull request is closed'
     else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait('checks are pending')
+    else if (pull.checks === 'none' && this.checksMayStart(state, pull.headSha)) return wait('no checks yet; waiting for CI to start')
     else if (pull.checks === 'failure') error = 'checks failed'
     else if (pull.mergeable === 'no') error = 'the branch has conflicts with the base branch'
     else {
@@ -647,6 +649,11 @@ export class Engine {
     await board.setState(id, 'needs-input')
     await run.save()
     return 'stop'
+  }
+
+  private checksMayStart(state: WorkpadState, sha: string) {
+    if (state.checksWait?.sha !== sha) state.checksWait = { sha, since: new Date().toISOString() }
+    return Date.now() - Date.parse(state.checksWait.since) < CHECKS_GRACE
   }
 
   private quotaBlock(harness: HarnessName, config: Config): string | undefined {

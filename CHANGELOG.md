@@ -13,6 +13,9 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- The control screen has a queued column, as the board: answered tasks that wait for a free slot.
+- The conveyor merges a pull request only after its checks started: without any check it waits up to 5 minutes for CI; before, it merged right after opening the pull request, before CI ran.
+- The conveyor assigns a task and its pull request to the user it runs as and removes the assignment on release. The pull request says `Closes #N` when the conveyor would close the issue anyway (`close_on_done` and the last part), otherwise `Part of #N`.
 - `r` on the control screen starts a conveyor cycle at once while the conveyor runs; the log records the start of every stage.
 - Model lists of the harnesses expire after a day, so new models appear without `--refresh`; `r` on the control screen says that it reads the board again and when it is done.
 - The `opencode` and `kilocode` presets pass the stage effort as `--variant`.
