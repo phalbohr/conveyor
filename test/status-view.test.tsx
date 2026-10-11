@@ -504,11 +504,11 @@ describe('liveness of tasks in progress', () => {
     at('2026-10-05T10:05:00.000Z')
     const activity = { stage: 'implement', startedAt: '2026-10-05T10:00:00.000Z', lastOutputAt: '2026-10-05T10:04:50.000Z' }
     const running = { ...snapshot, runner: { running: true, pid: 7, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, activity } : task)) }
-    expect(login(running)).toMatchObject({ detail: expect.stringContaining('● running here 5m · output 10s ago'), tone: 'ok' })
+    expect(login(running)).toMatchObject({ detail: expect.stringContaining('● running here 5m · active 10s ago'), tone: 'ok' })
     expect(login(running)?.detail).not.toMatch(/attempt|last error/)
 
     at('2026-10-05T10:08:00.000Z')
-    expect(login(running)).toMatchObject({ detail: expect.stringContaining('no output for 3m'), tone: 'warning' })
+    expect(login(running)).toMatchObject({ detail: expect.stringContaining('no activity for 3m'), tone: 'warning' })
     vi.useRealTimers()
   })
 

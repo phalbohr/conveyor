@@ -877,7 +877,7 @@ export class Engine {
       if (!stall) return
       clearTimeout(watchdog)
       watchdog = setTimeout(() => {
-        reason = `stage stalled: no harness events for ${stall / 60_000} min`
+        reason = `stage stalled: no harness output or activity for ${stall / 60_000} min`
         controller.abort()
       }, stall)
     }

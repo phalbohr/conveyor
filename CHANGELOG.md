@@ -13,6 +13,8 @@ First public release.
 - `close_on_done` (default `false`): finished issues stay open with `conveyor::done` until a human closes them.
 - The init menu has Cancel and Esc; the help screen starts a live session with the conveyor-help skill on `a`.
 - GitHub boards: `init` and `conveyor board update` use the project linked to the repository or create and link one; the board check reports a missing project.
+- The `opencode` and `kilocode` presets pass the stage effort as `--variant`.
+- Command harnesses count CPU work of their processes as activity, so a model that streams one long answer without output is not aborted as stalled; `timeouts.stage` still ends endless runs.
 - `conveyor config set` and the settings editor set `sandbox` and `network` of codex stages.
 - A usage limit of a harness pauses its stages until the reset time instead of counting failed attempts.
 - The review stage template no longer asks the agent to commit: the conveyor commits after the stage, and sandboxed agents cannot write `.git`.
@@ -21,7 +23,7 @@ First public release.
 - Reset: `x` on a task in the control screen or `conveyor reset <number> [--form]` stops it, closes its pull request, deletes its branch and workspace, clears the workpad, and returns it to Backlog as idea, story, plan, or draft.
 - `limits.running` counts my tasks in progress that wait for a retry; before, a failed stage freed its slot and the conveyor claimed more tasks than the limit.
 - The `opencode` and `kilocode` presets run with `--format json`: without a terminal both print nothing until the end, so the stall timeout aborted working stages; JSON events arrive on every step.
-- The control screen shows whether a task in progress is alive: running time and last harness output, or the heartbeat of a conveyor in another terminal. `s` stops at once: it aborts triage and the running stages and logs which. An existing blocked-by link no longer logs an error.
+- The control screen shows whether a task in progress is alive: running time and last harness activity, or the heartbeat of a conveyor in another terminal. `s` stops at once: it aborts triage and the running stages and logs which. An existing blocked-by link no longer logs an error.
 - Workpad state stays readable when a harness error contains color codes or other control characters; before, such an error broke the hidden state and the task restarted at the wrong stage.
 - OpenCode and Kilo stages run in parallel: each run gets its own database (`OPENCODE_DB`, `KILO_DB`), new placeholder `{temp}`. A failed model listing is no longer cached, so `run` warns about an unknown model again; harness errors in the log have no color codes.
 - Live sessions (`new`, `attach`, `h`, help `a`) use the personal `live: {harness, model, effort}` from `local.yaml`; `opencode` and `kilocode` start in their interactive mode; a failed session shows its exit code.

@@ -38,6 +38,7 @@ export class CommandHarness implements Harness {
           run.onEvent?.()
           tail = [...tail.slice(-19), line]
         },
+        ...(run.onEvent ? { onBusy: run.onEvent } : {}),
       })
 
       if (exit.aborted) return { result: failed('stage aborted'), usage: NO_USAGE }

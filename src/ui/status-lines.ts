@@ -40,7 +40,7 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
       if (task.part) details.push(`part ${task.part}`)
       const now = Date.now()
       const quiet = task.activity ? now - Date.parse(task.activity.lastOutputAt) : 0
-      if (task.activity) details.push(`● running here ${span(now - Date.parse(task.activity.startedAt))} · ${quiet < QUIET ? `output ${span(quiet)} ago` : `no output for ${span(quiet)}`}`)
+      if (task.activity) details.push(`● running here ${span(now - Date.parse(task.activity.startedAt))} · ${quiet < QUIET ? `active ${span(quiet)} ago` : `no activity for ${span(quiet)}`}`)
       else if (task.state === 'in-progress') {
         const heartbeat = task.heartbeat ? ` · heartbeat ${span(now - Date.parse(task.heartbeat))} ago` : ''
         if (!status.runner.running) details.push('○ not running: [s] starts the conveyor')
@@ -180,7 +180,7 @@ export function helpLines(): Line[] {
     row('in progress 1/3', 'my tasks in this column against my limit; needs input and review the same'),
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),
-    row('● ○ in progress', '● running here with time and last harness output (yellow: quiet) · ○ waits or not running · pid N: another terminal'),
+    row('● ○ in progress', '● running here with time and last harness activity: output or CPU work (yellow: quiet) · ○ waits or not running · pid N: another terminal'),
     row('live sessions', 'n, a, h, and a in help use live.harness and live.model from local.yaml (settings: Personal)'),
     row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h harness · x reset · i form::idea on/off (backlog) · Esc back'),
     row('part::2/3', 'the plan split the story into parts, one pull request each; the story is done after the last part merges'),
