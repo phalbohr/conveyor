@@ -122,7 +122,7 @@ function boardSummary(check: BoardCheck) {
 export function boardLines(status: StatusSnapshot): Line[] {
   const lines = status.board ? boardCheckLines(status.board) : []
   return [
-    { text: 'Board check · [k] or Esc back', tone: 'title' },
+    { text: 'Board check · [k] or [Esc] back', tone: 'title' },
     { text: 'The conveyor compares the board with the labels and fields this version uses. It never changes or deletes what exists.', tone: 'muted' },
     { text: '' },
     ...(status.board ? (lines.length ? lines.map((text): Line => ({ text: `  ${text}` })) : [{ text: '  The board has everything this version uses.', tone: 'ok' as const }]) : [{ text: '  Not checked yet; press r.', tone: 'muted' as const }]),
@@ -133,7 +133,7 @@ export function boardLines(status: StatusSnapshot): Line[] {
 export function usageLines(status: StatusSnapshot): Line[] {
   const { limits } = status
   const lines: Line[] = [
-    { text: 'Usage · [u] or Esc back', tone: 'title' },
+    { text: 'Usage · [u] or [Esc] back', tone: 'title' },
     { text: `tokens today ${number(limits.dailyTokens.used)}${limits.dailyTokens.limit ? ` / ${number(limits.dailyTokens.limit)} (limits.daily_tokens)` : ' (no daily limit)'}` },
     { text: '' },
     { text: 'Subscription windows', tone: 'title' },
@@ -167,7 +167,7 @@ function reserveReached(quota: StatusSnapshot['limits']['subscription'][string])
 
 export function helpLines(): Line[] {
   return [
-    { text: 'conveyor help · [h] or Esc back · [a] ask the conveyor-help skill', tone: 'title' },
+    { text: 'conveyor help · [h] or [Esc] back · [a] ask the conveyor-help skill', tone: 'title' },
     { text: 'The board holds every task. `conveyor run` takes tasks within your limits and runs their stages; you decide at the gates.' },
     { text: '' },
     { text: 'Flow', tone: 'title' },

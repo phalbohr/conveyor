@@ -125,7 +125,7 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
           }}
         />
         <Text> </Text>
-        <Text color="gray">Enter: apply · Esc: cancel</Text>
+        <Text color="gray">[Enter] apply · [Esc] cancel</Text>
       </Box>
     )
   }
@@ -156,7 +156,7 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
           />
         )}
         <Text> </Text>
-        <Text color="gray">Enter: apply · Esc: cancel{inheritable(field) ? ' · empty value: inherit' : ''}</Text>
+        <Text color="gray">[Enter] apply · [Esc] cancel{inheritable(field) ? ' · empty value: inherit' : ''}</Text>
       </Box>
     )
   }
@@ -206,7 +206,7 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
 
   const width = Math.max(16, ...fields.map((field) => shown(field).length + 1))
   const current = fields[cursor]
-  const footer = '↑↓ move · ←→ change option · Enter edit · m refresh models · a add stage · x remove stage · [ ] move stage · s save · q quit'
+  const footer = '[↑↓] move · [←→] change option · [Enter] edit · [m] refresh models · [a] add stage · [x] remove stage · [[ ]] move stage · [s] save · [q] quit'
   const problemText = problems.length > 0 ? ['Not valid yet, cannot be saved:', ...problems].join('\n') : ''
   const fixed = 1 + 2 + heightOf(current?.help ?? '', columns) + heightOf(problemText, columns) + heightOf(message?.text ?? '', columns) + heightOf(footer, columns)
   const { start, count } = fit(fields, cursor, Math.max(3, rows - fixed - 1))

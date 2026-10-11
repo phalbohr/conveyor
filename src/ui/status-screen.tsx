@@ -392,7 +392,7 @@ function viewport(lines: Line[], scroll: number, room: number, columns: number):
 function logLines(events: RunnerEvent[], project?: string): Line[] {
   const file = project ? `~/.conveyor/logs/${project.replaceAll('/', '-')}.log` : '~/.conveyor/logs/'
   return [
-    { text: `Log · last ${LOG_LINES} events · full log ${file} · [o] or Esc back`, tone: 'title' },
+    { text: `Log · last ${LOG_LINES} events · full log ${file} · [o] or [Esc] back`, tone: 'title' },
     ...(events.length === 0 ? [{ text: '  no events yet: start the conveyor with s', tone: 'muted' as const }] : []),
     ...events.map((event): Line => ({
       text: `${new Date(event.time).toLocaleTimeString()} ${event.text.split('\n')[0]}`,
