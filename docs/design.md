@@ -386,7 +386,7 @@ If the board read fails, running stages continue; the next cycle tries again.
 - A confirmed task leaves `awaiting_me`. If no `running` slot is free, it gets `conveyor::queued` and waits.
 - When a slot is free: first tasks from the resume queue, then new tasks from the board.
 - A task that waits to merge (checks, approvals, a red base, or the base CI after its merge) runs no harness and takes no `running` slot.
-- The fix task of a red base starts even when every slot is taken, the resume queue is not empty, or `awaiting_me`, `awaiting_review`, or the daily token limit is reached: no other task merges before it. A subscription reserve still pauses its stages until the window resets.
+- The fix task of a red base starts even when every slot is taken, the resume queue is not empty, or `awaiting_me`/`awaiting_review` is reached: no other task merges before it. The daily token limit and the subscription reserves still apply to it.
 - A task whose checks failed on an older base branch is rebased onto the latest base and waits for its new checks before any repair stage runs.
 - `awaiting_review` only blocks the claim of new tasks. It never stops a task that is ready for review.
 - The CLI claims a new task only if all conditions are true:

@@ -247,6 +247,7 @@ export class Engine {
     for (const task of this.sorted(fresh, me)) {
       const fix = this.isBaseFix(task, me)
       if (!fix && (blocked || slots <= 0)) break
+      if (fix && overBudget) continue
       if (!(await this.lock(task.id, LOCK_TTL))) continue
       await board.setOwner(task.id, me)
       this.log(`claimed task ${task.id}: ${task.title}`)
