@@ -58,7 +58,7 @@ export async function runCommand(context: Context, options: { once?: boolean }):
     if (event.level === 'info') context.stdout(`${event.time} ${event.text}\n`)
     else context.stderr(event.level === 'warning' ? `warning: ${event.text}\n` : `${event.text}\n`)
   })
-  const started = await runner.start({ ...(options.once ? { once: true } : {}) })
+  const started = await runner.start(options.once ? { once: true } : {})
   if (!started.ok) return 1
   if (options.once) return 0
   await new Promise<void>((resolve) => {

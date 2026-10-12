@@ -13,7 +13,7 @@ const LEFT = '\u001B[D'
 const until = (assertion: () => void) => vi.waitFor(assertion, { timeout: 5_000 })
 const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
 
-function setup(options: { catalogs?: ConstructorParameters<typeof SettingsDocument>[1]['catalogs']; refresh?: () => Promise<Record<string, never>> } = {}) {
+function setup(options: { catalogs?: NonNullable<ConstructorParameters<typeof SettingsDocument>[1]>['catalogs']; refresh?: () => Promise<Record<string, never>> } = {}) {
   const dir = tempDir('conveyor-settings-')
   writeFileSync(join(dir, 'config.yaml'), 'board:\n  provider: github\n  project: acme/app\ntransitions:\n  merge: human\nstages:\n  implement: {}\n  merge: {}\n')
   writeFileSync(join(dir, 'local.yaml'), 'limits:\n  running: 3\n')

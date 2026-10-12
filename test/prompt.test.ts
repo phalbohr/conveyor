@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildPrompt, buildTriagePrompt } from '../src/engine/prompt.js'
 import type { Task } from '../src/board/board.js'
 
-const task: Task = { id: '7', title: 'Login', body: 'Add login.', author: 'me', url: 'https://example.test/issues/7', assignees: [], openBlockers: 0, closed: false, createdAt: '' }
+const task: Task = { id: '7', title: 'Login', body: 'Add login.', author: 'me', url: 'https://example.test/issues/7', labels: [], assignees: [], openBlockers: 0, closed: false, createdAt: '' }
 
 describe('prompt boundaries', () => {
   it('tells every stage what is an instruction, what is data, and which board steps belong to the conveyor', () => {

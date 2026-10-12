@@ -27,6 +27,7 @@ jobs:
       - run: git config --global user.name ci && git config --global user.email ci@example.test && git config --global init.defaultBranch main
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
       - name: Install the packed CLI
         run: |

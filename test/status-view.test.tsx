@@ -33,6 +33,7 @@ const snapshot: StatusSnapshot = {
     dailyTokens: { used: 12345, limit: 0 },
     subscription: {
       claude: {
+        reports: true,
         fiveHour: { utilization: 0.93, resetsAt: '2026-10-05T14:00:00.000Z' },
         observedAt: '2026-10-05T10:00:00.000Z',
         fiveHourReserve: 10,
@@ -185,7 +186,7 @@ describe('StatusScreen as a control panel', () => {
       openBoard: async () => void calls.push('open board'),
       updateBoard: async () => 'Nothing to add.',
       detail: async (id) => ({
-        task: { id, title: id === '8' ? 'Search' : 'Store users', body: 'The task text', author: 'me', url: `https://example.test/issues/${id}`, assignees: [], openBlockers: 0, closed: false, createdAt: '', ...(id === '8' ? { state: 'backlog' as const, form: 'idea' as const } : { state: 'review' as const }) },
+        task: { id, title: id === '8' ? 'Search' : 'Store users', body: 'The task text', author: 'me', url: `https://example.test/issues/${id}`, labels: [], assignees: [], openBlockers: 0, closed: false, createdAt: '', ...(id === '8' ? { state: 'backlog' as const, form: 'idea' as const } : { state: 'review' as const }) },
         workpad: { stage: 'plan', text: 'Notes of the agent' },
         comments: [{ id: 'c1', author: 'bob', body: 'Which date format?', createdAt: '2026-10-05T09:00:00.000Z', updatedAt: '' }],
         ...(id === '3' ? { pull } : {}),

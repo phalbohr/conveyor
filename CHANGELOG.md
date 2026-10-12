@@ -9,6 +9,11 @@
 - A retry time in the past shows as `resumes next cycle` (or `resumes on start` while the conveyor is stopped).
 - After a soft stop the control screen says `All running stages finished. The conveyor stopped.`
 
+### Development
+
+- `npm run typecheck` also checks the tests; unused locals and parameters are errors.
+- `npm run lint` runs oxlint; CI and `prepublishOnly` run it.
+
 ## 0.1.0 — 2026-10-12
 
 First public release.

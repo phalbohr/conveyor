@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { Board } from '../src/board/board.js'
 import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
@@ -114,7 +115,8 @@ describe('board labels', () => {
   it('syncs the project columns with the labels on every cycle', async () => {
     const { board, cycle } = setup()
     let synced: string[] = []
-    board.syncMirror = async (tasks) => {
+    const mirror: Board = board
+    mirror.syncMirror = async (tasks) => {
       synced = tasks.map((task) => `${task.id}:${task.state}`)
       return tasks.length
     }

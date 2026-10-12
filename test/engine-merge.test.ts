@@ -261,7 +261,7 @@ describe('merge mode ai', () => {
       },
     })
     await board.createTask('Add login', 'p', { form: 'plan' })
-    await board.openPullRequest('1')
+    await board.openPullRequest('1', 'Add login', '')
     await cycle()
     expect(board.merges).toEqual([])
     expect((await board.getTask('1'))?.state).toBe('in-progress')
@@ -284,7 +284,7 @@ describe('merge mode ai', () => {
       },
     })
     await board.createTask('Add login', 'p', { form: 'plan' })
-    await board.openPullRequest('1')
+    await board.openPullRequest('1', 'Add login', '')
 
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:merge', '1:fix-ci'])

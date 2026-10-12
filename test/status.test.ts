@@ -26,7 +26,7 @@ async function board() {
   await fake.addComment(answered, renderWorkpad({ attempt: 0, waiting: { kind: 'questions', stage: 'plan', commentId: asked.id, since: '2026-10-05T09:00:00.000Z' } }, ''))
   await fake.addComment(answered, 'Blue.')
   const review = await claim('Review', 'review')
-  await fake.openPullRequest(review)
+  await fake.openPullRequest(review, 'Review', '')
   await fake.createTask('Open plan', 'body', { form: 'plan' })
   await fake.createTask('Open idea', 'body', { form: 'idea' })
   await claim('Theirs', 'in-progress', 'alice')

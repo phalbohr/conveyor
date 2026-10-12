@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import type { Board, Task, TaskState } from '../src/board/board.js'
+import type { Board, Task, TaskLabels } from '../src/board/board.js'
 
 const eventually = (assertion: () => Promise<void>) => vi.waitFor(assertion, { timeout: 30_000, interval: 1_000 })
 

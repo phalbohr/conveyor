@@ -7,13 +7,13 @@ describe('workpad', () => {
 
     expect(body).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f]/)
     expect(body).not.toContain('\\u00')
-    const pad = findWorkpad([{ id: '1', author: 'me', body, createdAt: '2026-10-10T00:00:00.000Z' }])
+    const pad = findWorkpad([{ id: '1', author: 'me', body, createdAt: '2026-10-10T00:00:00.000Z', updatedAt: '' }])
     expect(pad?.state).toMatchObject({ stage: 'plan', attempt: 1, lastError: 'no result file: Error: {\n  "name": "UnknownError"\n}' })
   })
 
   it('links the task branch and the pull request', () => {
     const body = renderWorkpad({ attempt: 0, stage: 'review', branch: 'https://github.com/acme/app/tree/conveyor/7', pull: { number: '12', url: 'https://github.com/acme/app/pull/12' } }, 'notes')
     expect(body).toContain('Branch: [conveyor/7](https://github.com/acme/app/tree/conveyor/7) · pull request [#12](https://github.com/acme/app/pull/12)')
-    expect(findWorkpad([{ id: '1', author: 'me', body, createdAt: '2026-10-10T00:00:00.000Z' }])?.text).toBe('notes')
+    expect(findWorkpad([{ id: '1', author: 'me', body, createdAt: '2026-10-10T00:00:00.000Z', updatedAt: '' }])?.text).toBe('notes')
   })
 })

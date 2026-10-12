@@ -13,7 +13,7 @@ async function started(board: FakeBoard) {
   await board.setStage(task.id, 'implement')
   await board.addComment(task.id, renderWorkpad({ attempt: 2, stage: 'implement', form: 'story', lastError: 'tests are red', parts: ['api', 'ui'], part: 0 }, 'plan notes'))
   await board.setPart(task.id, '1/2')
-  await board.openPullRequest(task.id)
+  await board.openPullRequest(task.id, task.title, '')
   return task.id
 }
 

@@ -155,7 +155,7 @@ describe('Engine timeouts', () => {
   it('stops a stage after the stage timeout and schedules a retry', async () => {
     const { board, engine, workpad, started } = setup({
       config: 'timeouts: {stage: 2m, stall: 0}\n',
-      script: (run, index) => (index === 0 ? never() : done),
+      script: (_run, index) => (index === 0 ? never() : done),
     })
     await board.createTask('Login', 'p', { form: 'plan' })
 
