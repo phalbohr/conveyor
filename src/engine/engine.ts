@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type { Board, Comment, PullRequest, Task, TaskForm } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, Quota, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
-import { NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
+import { LENGTH_LIMIT, NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
 import { isModelError } from '../models.js'
 import { resolveSkills } from '../skills.js'
 import { QuotaStore, type UsageLedger } from '../usage.js'
@@ -101,6 +101,7 @@ type StageContext = {
   gate: { mode: GateMode; criteria: string } | undefined
   conversation: { request: string; replies: string[]; approval: boolean } | undefined
   notes?: { author: string; at: string; text: string }[]
+  split?: boolean
   attempt: number
   signal: AbortSignal
   review?: string | undefined
@@ -580,6 +581,7 @@ export class Engine {
           gate,
           conversation,
           notes: teamNotes(comments),
+          split: state.split ?? false,
           attempt: state.attempt,
           signal,
           review: state.review,
@@ -629,10 +631,12 @@ export class Engine {
       if (result.outcome === 'done') {
         state.attempt = 0
         delete state.lastError
+        delete state.split
         summary = result.summary
         continue
       }
       if (result.outcome === 'failed') {
+        if (result.summary.startsWith(LENGTH_LIMIT)) state.split = true
         const modelError = isModelError(result.summary)
         if (modelError) {
           result = {
@@ -1062,6 +1066,7 @@ export class Engine {
       workpad: context.workpad,
       ...(context.conversation ? { conversation: context.conversation } : {}),
       ...(context.notes?.length ? { notes: context.notes } : {}),
+      ...(context.split ? { split: true } : {}),
       attempt: context.attempt,
       language: config.language.docs,
       ...(context.review ? { review: context.review, reviewMode: context.reviewMode ?? 'rework' } : {}),

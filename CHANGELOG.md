@@ -28,6 +28,7 @@ First public release.
 
 ### Harnesses
 
+- A model that stops at its length limit gives a readable error with token counts, and the next attempt splits the work into small steps.
 - `claude` and `codex` are built in; presets for `opencode`, `kilocode`, `pi`, `openhands`, and `agent-zero`; any CLI through `harnesses`. `claude`, `codex`, `opencode`, and `kilocode` are tested with real runs.
 - Command harnesses write the result JSON to `CONVEYOR_RESULT` and the artifact text as plain text to `CONVEYOR_ARTIFACT`. Placeholders: `{prompt}`, `{model}`, `{effort}`, `{workspace}`, `{result}`, `{artifact}`, `{temp}`.
 - The `opencode` and `kilocode` presets run with `--format json`, pass the effort as `--variant`, and give every stage its own database, so stages run in parallel.

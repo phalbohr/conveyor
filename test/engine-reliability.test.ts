@@ -116,6 +116,21 @@ describe('Engine retries', () => {
     expect(retry?.prompt).not.toContain('conveyor:workpad')
   })
 
+  it('asks the next attempt to split the work after the model reached its length limit', async () => {
+    const { board, cycle, harness } = setup({
+      script: (run, index) => (run.stage === 'implement' && index === 0 ? { outcome: 'failed', summary: 'the model reached its length limit: it stopped with finish reason "length"' } : done),
+    })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await cycle()
+    await vi.advanceTimersByTimeAsync(10_000)
+    await cycle()
+
+    const [first, second] = stageRuns(harness).filter((run) => run.stage === 'implement')
+    expect(first?.prompt).not.toContain('## Split the work')
+    expect(second?.prompt).toContain('## Split the work')
+    expect(stageRuns(harness).find((run) => run.stage === 'review')?.prompt).not.toContain('## Split the work')
+  })
+
   it('asks a human after the maximum number of attempts and resumes on reply', async () => {
     let failures = 2
     const { board, cycle, runs } = setup({

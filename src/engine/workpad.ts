@@ -32,6 +32,7 @@ export type WorkpadState = {
   followUp?: boolean
   repairs?: number
   source?: string
+  split?: boolean
   pull?: { number: string; url: string }
 }
 
@@ -68,6 +69,7 @@ const stateSchema = z.object({
   followUp: z.boolean().optional(),
   repairs: z.int().nonnegative().optional(),
   source: z.string().optional(),
+  split: z.boolean().optional(),
   pull: z.object({ number: z.string(), url: z.string() }).optional(),
 })
 

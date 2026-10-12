@@ -118,6 +118,17 @@ describe('CommandHarness', () => {
     expect(output.result.summary).toContain('I could not finish the plan')
   })
 
+  it('explains a length stop and a context overflow in plain words', async () => {
+    const event = JSON.stringify({ type: 'step_finish', part: { reason: 'length', tokens: { input: 107464, output: 0, reasoning: 207 } } })
+    const stopped = agent(`console.log(${JSON.stringify(event)})`)
+    const output = await new CommandHarness({ command: stopped.command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(output.result.summary).toBe('the model reached its length limit: it stopped with finish reason "length" before it finished (input 107464 tokens, reasoning 207, output 0). The next attempt splits the work into smaller steps.')
+
+    const overflow = agent(`console.error('Error: This model maximum context length is 131072 tokens'); process.exit(1)`)
+    const failedRun = await new CommandHarness({ command: overflow.command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(failedRun.result.summary).toBe('the model reached its length limit: its context window overflowed. The next attempt splits the work into smaller steps.')
+  })
+
   it('stops on abort', async () => {
     const { command } = agent(`setInterval(() => console.log('still working'), 100)`)
     const controller = new AbortController()

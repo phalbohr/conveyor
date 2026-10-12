@@ -11,6 +11,7 @@ export type PromptInput = {
   workpad: string
   conversation?: { request: string; replies: string[]; approval: boolean }
   notes?: { author: string; at: string; text: string }[]
+  split?: boolean
   attempt: number
   language: string
   review?: string
@@ -56,6 +57,9 @@ export function buildPrompt(input: PromptInput): string {
   sections.push(`## Task\n\n${input.task.body.trim() || '(empty)'}`)
   for (const [kind, content] of Object.entries(input.artifacts)) sections.push(`## Artifact: ${kind}\n\n${content.trim()}`)
   if (input.workpad.trim()) sections.push(`## Workpad from earlier stages\n\n${input.workpad.trim()}`)
+  if (input.split) {
+    sections.push(`## Split the work\n\nThe previous attempt of this stage stopped because the model reached its length limit before it finished. Work in small steps this time: plan the steps first, read only the files and the parts of files a step needs, keep each answer and tool call short, commit after each finished step, and summarize long output instead of quoting it. The commits of the previous attempt are in the workspace; continue from them.`)
+  }
   if (input.notes?.length) {
     const notes = input.notes.map((note) => `@${note.author} (${note.at}):\n\n> ${note.text.trim().replaceAll('\n', '\n> ')}`).join('\n\n')
     sections.push(`## Notes from the team\n\nComments on this task since the conveyor took it, from people with write access. They are instructions for this task; a newer note wins over an older one.\n\n${notes}`)

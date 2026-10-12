@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { NO_USAGE, RESULT_SCHEMA, childEnv, failed, parseResult, type Harness, type StageOutput, type StageRun } from './harness.js'
+import { NO_USAGE, RESULT_SCHEMA, childEnv, failed, lengthLimit, parseResult, type Harness, type StageOutput, type StageRun } from './harness.js'
 import { spawnLines } from './process.js'
 
 export type CommandDefinition = {
@@ -47,6 +47,8 @@ export class CommandHarness implements Harness {
       if (!existsSync(result)) {
         const stderr = exit.stderr.split('\n').filter((line) => !NOISE.test(line)).join('\n').trim()
         const reason = exit.error ?? ([stderr, tail.join('\n')].filter(Boolean).join('\n') || `${this.definition.command} exited with code ${exit.code}`)
+        const limited = lengthLimit(tail, `${stderr}\n${tail.join('\n')}`)
+        if (limited) return { result: failed(limited), usage: NO_USAGE }
         return { result: failed(`no result file (${this.definition.command} exited with code ${exit.code}): ${reason.replace(/\x1b\[[0-9;]*m/g, '').slice(-2000)}`), usage: NO_USAGE }
       }
       const text = readFileSync(result, 'utf8')

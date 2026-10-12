@@ -121,3 +121,20 @@ export function usageLimitUntil(text: string, now = new Date()): string | undefi
   if (at <= now) at.setDate(at.getDate() + 1)
   return at.toISOString()
 }
+
+export const LENGTH_LIMIT = 'the model reached its length limit'
+const OVERFLOW = /context[_ ]length[_ ]exceeded|maximum context length|context window|prompt is too long|too many tokens|ContextWindowExceeded/i
+
+export function lengthLimit(lines: string[], text: string): string | undefined {
+  for (const line of [...lines].reverse()) {
+    if (!line.includes('"step_finish"') || !line.includes('"length"')) continue
+    try {
+      const event = JSON.parse(line) as { part?: { reason?: string; tokens?: { input?: number; output?: number; reasoning?: number } } }
+      if (event.part?.reason !== 'length') continue
+      const tokens = event.part.tokens ?? {}
+      return `${LENGTH_LIMIT}: it stopped with finish reason "length" before it finished (input ${tokens.input ?? '?'} tokens, reasoning ${tokens.reasoning ?? '?'}, output ${tokens.output ?? '?'}). The next attempt splits the work into smaller steps.`
+    } catch {}
+  }
+  if (OVERFLOW.test(text)) return `${LENGTH_LIMIT}: its context window overflowed. The next attempt splits the work into smaller steps.`
+  return undefined
+}
