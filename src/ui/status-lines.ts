@@ -51,7 +51,7 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
       }
       if (task.state === 'queued') details.push('answered, waits for a free slot')
       if (task.attempt > 0 && !task.activity) details.push(`attempt ${task.attempt + 1}`)
-      if (task.retryAt && !task.activity) details.push(`retry ${time(task.retryAt)}`)
+      if (task.retryAt && !task.activity) details.push(Date.parse(task.retryAt) > now ? `retry ${time(task.retryAt)}` : status.runner.running ? 'resumes next cycle' : 'resumes on start')
       if (task.state === 'needs-input') details.push(task.answered ? 'answered, resumes next cycle' : `waits for your answer since ${task.waitingSince ? time(task.waitingSince) : '?'}`)
       if (task.state === 'review' && task.pullRequest) details.push(task.pullRequest)
       if (task.lastError && !task.activity) details.push(`last error: ${task.lastError}`)

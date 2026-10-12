@@ -609,6 +609,15 @@ describe('liveness of tasks in progress', () => {
     expect(login(elsewhere)?.detail).toContain('runs in conveyor pid 42 · heartbeat 3m ago')
   })
 
+  it('shows a due retry as a resume instead of a past time', () => {
+    const due = (running: boolean) => ({ ...snapshot, runner: { running, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, retryAt: '2026-10-11T16:23:00.000Z' } : task)) })
+    expect(login(due(false))?.detail).toContain('resumes on start')
+    expect(login(due(true))?.detail).toContain('resumes next cycle')
+    expect(login(due(true))?.detail).not.toContain('retry 11.10.')
+    const later = { ...snapshot, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, retryAt: new Date(Date.now() + 60 * 60_000).toISOString() } : task)) }
+    expect(login(later)?.detail).toMatch(/retry \d\d\.\d\d\. \d\d:\d\d/)
+  })
+
   it('shows why a parked task waits instead of the next attempt', () => {
     const parked = { ...snapshot, runner: { running: true, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, stage: 'land', parked: 'merge waits: the base branch CI is red; task #9 fixes it first' } : task)) }
     expect(login(parked)?.detail).toContain('stage::land · ○ merge waits: the base branch CI is red; task #9 fixes it first')
