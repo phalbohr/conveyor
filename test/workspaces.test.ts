@@ -129,6 +129,23 @@ describe('GitWorkspaces', () => {
     expect(readFileSync(join(workspace.path, 'review.txt'), 'utf8')).toBe('reviewer fix\n')
   })
 
+  it('adopts a task branch that an older version pushed without a lease record', async () => {
+    const { project } = repository()
+    const manager = workspaces(project)
+    const workspace = await manager.prepare('4')
+    git(workspace.path, 'config', 'user.email', 'test@example.com')
+    git(workspace.path, 'config', 'user.name', 'Test')
+    writeFileSync(join(workspace.path, 'a.txt'), 'a\n')
+    await manager.commitAll('4', 'first')
+    git(workspace.path, 'push', '--quiet', '--force', 'origin', 'HEAD:refs/heads/conveyor/4')
+    git(project, 'fetch', '--quiet', 'origin')
+    writeFileSync(join(workspace.path, 'b.txt'), 'b\n')
+    await manager.commitAll('4', 'second')
+
+    await manager.prepare('4')
+    await expect(manager.push('4')).resolves.toMatch(/^[0-9a-f]{40}$/)
+  })
+
   it('runs after_create once in a new workspace', async () => {
     const { project } = repository()
     const manager = workspaces(project, { after_create: 'echo created >> hook.log' })

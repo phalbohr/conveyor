@@ -94,6 +94,11 @@ export class GitWorkspaces implements Workspaces {
     if ((await this.tryGit(this.options.repo, 'fetch', '--quiet', 'origin')) === undefined) return
     const remote = `refs/remotes/origin/${taskBranch(taskId)}`
     if ((await this.tryGit(path, 'rev-parse', '--verify', '--quiet', remote)) === undefined) return
+    const known = await this.tryGit(this.options.repo, 'rev-parse', '--verify', '--quiet', leaseRef(taskId))
+    if (!known && (await this.tryGit(path, 'merge-base', '--is-ancestor', remote, 'HEAD')) !== undefined) {
+      await this.tryGit(this.options.repo, 'update-ref', leaseRef(taskId), remote)
+      return
+    }
     if ((await this.tryGit(path, 'merge-base', '--is-ancestor', 'HEAD', remote)) === undefined) return
     if ((await this.tryGit(path, 'merge', '--ff-only', '--quiet', remote)) !== undefined) await this.tryGit(this.options.repo, 'update-ref', leaseRef(taskId), remote)
   }
