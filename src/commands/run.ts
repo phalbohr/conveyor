@@ -14,6 +14,7 @@ import { parseStageFile } from '../engine/stage-file.js'
 import { findSettings } from '../settings.js'
 import { resolveSkills } from '../skills.js'
 import { resetTask, type ResetForm } from '../engine/reset.js'
+import { sessionFile } from '../session-log.js'
 import { runningPid } from '../lock.js'
 import { taskWorkspaces } from '../runner.js'
 import { type Workspaces } from '../workspaces.js'
@@ -90,7 +91,7 @@ export async function resetCommand(context: Context, id: string, form: ResetForm
     return 1
   }
   try {
-    context.stdout(`${await resetTask(prepared.board, taskWorkspaces(context, prepared.settings, prepared.config, prepared.board), id, form)}\n`)
+    context.stdout(`${await resetTask(prepared.board, taskWorkspaces(context, prepared.settings, prepared.config, prepared.board), id, form, sessionFile(context.home, prepared.config.board.project, id))}\n`)
     return 0
   } catch (error) {
     context.stderr(`${(error as Error).message}\n`)

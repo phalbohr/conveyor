@@ -44,6 +44,7 @@ Commands:
 | `conveyor new` | live harness session in the terminal; result is a new task on the board. `--write` opens a template (title, form, text) in `$VISUAL`/`$EDITOR`; `--title` (with `--form`, `--body`) creates the task at once |
 | `conveyor attach <issue>` | answer the questions of a `needs-input` task in a live harness session |
 | `conveyor release <issue>` | release the task claim manually (`--force` for private tasks of others) |
+| `conveyor watch <issue> [-f]` | show the session log of a task (`session_logs: true`); `-f` follows it |
 | `conveyor reset <issue> [--form]` | start a task over: stop it, close its PR/MR, delete its branch and workspace, clear the workpad, return it to Backlog with a form |
 
 ## Language and formats
@@ -138,6 +139,7 @@ limits:
 poll_interval: 5m
 pickup: {assignee: me, include_unassigned: true}
 workspace: {root: "~/.conveyor/workspaces/{project}"}
+session_logs: false     # true: record each stage for `w` and `conveyor watch`
 ```
 
 ## Artifacts

@@ -176,15 +176,17 @@ function fakeRunner() {
 describe('StatusScreen as a control panel', () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
   const DOWN = '\u001B[B'
+  const UP = '\u001B[A'
   const RIGHT = '\u001B[C'
   const ESC = '\u001B'
 
-  function control() {
+  function control(session: { enabled: boolean; lines: string[] } = { enabled: false, lines: [] }) {
     const calls: string[] = []
     const pull = { number: '52', url: 'https://example.test/pull/52', headSha: 'a', state: 'open' as const, checks: 'success' as const, mergeable: 'yes' as const, feedback: [], reviews: [], comments: [{ author: 'alice', body: 'Looks fine', createdAt: '2026-10-05T10:00:00.000Z' }] }
     const value: TaskControl = {
       openBoard: async () => void calls.push('open board'),
       updateBoard: async () => 'Nothing to add.',
+      session: (id) => ({ ...session, file: `/home/me/.conveyor/sessions/acme-app/${id}.log` }),
       detail: async (id) => ({
         task: { id, title: id === '8' ? 'Search' : 'Store users', body: 'The task text', author: 'me', url: `https://example.test/issues/${id}`, labels: [], assignees: [], openBlockers: 0, closed: false, createdAt: '', ...(id === '8' ? { state: 'backlog' as const, form: 'idea' as const } : { state: 'review' as const }) },
         workpad: { stage: 'plan', text: 'Notes of the agent' },
@@ -226,6 +228,44 @@ describe('StatusScreen as a control panel', () => {
     await settle()
     stdin.write(ESC)
     await vi.waitFor(() => expect(lastFrame()).toContain('› #8 Search'), { timeout: 5_000 })
+  })
+
+  it('watches the session of a task, scrolls back, follows again, and returns', async () => {
+    const lines = ['10:00:00 ── implement · claude · attempt 1 · 2026-10-12 ──', ...Array.from({ length: 60 }, (_, index) => `10:00:${String(index).padStart(2, '0')} ▸ Bash step ${index}`), '10:01:00   ✗ exit 1']
+    const { value } = control({ enabled: true, lines })
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write(DOWN)
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #7 Dark mode'), { timeout: 5_000 })
+    expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[w] watch')
+    await settle()
+    stdin.write('w')
+    await vi.waitFor(() => expect(lastFrame()).toContain('Watch #7 · follows the stage · ~/.conveyor/sessions/acme-app/7.log'), { timeout: 5_000 })
+    expect(lastFrame()).toContain('✗ exit 1')
+    expect(lastFrame()).not.toContain('step 0\n')
+    await settle()
+    stdin.write(UP)
+    await vi.waitFor(() => expect(lastFrame()).toContain('paused, ↓ at the end follows again'), { timeout: 5_000 })
+    expect(lastFrame()).not.toContain('✗ exit 1')
+    await settle()
+    stdin.write(DOWN)
+    await vi.waitFor(() => expect(lastFrame()).toContain('follows the stage'), { timeout: 5_000 })
+    await settle()
+    stdin.write('w')
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #7 Dark mode'), { timeout: 5_000 })
+  })
+
+  it('says how to turn session logs on when they are off', async () => {
+    const { value } = control()
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write(DOWN)
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #7 Dark mode'), { timeout: 5_000 })
+    await settle()
+    stdin.write('w')
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('session logs are off: turn on "Session logs for watch" in [e] settings'), { timeout: 5_000 })
   })
 
   it('says that r reads the board again and when it is done', async () => {

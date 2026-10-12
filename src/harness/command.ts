@@ -37,10 +37,10 @@ export class CommandHarness implements Harness {
         env: { ...childEnv(this.options.env ?? process.env), ...env, CONVEYOR_RESULT: result, CONVEYOR_ARTIFACT: artifact },
         ...(run.signal ? { signal: run.signal } : {}),
         onLine: (line) => {
-          run.onEvent?.()
+          run.onEvent?.(line)
           tail = [...tail.slice(-19), line]
         },
-        ...(run.onEvent ? { onBusy: run.onEvent } : {}),
+        ...(run.onEvent ? { onBusy: () => run.onEvent?.() } : {}),
       })
 
       if (exit.aborted) return { result: failed('stage aborted'), usage: NO_USAGE }

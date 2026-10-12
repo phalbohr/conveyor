@@ -11,8 +11,11 @@ export type TaskDetail = {
   pull?: PullRequest
 }
 
+export type SessionView = { enabled: boolean; file: string; lines: string[] }
+
 export type TaskControl = {
   detail(id: string): Promise<TaskDetail>
+  session(id: string): SessionView
   comment(id: string, target: Target, body: string): Promise<void>
   toggleIdea(id: string): Promise<string>
   open(url: string): Promise<void>

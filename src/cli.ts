@@ -8,6 +8,7 @@ import { modelsCommand } from './commands/models.js'
 import { type ClaudeModel, type Probes } from './models.js'
 import { skillInstall } from './commands/skill.js'
 import { prepare, releaseCommand, resetCommand, runCommand } from './commands/run.js'
+import { watchCommand } from './commands/watch.js'
 import { loadConfig, type Config } from './config.js'
 import { detectBoard, initProject, type Board, type InitResult, type Target } from './init.js'
 import { findSettings } from './settings.js'
@@ -219,6 +220,15 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .option('--force', 'release a task with private artifacts of another member')
     .action(async (issue: string, options: { force?: boolean }) => {
       exitCode = validIssue(context, issue) ? await releaseCommand(context, issue, options.force ?? false) : 1
+    })
+
+  program
+    .command('watch')
+    .description('show what the harness does in the stages of a task (needs session_logs: true)')
+    .argument('<issue>', 'issue number on the board, for example 51')
+    .option('-f, --follow', 'keep showing new lines until Ctrl+C')
+    .action(async (issue: string, options: { follow?: boolean }) => {
+      exitCode = validIssue(context, issue) ? await watchCommand(context, issue, options.follow ?? false) : 1
     })
 
   program

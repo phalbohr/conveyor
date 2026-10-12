@@ -58,7 +58,7 @@ export class ClaudeHarness implements Harness {
       env: childEnv(this.options.env ?? process.env),
       ...(run.signal ? { signal: run.signal } : {}),
       onLine: (line) => {
-        run.onEvent?.()
+        run.onEvent?.(line)
         const event = parseLine(line)
         if (event?.type === 'result') last = event as ResultEvent
         if (event?.type === 'rate_limit_event') quota = toQuota(event as RateLimitEvent) ?? quota

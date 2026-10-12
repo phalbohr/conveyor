@@ -55,7 +55,7 @@ export class CodexHarness implements Harness {
         env: childEnv(this.options.env ?? process.env),
         ...(run.signal ? { signal: run.signal } : {}),
         onLine: (line) => {
-          run.onEvent?.()
+          run.onEvent?.(line)
           const event = parseLine(line)
           if (event?.type === 'thread.started') thread = event.thread_id
           if (event?.type === 'item.completed' && event.item?.type === 'agent_message') message = event.item.text

@@ -144,6 +144,7 @@ const localSchema = z.strictObject({
   workspace: z.strictObject({ root: name.default('~/.conveyor/workspaces/{project}') }).prefault({}),
   language: z.strictObject({ chat: name.optional() }).prefault({}),
   live: stageSettings.prefault({}),
+  session_logs: z.boolean().default(false),
   harnesses: z.record(harness, harnessOverride).default({}),
 })
 

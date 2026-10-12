@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
@@ -435,5 +435,39 @@ describe('Engine token budget', () => {
     await cycle()
     expect(runs()).toEqual(['1:implement', '1:review', '1:merge'])
     expect(usage.today()).toBe(440)
+  })
+})
+
+describe('Engine session logs', () => {
+  const talk: Script = (run) => {
+    run.onEvent?.(JSON.stringify({ type: 'item.started', item: { type: 'command_execution', command: '/bin/zsh -lc ls' } }))
+    run.onEvent?.()
+    return done()
+  }
+  const file = (home: string, id = '1') => join(home, '.conveyor', 'sessions', 'acme-app', `${id}.log`)
+
+  it('records each stage when session_logs is on', async () => {
+    const { board, home, cycle } = setup({ local: 'session_logs: true\n', script: talk })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await cycle()
+    const lines = readFileSync(file(home), 'utf8').trim().split('\n').map((line) => line.slice(9))
+    const day = new Date().toISOString().slice(0, 10)
+    expect(lines).toEqual(['implement', 'review', 'merge'].flatMap((stage) => [`── ${stage} · claude sonnet · attempt 1 · ${day} ──`, '▸ $ ls']))
+  })
+
+  it('records nothing by default', async () => {
+    const { board, home, cycle } = setup({ script: talk })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await cycle()
+    expect(existsSync(file(home))).toBe(false)
+  })
+
+  it('deletes the log when the task is done', async () => {
+    const { board, home, cycle } = setup({ local: 'session_logs: true\n', config: 'transitions: {merge: ai}\nstages:\n  implement: {}\n  merge: {}\n', script: talk })
+    await board.createTask('Login', 'p', { form: 'plan' })
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('done')
+    expect(existsSync(file(home))).toBe(false)
+    expect(existsSync(join(home, '.conveyor', 'sessions', 'acme-app'))).toBe(true)
   })
 })

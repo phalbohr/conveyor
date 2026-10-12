@@ -1,10 +1,12 @@
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { resetTask } from '../src/engine/reset.js'
 import { manualRelease } from '../src/engine/release.js'
 import { findWorkpad, renderWorkpad } from '../src/engine/workpad.js'
 import { FakeWorkspaces } from './fakes.js'
-import { runCli } from './helpers.js'
+import { runCli, tempDir } from './helpers.js'
 
 async function started(board: FakeBoard) {
   const task = await board.createTask('Login', 'story text', { state: 'in-progress' })
@@ -22,13 +24,17 @@ describe('resetTask', () => {
     const board = new FakeBoard('me')
     const workspaces = new FakeWorkspaces()
     const id = await started(board)
+    const session = join(tempDir(), 'sessions', `${id}.log`)
+    mkdirSync(join(session, '..'))
+    writeFileSync(session, 'old stage\n')
 
-    const summary = await resetTask(board, workspaces, id)
+    const summary = await resetTask(board, workspaces, id, undefined, session)
 
     expect(summary).toContain('back in Backlog with form::story')
     expect((await board.pullRequest(id))?.state).toBe('closed')
     expect(workspaces.removed).toContain(id)
     expect(workspaces.deletedBranches).toContain(id)
+    expect(existsSync(session)).toBe(false)
     const task = await board.getTask(id)
     expect(task).toMatchObject({ state: 'backlog', form: 'story' })
     expect([task?.owner, task?.stage]).toEqual([undefined, undefined])

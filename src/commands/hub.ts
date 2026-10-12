@@ -3,6 +3,7 @@ import { loadConfig } from '../config.js'
 import { ModelCache, catalogsFor } from '../models.js'
 import { Runner, type RunnerSetup } from '../runner.js'
 import { SettingsDocument } from '../settings-editor.js'
+import { readSession, sessionFile } from '../session-log.js'
 import { collectStatus, forgetBoardCheck } from '../status.js'
 import { showSettings } from '../ui/settings-screen.js'
 import { showStatus } from '../ui/status-screen.js'
@@ -23,6 +24,11 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
   }
   const board = setup.board
   const control: TaskControl = {
+    session(id) {
+      const current = loadConfig(setup.settings)
+      const file = sessionFile(context.home, setup.config.board.project, id)
+      return { enabled: current.ok && current.config.session_logs, file, lines: readSession(file) }
+    },
     async detail(id) {
       const task = await board.getTask(id)
       if (!task) throw new Error(`task ${id} not found`)

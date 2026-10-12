@@ -1,15 +1,16 @@
 import { TextInput } from '@inkjs/ui'
 import { Box, Text, render, useApp, useInput, useWindowSize } from 'ink'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Activity } from '../engine/engine.js'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
 import { BACKLOG, CELL_WIDTH, STATUS_COLUMNS, boardLines, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
 import { clock } from './time.js'
-import { taskLines, type Target, type TaskControl, type TaskDetail } from './task-lines.js'
+import { taskLines, type SessionView, type Target, type TaskControl, type TaskDetail } from './task-lines.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 const LOG_LINES = 30
+const WATCH_LINES = 2_000
 
 export type RunnerControl = {
   readonly running: boolean
@@ -43,7 +44,7 @@ type Props = {
   onAction?: (action: HubAction) => void
 }
 
-type Panel = 'status' | 'help' | 'usage' | 'log' | 'task' | 'board'
+type Panel = 'status' | 'help' | 'usage' | 'log' | 'task' | 'board' | 'watch'
 type Input = { kind: 'attach' | 'release' } | { kind: 'new' } | { kind: 'idea' } | { kind: 'comment'; id: string; target: Target } | { kind: 'reset'; id: string }
 
 const RESET_FORMS: Record<string, 'idea' | 'story' | 'plan' | 'none'> = { i: 'idea', s: 'story', p: 'plan', d: 'none' }
@@ -63,6 +64,8 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const [view, setView] = useState<StatusView>({ column: 0, open: false, focus: 'columns', task: 0 })
   const [opened, setOpened] = useState<Opened>()
   const [tick, setTick] = useState(0)
+  const [watched, setWatched] = useState<{ id: string; from: Panel; follow: boolean }>()
+  const shown = useRef({ start: 0, last: 0 })
 
   const refresh = useCallback(
     (force?: boolean, done?: () => void) => {
@@ -92,6 +95,11 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
     const timer = setInterval(() => runner?.running && setTick((value) => value + 1), 5_000)
     return () => clearInterval(timer)
   }, [runner])
+  useEffect(() => {
+    if (panel !== 'watch') return
+    const timer = setInterval(() => setTick((value) => value + 1), 1_000)
+    return () => clearInterval(timer)
+  }, [panel])
   const activity = runner?.activity?.() ?? {}
   const status = loaded && { ...loaded, runner: { ...loaded.runner, here: runner?.running ?? false }, mine: loaded.mine.map((task) => (activity[task.id] ? { ...task, activity: activity[task.id] } : task)) }
 
@@ -128,6 +136,23 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         setScroll(0)
         setPanel((now) => (now === next ? 'status' : next))
       }
+      if (panel === 'watch' && watched && (special.escape || key === 'w')) {
+        setPanel(watched.from)
+        setScroll(0)
+        setWatched(undefined)
+        return
+      }
+      if (panel === 'watch' && watched) {
+        if (special.upArrow) {
+          setScroll(Math.max(0, (watched.follow ? shown.current.start : scroll) - 1))
+          setWatched({ ...watched, follow: false })
+        }
+        if (special.downArrow && !watched.follow) {
+          if (scroll + 1 >= shown.current.last) setWatched({ ...watched, follow: true })
+          else setScroll(scroll + 1)
+        }
+        if (key !== 'q') return
+      }
       if (special.escape) {
         if (panel === 'task') {
           setPanel('status')
@@ -163,6 +188,11 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         if (key === 'c') setInput({ kind: 'comment', id: current.id, target: current.target })
         if (key === 'b' && url) void control.open(url).catch(fail)
         if (key === 'h') act({ kind: 'harness', id: current.id })
+        if (key === 'w') {
+          setWatched({ id: current.id, from: panel, follow: true })
+          setPanel('watch')
+          return
+        }
         if (key === 'x') {
           if (panel === 'status' && view.column === BACKLOG && !selected?.released) setMessage({ text: 'x resets started tasks: mine, or released ones in Backlog.', error: true })
           else setInput({ kind: 'reset', id: current.id })
@@ -278,6 +308,8 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
           ? logLines(events, status?.project)
           : panel === 'board' && status
             ? boardLines(status)
+          : panel === 'watch' && watched && control
+            ? watchLines(watched.id, control.session(watched.id), watched.follow)
           : panel === 'task'
             ? opened?.detail
               ? taskLines(opened.detail, opened.target)
@@ -288,7 +320,10 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const footer = keyBar(panel, view, runner, opened, updated)
   const room = Math.max(3, rows - 1 - heightOf(footer, columns) - heightOf(message?.text ?? '', columns) - (input ? 4 : 0) - (error ? 1 : 0) - 1)
   const focusLine = panel === 'status' && view.focus === 'tasks' ? lines.findIndex((line) => line.text.startsWith('›')) : -1
-  const page = viewport(lines, focusLine >= 0 ? Math.max(0, focusLine - room + 4) : scroll, room, columns)
+  const pinned = panel === 'watch' ? lines.slice(0, 1) : []
+  const body = viewport(lines.slice(pinned.length), focusLine >= 0 ? Math.max(0, focusLine - room + 4) : panel === 'watch' && watched?.follow ? Number.MAX_SAFE_INTEGER : scroll, room - pinned.length, columns)
+  const page = { ...body, lines: [...pinned, ...body.lines] }
+  shown.current = { start: body.start, last: body.last }
   return (
     <Box flexDirection="column">
       {panel === 'status' && !status && !error && <Text color="gray">Loading the board…</Text>}
@@ -386,14 +421,15 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
 
 function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefined, opened: Opened | undefined, updated: Date | undefined) {
   const time = updated ? ` · updated ${clock(updated)}` : ''
+  if (panel === 'watch') return `[↑↓] scroll (↓ at the end follows again) · [w] or [Esc] back · [q] quit`
   if (panel === 'task') {
-    return `[↑↓] scroll · [c] comment · [b] browser · [h] harness · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
+    return `[↑↓] scroll · [c] comment · [b] browser · [h] harness · [w] watch · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
   }
   if (panel === 'board') return `[Enter] add what is missing · [↑↓] scroll · [Esc] back · [q] quit`
   if (panel === 'help') return `[a] ask the conveyor-help skill in a live session · [↑↓] scroll · [Esc] back · [q] quit`
   if (panel !== 'status') return `[↑↓] scroll · [Esc] back · [q] quit`
   if (view.focus === 'tasks') {
-    return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness${view.column === BACKLOG ? ' · [i] form::idea on/off' : ' · [x] reset'} · [Esc] columns · [?] help · [q] quit${time}`
+    return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness · [w] watch${view.column === BACKLOG ? ' · [i] form::idea on/off' : ' · [x] reset'} · [Esc] columns · [?] help · [q] quit${time}`
   }
   return `${runner ? `[s] ${runner.running ? (runner.finishing ? 'stop now' : 'stop') : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [k] board check · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
 }
@@ -407,9 +443,9 @@ function lineHeight(line: Line, columns: number) {
   return line.cells ? heightOf(line.cells[1] || ' ', columns - (line.cellWidth ?? CELL_WIDTH)) : heightOf(line.text || ' ', columns)
 }
 
-function viewport(lines: Line[], scroll: number, room: number, columns: number): { lines: Line[]; more?: string } {
+function viewport(lines: Line[], scroll: number, room: number, columns: number): { lines: Line[]; more?: string; start: number; last: number } {
   const total = lines.reduce((sum, line) => sum + lineHeight(line, columns), 0)
-  if (total <= room) return { lines }
+  if (total <= room) return { lines, start: 0, last: 0 }
   let last = lines.length
   let tail = 0
   while (last > 0 && tail + lineHeight(lines[last - 1] as Line, columns) <= room - 2) tail += lineHeight(lines[--last] as Line, columns)
@@ -422,7 +458,27 @@ function viewport(lines: Line[], scroll: number, room: number, columns: number):
     shown.push(line)
     used += height
   }
-  return { lines: shown, more: `lines ${start + 1}–${start + shown.length} of ${lines.length} · ↑↓ scroll` }
+  return { lines: shown, more: `lines ${start + 1}–${start + shown.length} of ${lines.length} · ↑↓ scroll`, start, last }
+}
+
+function watchLines(id: string, session: SessionView, follow: boolean): Line[] {
+  const file = session.file.replace(/^.*?\/\.conveyor\//, '~/.conveyor/')
+  const header: Line = { text: `Watch #${id} · ${follow ? 'follows the stage' : 'paused, ↓ at the end follows again'} · ${file}`, tone: 'title' }
+  if (session.lines.length === 0) {
+    return [
+      header,
+      session.enabled
+        ? { text: `  nothing recorded yet: the next stage of #${id} writes here`, tone: 'muted' }
+        : { text: '  session logs are off: turn on "Session logs for watch" in [e] settings (Personal); stages that start after that are recorded', tone: 'muted' },
+    ]
+  }
+  return [
+    header,
+    ...session.lines.slice(-WATCH_LINES).map((line): Line => {
+      const body = line.slice(9)
+      return { text: line, ...(body.startsWith('✗') || body.startsWith('  ✗') ? { tone: 'error' as const } : body.startsWith('──') ? { tone: 'title' as const } : {}) }
+    }),
+  ]
 }
 
 function logLines(events: RunnerEvent[], project?: string): Line[] {

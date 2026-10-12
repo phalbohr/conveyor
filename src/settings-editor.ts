@@ -104,6 +104,14 @@ const PERSONAL: Spec[] = [
   { key: 'poll_interval', label: 'Board poll interval', kind: 'text', help: 'how often `run` checks the board, e.g. 5m' },
   { key: 'pickup.include_unassigned', label: 'Take unassigned tasks', kind: 'boolean', options: BOOLEAN, help: 'also take tasks nobody is assigned to' },
   { key: 'language.chat', label: 'My chat language', kind: 'text', help: 'language of `new` and `attach` sessions' },
+  {
+    key: 'session_logs',
+    label: 'Session logs for watch',
+    kind: 'boolean',
+    options: BOOLEAN,
+    help: 'record what the harness does in each stage, for [w] and `conveyor watch`',
+    optionHelp: { false: 'nothing is recorded', true: 'a readable log per task in ~/.conveyor/sessions, deleted when the task is done' },
+  },
 ]
 
 const PREFIX_HELP: Record<string, string> = {

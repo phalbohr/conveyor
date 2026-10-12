@@ -13,6 +13,7 @@ import { taskBranch, type Workspaces } from '../workspaces.js'
 import { Artifacts } from './artifacts.js'
 import { buildPrompt, buildTriagePrompt, type GateMode } from './prompt.js'
 import { releaseClaim } from './release.js'
+import { sessionFile, sessionWriter, removeSession } from '../session-log.js'
 import { publicText, redactSecrets } from './redact.js'
 import { Trust } from './trust.js'
 import { parseStageFile, readFormat, renderInstructions } from './stage-file.js'
@@ -541,6 +542,7 @@ export class Engine {
     await board.release(id)
     await workspaces.remove(id)
     await workspaces.deleteBranch(id)
+    removeSession(sessionFile(this.options.home, config.board.project, id))
     this.log(`task ${id}: done`)
   }
 
@@ -1092,6 +1094,21 @@ export class Engine {
     const stop = () => controller.abort()
     context.signal.addEventListener('abort', stop, { once: true })
     let reason: string | undefined
+    let session: ReturnType<typeof sessionWriter> | undefined
+    const record = (write: () => void) => {
+      try {
+        write()
+      } catch (error) {
+        session = undefined
+        this.log(`task ${task.id}: the session log stopped: ${(error as Error).message}`)
+      }
+    }
+    if (config.session_logs) {
+      record(() => {
+        session = sessionWriter(sessionFile(this.options.home, config.board.project, task.id), context.workspace, this.options.redact ?? ((text) => redactSecrets(text)))
+        session.header(`${stage.name} · ${stage.harness}${stage.model ? ` ${stage.model}` : ''} · attempt ${context.attempt + 1} · ${new Date().toISOString().slice(0, 10)}`)
+      })
+    }
     const { stage: stageTimeout, stall } = config.timeouts
     const deadline = setTimeout(() => {
       reason = `stage timed out after ${stageTimeout / 60_000} min`
@@ -1121,7 +1138,10 @@ export class Engine {
         effort: stage.effort,
         cwd: context.workspace,
         signal: controller.signal,
-        onEvent: arm,
+        onEvent: (line) => {
+          arm()
+          if (line && session) record(() => session?.event(line))
+        },
         skills: skills.filter((skill) => skill.source !== 'project'),
         ...(stage.sandbox ? { sandbox: stage.sandbox } : {}),
         ...(stage.network !== undefined ? { network: stage.network } : {}),

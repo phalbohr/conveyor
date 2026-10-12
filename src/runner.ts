@@ -7,6 +7,7 @@ import { checkStages, cleanupWorkspaces, quotaFile, usageFile } from './commands
 import { loadConfig, type Config } from './config.js'
 import { Engine, type Activity } from './engine/engine.js'
 import { resetTask, type ResetForm } from './engine/reset.js'
+import { sessionFile } from './session-log.js'
 import { ClaudeHarness } from './harness/claude.js'
 import { CodexHarness } from './harness/codex.js'
 import { CommandHarness } from './harness/command.js'
@@ -222,7 +223,7 @@ export class Runner {
     const { settings, config, board } = this.setup
     const pid = this.loop ? undefined : runningPid(this.context.home, config.board.project)
     if (pid) throw new Error(`the conveyor runs in another terminal (pid ${pid}); stop it there first, then reset #${id}`)
-    const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form)
+    const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form, sessionFile(this.context.home, config.board.project, id))
     const summary = await (this.loop && this.engine ? this.engine.hold(id, work) : work())
     this.emit('info', `task ${id}: ${summary}`)
     return summary

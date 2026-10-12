@@ -1,4 +1,5 @@
 import type { Board, TaskForm } from '../board/board.js'
+import { removeSession } from '../session-log.js'
 import type { Workspaces } from '../workspaces.js'
 import { releaseClaim } from './release.js'
 import { findWorkpad, renderWorkpad } from './workpad.js'
@@ -9,7 +10,7 @@ export async function recordedForm(board: Board, id: string): Promise<TaskForm |
   return findWorkpad(await board.listComments(id))?.state.form
 }
 
-export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remove' | 'deleteBranch'>, id: string, form?: ResetForm): Promise<string> {
+export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remove' | 'deleteBranch'>, id: string, form?: ResetForm, session?: string): Promise<string> {
   const task = await board.getTask(id)
   if (!task) throw new Error(`task ${id} not found`)
   const me = await board.user()
@@ -20,6 +21,7 @@ export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remo
   if (pull?.state === 'open') await board.closePullRequest(id)
   await workspaces.remove(id)
   await workspaces.deleteBranch(id)
+  if (session) removeSession(session)
   if (pad) await board.updateComment(pad.id, renderWorkpad({ attempt: 0 }, ''))
   await board.setStage(id, undefined)
   if (pad?.state.parts) await board.setPart(id, undefined)
