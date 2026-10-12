@@ -86,7 +86,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
 
   useEffect(() => runner?.subscribe(() => setTick((value) => value + 1)), [runner])
   useEffect(() => {
-    if (!runner?.running && message?.text.startsWith('Finishing')) setMessage({ text: 'The conveyor stopped after its running stages finished.' })
+    if (!runner?.running && message?.text.startsWith('Finishing')) setMessage({ text: 'All running stages finished. The conveyor stopped.' })
   }, [tick, runner, message])
   useEffect(() => {
     const timer = setInterval(() => runner?.running && setTick((value) => value + 1), 5_000)

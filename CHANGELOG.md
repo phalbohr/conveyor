@@ -6,6 +6,7 @@
 - The fix task of a red base branch starts even when every `running` slot is taken; before, the tasks waiting for it could block it forever.
 - Tasks that wait to merge or wait for the base CI after their merge no longer take a `running` slot.
 - The control screen shows why a task waits to merge (for example `○ merge waits: the base branch CI is red; task #N fixes it first`) instead of `waits for its next attempt`.
+- After a soft stop the control screen says `All running stages finished. The conveyor stopped.`
 
 ## 0.1.0 — 2026-10-12
 

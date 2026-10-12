@@ -253,6 +253,18 @@ describe('StatusScreen as a control panel', () => {
     expect(runner.running).toBe(false)
   })
 
+  it('says when the running stages finished and the conveyor stopped', async () => {
+    const runner = fakeRunner()
+    runner.running = true
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} runner={runner} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('s')
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('Finishing: the running stages end'), { timeout: 5_000 })
+    await runner.stop()
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('All running stages finished. The conveyor stopped.'), { timeout: 5_000 })
+  })
+
   it('starts a conveyor cycle on r while the conveyor runs', async () => {
     const runner = fakeRunner()
     runner.running = true
