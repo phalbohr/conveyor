@@ -415,7 +415,7 @@ export class GitHubBoard implements Board {
 
   private async gh(args: string[]) {
     const result = await this.run('gh', args)
-    if (result.code !== 0) throw new Error(`gh ${args.slice(0, 2).join(' ')} failed: ${result.stderr.trim()}`)
+    if (result.code !== 0) throw new Error(`gh ${args.slice(0, 2).join(' ')} failed: ${result.stderr.trim() || 'no answer from gh. Check that gh is installed and signed in: gh auth status.'}`)
     return result.stdout
   }
 
@@ -438,7 +438,7 @@ export class GitHubBoard implements Board {
   }
 
   private parse<T>(result: Awaited<ReturnType<GitHubBoard['call']>>): T {
-    if (result.code !== 0) throw new Error(`gh api ${result.args.join(' ')} failed: ${result.stderr.trim()}`)
+    if (result.code !== 0) throw new Error(`gh api ${result.args.join(' ')} failed: ${result.stderr.trim() || 'no answer from gh'}${result.status === 0 ? '. Check that gh is installed and signed in: gh auth status.' : ''}`)
     return (result.stdout.trim() ? JSON.parse(result.stdout) : undefined) as T
   }
 

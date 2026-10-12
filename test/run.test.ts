@@ -85,3 +85,12 @@ describe('conveyor run and release', () => {
     expect((await runCli(['release', '3'])).stderr).toContain('conveyor init')
   })
 })
+
+describe('external commands', () => {
+  it('says when a command is not installed', async () => {
+    const { createRun } = await import('../src/run.js')
+    const result = await createRun()('conveyor-missing-command-for-test', ['--version'])
+    expect(result.code).toBe(127)
+    expect(result.stderr).toBe('conveyor-missing-command-for-test is not installed or not in PATH')
+  })
+})

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A missing or silent `gh`/`glab` gives a clear board error with the next step (`… is not installed or not in PATH`, `gh auth status`, `glab auth status`).
+
 ## 0.1.0 — 2026-10-12
 
 First public release.

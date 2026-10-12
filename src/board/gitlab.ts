@@ -409,7 +409,9 @@ export class GitLabBoard implements Board {
   }
 
   private fail(result: Call, what: string): never {
-    throw new Error(`glab api ${what} failed (HTTP ${result.status}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`)
+    const detail = (result.stderr || result.stdout).trim().slice(0, 500)
+    const hint = result.status === 0 ? ' Check that glab is installed and signed in to this GitLab host: glab auth status.' : ''
+    throw new Error(`glab api ${what} failed (HTTP ${result.status}): ${detail || 'no answer from glab'}.${hint}`)
   }
 }
 
