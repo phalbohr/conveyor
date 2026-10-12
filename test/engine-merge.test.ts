@@ -580,7 +580,7 @@ describe('a red base branch', () => {
   })
 
   it('creates one fix task, merges it first, and holds the other merges until the base is green', async () => {
-    const { board, harness, cycle, expireRetry } = setup({ mode: 'ai' })
+    const { board, harness, cycle } = setup({ mode: 'ai' })
     board.headChecks = 'failure'
     board.baseFailures = ['Backend (Java 21)']
     await board.createTask('Add login', 'p', { form: 'plan' })
@@ -590,15 +590,13 @@ describe('a red base branch', () => {
     expect(fix?.body).toContain('Backend (Java 21)')
     expect(fix?.priority).toBe(1)
     expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id])
-    expect((await board.getTask('1'))?.state).toBe('in-progress')
-    const login = stageRuns(harness).find((run) => run.taskId === '1' && run.stage === 'implement')
-    expect(login?.prompt).toContain(`Task #${fix?.id} fixes it`)
+    expect(stageRuns(harness).filter((run) => run.taskId === '1')).toEqual([])
 
     await cycle()
     expect((await board.listTasks()).filter((task) => task.title.startsWith('Fix the CI')).length).toBe(1)
+    expect(stageRuns(harness).filter((run) => run.taskId === '1')).toEqual([])
 
     board.headChecks = 'success'
-    await expireRetry('1')
     await cycle()
     expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id, '1'])
   })
@@ -632,6 +630,40 @@ describe('slots while the base is red', () => {
     await cycle()
     const fix = await fixOf(board)
     expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id])
+  })
+})
+
+describe('one repair at a time', () => {
+  it('lets one task repair its failed checks while the others wait, then retries the others on the new base', async () => {
+    const { board, cycle, runs, expireRetry } = setup({
+      mode: 'ai',
+      limits: 'running: 2',
+      stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}',
+      script: (run) => {
+        if (run.stage === 'fix-ci') board.updatePullRequest(run.taskId ?? '', { checks: 'success' })
+        return done
+      },
+    })
+    board.checks = 'failure'
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await board.createTask('Add search', 'p', { form: 'plan' })
+
+    await cycle()
+    const repairs = () => runs().filter((run) => run.endsWith(':fix-ci'))
+    expect(repairs()).toHaveLength(1)
+    const [first] = repairs()
+    const other = first === '1:fix-ci' ? '2' : '1'
+    expect(board.merges).toEqual([])
+
+    await cycle()
+    expect(board.merges.map((merge) => merge.id)).toEqual([first?.split(':')[0]])
+    expect(repairs()).toHaveLength(1)
+
+    await expireRetry(other)
+    await cycle()
+    expect(repairs()).toEqual([first, `${other}:fix-ci`])
+    await cycle()
+    expect(board.merges).toHaveLength(2)
   })
 })
 

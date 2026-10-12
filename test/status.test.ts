@@ -87,6 +87,28 @@ describe('collectStatus', () => {
     expect(status.limits.subscription.claude).toMatchObject({ fiveHour: { utilization: 0.42 }, fiveHourReserve: 10 })
   })
 
+  it('marks the tasks that wait while another task fixes the CI', async () => {
+    const settings = tempDir()
+    writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')
+    const loaded = loadConfig(settings)
+    if (!loaded.ok) throw new Error('invalid')
+    const fake = new FakeBoard('me')
+    for (const [title, fixing] of [['Login', true], ['Search', false]] as const) {
+      const task = await fake.createTask(title, 'body', { state: 'in-progress' })
+      await fake.setOwner(task.id, 'me')
+      await fake.addComment(task.id, renderWorkpad({ attempt: 0, stage: fixing ? 'fix-ci' : 'land', ...(fixing ? { fixing } : {}) }, ''))
+    }
+    const status = await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })
+    expect(status.mine.map((task) => [task.id, task.held])).toEqual([
+      ['1', undefined],
+      ['2', 'waits: task #1 fixes the CI first'],
+    ])
+
+    const fix = await fake.createTask('Fix the CI of the base branch main', '<!-- conveyor:base-fix -->', { state: 'backlog', form: 'plan' })
+    const red = await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })
+    expect(red.mine.map((task) => task.held)).toEqual([`waits: task #${fix.id} fixes the CI first`, `waits: task #${fix.id} fixes the CI first`])
+  })
+
   it('reports a stopped runner', async () => {
     const settings = tempDir()
     writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')

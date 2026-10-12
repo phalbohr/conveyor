@@ -131,6 +131,7 @@ export class Engine {
   private readonly held = new Set<string>()
   private draining = false
   private baseRed?: { sha: string; fix: string; failed: string[]; repairing?: boolean }
+  private fixer?: string
   private readonly verifying = new Map<string, string>()
   private readonly limited = new Map<string, string>()
   private readonly cleanups = new Set<Promise<void>>()
@@ -169,6 +170,7 @@ export class Engine {
     let awaitingMe = 0
     let awaitingReview = 0
     let backingOff = 0
+    const fixing: string[] = []
     const now = Date.now()
 
     const listedTasks = await board.listTasks()
@@ -200,7 +202,9 @@ export class Engine {
           ;(owned ? resumable : fresh).push(task)
           break
         case 'needs-input': {
-          const answered = await this.answered(task.id)
+          const { comments, pad } = await this.workpad(task.id)
+          if (owned && pad?.state.fixing) fixing.push(task.id)
+          const answered = repliesSince(comments, pad?.state.waiting?.commentId).length > 0
           if (answered) (owned ? resumable : fresh).push(task)
           else if (owned) awaitingMe++
           break
@@ -210,6 +214,7 @@ export class Engine {
           if (!owned) fresh.push(task)
           else {
             const { pad } = await this.workpad(task.id)
+            if (pad?.state.fixing) fixing.push(task.id)
             if (!pad?.state.retryAt || Date.parse(pad.state.retryAt) <= now) resumable.push(task)
             else if (task.state === 'in-progress' && !pad.state.parked) backingOff++
           }
@@ -227,10 +232,12 @@ export class Engine {
     }
 
     if (this.halt.signal.aborted || this.draining) return
+    const fixer = (this.fixer = this.baseRed?.fix ?? listedTasks.find((task) => this.isBaseFix(task, me) && !task.closed && task.state !== 'done')?.id ?? fixing[0])
     let slots = config.limits.running - this.running.size - backingOff
     let waiting = 0
     for (const task of this.sorted(resumable, me)) {
-      if (slots > 0 || this.isBaseFix(task, me)) {
+      if (fixer && task.id !== fixer) continue
+      if (slots > 0 || task.id === fixer) {
         this.start(task, config)
         slots--
         continue
@@ -245,7 +252,8 @@ export class Engine {
     const blocked = waiting > 0 || overBudget || awaitingMe >= config.limits.awaiting_me || awaitingReview >= config.limits.awaiting_review
 
     for (const task of this.sorted(fresh, me)) {
-      const fix = this.isBaseFix(task, me)
+      const fix = task.id === fixer
+      if (fixer && !fix) continue
       if (!fix && (blocked || slots <= 0)) break
       if (fix && overBudget) continue
       if (!(await this.lock(task.id, LOCK_TTL))) continue
@@ -481,10 +489,12 @@ export class Engine {
       if (landed === 'stop') return
       state.landing = landed
       delete state.stage
+      if (landed === 'success') delete state.fixing
     }
 
     if (state.landing === 'success' && state.verify && !(await this.verifyBase(run))) return
     if (state.broken) {
+      state.fixing = true
       this.verifying.set(state.broken, id)
       const repair = config.stages.slice(mergeIndex + 1).filter((stage) => stage.when === 'failure' || stage.when === 'always')
       const resumeRepair = state.stage ? repair.findIndex((stage) => stage.name === state.stage) : 0
@@ -504,6 +514,20 @@ export class Engine {
     }
 
     const landing = state.landing ?? 'success'
+    if (landing === 'failure') {
+      if (this.fixer && this.fixer !== id) {
+        delete state.landing
+        state.landAttempts = Math.max(0, (state.landAttempts ?? 1) - 1)
+        state.stage = LAND
+        state.parked = `waits: task #${this.fixer} fixes the CI first`
+        state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
+        await run.save()
+        this.log(`task ${id}: merge failed; task #${this.fixer} fixes the CI first, then this task tries again on the latest base branch`)
+        return
+      }
+      this.fixer = id
+      state.fixing = true
+    }
     const post = config.stages.slice(mergeIndex + 1).filter((stage) => stage.when === 'always' || stage.when === landing)
     const resumeAt = state.stage ? post.findIndex((stage) => stage.name === state.stage) : 0
     const merge =
@@ -532,7 +556,7 @@ export class Engine {
       return
     }
 
-    for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError', 'checksWait', 'repairs'] as const) delete state[key]
+    for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError', 'checksWait', 'repairs', 'fixing'] as const) delete state[key]
     state.attempt = 0
     await board.setState(id, 'done')
     await board.setStage(id, undefined)
@@ -563,6 +587,14 @@ export class Engine {
         state.stage = stage.name
         await run.save()
         this.log(`task ${id}: stops before stage ${stage.name}; it starts there on the next start`)
+        return { status: 'stopped', summary }
+      }
+      const fixer = this.baseRed?.fix ?? this.fixer
+      if (fixer && fixer !== id) {
+        state.stage = stage.name
+        state.parked = `waits: task #${fixer} fixes the CI first`
+        await run.save()
+        this.log(`task ${id}: stops before stage ${stage.name}; task #${fixer} fixes the CI first`)
         return { status: 'stopped', summary }
       }
       state.stage = stage.name
@@ -683,6 +715,7 @@ export class Engine {
     const task = await this.mustGetTask(id)
     if (task.openBlockers > 0) return wait('open blockers')
     if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; task #${this.baseRed.fix} fixes it first`)
+    if (this.fixer && this.fixer !== id) return wait(`task #${this.fixer} fixes the CI first`)
     const pull = await board.pullRequest(id)
     if (pull?.state === 'merged') return 'success'
     if (pull?.state === 'open' && pull.draft) return wait('the pull request is a draft; mark it ready for review')
@@ -869,7 +902,7 @@ export class Engine {
         fix = (await open())?.id
         if (!fix) {
           const base = await board.baseBranch()
-          const body = `The CI of the base branch \`${base}\` fails at commit \`${sha}\`${failed.length ? `: ${failed.join(', ')}` : ''}.\n\nFind the cause and fix it so that every check passes on the base branch again. Other tasks of the conveyor do not merge until this task is merged and the base branch is green.\n\n${BASE_FIX}`
+          const body = `The CI of the base branch \`${base}\` fails at commit \`${sha}\`${failed.length ? `: ${failed.join(', ')}` : ''}.\n\nFind the cause and fix it so that every check passes on the base branch again. If the latest base branch already fixes the failure in another way, keep the base version and drop this branch's own fix for it. Other tasks of the conveyor wait until this task is merged and the base branch is green.\n\n${BASE_FIX}`
           const task = await board.createTask(`Fix the CI of the base branch ${base}`, body, { state: 'backlog', form: 'plan' })
           await board.setPriority(task.id, 1)
           fix = task.id
@@ -1098,11 +1131,6 @@ export class Engine {
       ...(context.merge ? { merge: context.merge } : {}),
       ...(stage.name === 'merge' && config.transitions.merge === 'smart' ? { mergeCriteria: this.read('smart', 'merge.md') } : {}),
       ...(context.parts ? { parts: context.parts } : {}),
-      ...(this.baseRed && this.baseRed.fix !== task.id
-        ? {
-            base: `The CI of the base branch fails at \`${this.baseRed.sha.slice(0, 7)}\`${this.baseRed.failed.length ? ` (${this.baseRed.failed.join(', ')})` : ''}, before this task changed anything. Task #${this.baseRed.fix} fixes it; this task merges only after the base branch is green again. Do not fix failures that also occur on the base branch. Make the tests of your change pass, and name the failures that come from the base branch in your summary.`,
-          }
-        : {}),
     })
 
     const controller = new AbortController()
@@ -1248,11 +1276,6 @@ export class Engine {
     this.log(`the lock conveyor-lock/${name} is older than ${ttl / 60_000} min: released`)
     await board.release(name)
     return board.claim(name)
-  }
-
-  private async answered(id: string) {
-    const { comments, pad } = await this.workpad(id)
-    return repliesSince(comments, pad?.state.waiting?.commentId).length > 0
   }
 
   private isBaseFix(task: Task, me: string) {

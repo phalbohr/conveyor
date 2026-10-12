@@ -5,7 +5,7 @@ import type { Config } from './config.js'
 import { findWorkpad, repliesSince } from './engine/workpad.js'
 import type { QuotaWindow } from './harness/harness.js'
 import { runningPid } from './lock.js'
-import type { Activity } from './engine/engine.js'
+import { BASE_FIX, type Activity } from './engine/engine.js'
 import { checkSettingsSync, type SettingsSync } from './settings-sync.js'
 import { undescribedStages } from './stage-catalog.js'
 import { QuotaStore, UsageLedger } from './usage.js'
@@ -27,6 +27,7 @@ export type MyTask = {
   part?: string
   heartbeat?: string
   parked?: string
+  held?: string
   activity?: Activity
 }
 
@@ -70,6 +71,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
   const me = await board.user()
   const tasks = await board.listTasks()
   const mine: MyTask[] = []
+  let fixer = tasks.find((task) => task.body.includes(BASE_FIX) && task.author === me && !task.closed && task.state !== 'done')?.id
 
   for (const task of tasks.filter((candidate) => candidate.owner === me && candidate.state)) {
     const comments = await board.listComments(task.id)
@@ -83,6 +85,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     if (state?.heartbeat) entry.heartbeat = state.heartbeat
     if (state?.lastError) entry.lastError = state.lastError
     if (state?.parked) entry.parked = state.parked
+    if (state?.fixing) fixer ??= task.id
     if (state?.waiting) entry.waitingSince = state.waiting.since
     if (task.state === 'needs-input') entry.answered = repliesSince(comments, state?.waiting?.commentId).length > 0
     if (task.state === 'review') {
@@ -91,6 +94,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     }
     mine.push(entry)
   }
+  for (const entry of mine) if (fixer && entry.id !== fixer && (entry.state === 'in-progress' || entry.state === 'queued')) entry.held = `waits: task #${fixer} fixes the CI first`
   mine.sort((a, b) => Number(a.id) - Number(b.id))
   const backlog = tasks
     .filter((task) => !task.owner && task.state !== 'done' && (task.state !== undefined || task.form !== undefined))
