@@ -7,6 +7,7 @@
 - Tasks that wait to merge or wait for the base CI after their merge no longer take a `running` slot.
 - The control screen shows why a task waits to merge (for example `○ merge waits: the base branch CI is red; task #N fixes it first`) instead of `waits for its next attempt`.
 - `w` on a task and `conveyor watch <number> [-f]` show what the harness does in its stage while it runs (commands, edited files, messages, errors) for claude, codex, opencode, and kilo. Turn it on with the personal setting `session_logs: true`. The log is `~/.conveyor/sessions/<project>/<number>.log` (mode 0600, secrets redacted), outside the repository; the conveyor deletes it when the task is done or reset.
+- The `merge` stage template tells the harness to run checks in the foreground and wait for them: a headless harness cannot schedule a later wakeup.
 - A retry time in the past shows as `resumes next cycle` (or `resumes on start` while the conveyor is stopped).
 - After a soft stop the control screen says `All running stages finished. The conveyor stopped.`
 
