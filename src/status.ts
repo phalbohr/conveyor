@@ -26,6 +26,7 @@ export type MyTask = {
   pullRequest?: string
   part?: string
   heartbeat?: string
+  parked?: string
   activity?: Activity
 }
 
@@ -81,6 +82,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     if (state?.retryAt) entry.retryAt = state.retryAt
     if (state?.heartbeat) entry.heartbeat = state.heartbeat
     if (state?.lastError) entry.lastError = state.lastError
+    if (state?.parked) entry.parked = state.parked
     if (state?.waiting) entry.waitingSince = state.waiting.since
     if (task.state === 'needs-input') entry.answered = repliesSince(comments, state?.waiting?.commentId).length > 0
     if (task.state === 'review') {

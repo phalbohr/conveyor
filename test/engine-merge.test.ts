@@ -5,14 +5,14 @@ import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
 import type { Script } from '../src/harness/fake.js'
-import type { StageResult } from '../src/harness/harness.js'
+import { failed, type StageResult } from '../src/harness/harness.js'
 import { UsageLedger } from '../src/usage.js'
 import { FakeWorkspaces, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
 const done: StageResult = { outcome: 'done', summary: 'ok' }
 
-function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; stages?: string; config?: string; script?: Script } = {}) {
+function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; stages?: string; config?: string; limits?: string; script?: Script } = {}) {
   const settings = tempDir('conveyor-settings-')
   writeFileSync(
     join(settings, 'config.yaml'),
@@ -24,7 +24,7 @@ function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; 
       options.config ?? '',
     ].join('\n'),
   )
-  writeFileSync(join(settings, 'local.yaml'), 'limits: {awaiting_review: 10}\n')
+  writeFileSync(join(settings, 'local.yaml'), `limits: {awaiting_review: 10${options.limits ? `, ${options.limits}` : ''}}\n`)
   mkdirSync(join(settings, 'stages'))
   const board = new FakeBoard('me')
   const harness = stageHarness(options.script)
@@ -561,6 +561,37 @@ describe('a red base branch', () => {
     await expireRetry('1')
     await cycle()
     expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id, '1'])
+  })
+})
+
+describe('slots while the base is red', () => {
+  const fixOf = async (board: FakeBoard) => (await board.listTasks()).find((task) => task.title.startsWith('Fix the CI of the base branch'))
+
+  it('frees the slots of tasks that wait to merge so the fix task runs', async () => {
+    const { board, cycle } = setup({ mode: 'ai', limits: 'running: 2' })
+    board.draft = true
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await board.createTask('Add search', 'p', { form: 'plan' })
+    await cycle()
+    expect(board.merges).toEqual([])
+
+    board.draft = false
+    board.headChecks = 'failure'
+    await cycle()
+    const fix = await fixOf(board)
+    expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id])
+  })
+
+  it('starts the fix task when every slot is taken', async () => {
+    const { board, cycle } = setup({ mode: 'ai', limits: 'running: 1', script: (run) => (run.taskId === '1' ? failed('boom') : done) })
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('in-progress')
+
+    board.headChecks = 'failure'
+    await cycle()
+    const fix = await fixOf(board)
+    expect(board.merges.map((merge) => merge.id)).toEqual([fix?.id])
   })
 })
 

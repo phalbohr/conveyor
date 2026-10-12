@@ -34,6 +34,7 @@ export type WorkpadState = {
   source?: string
   split?: boolean
   pull?: { number: string; url: string }
+  parked?: string
 }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
@@ -71,6 +72,7 @@ const stateSchema = z.object({
   source: z.string().optional(),
   split: z.boolean().optional(),
   pull: z.object({ number: z.string(), url: z.string() }).optional(),
+  parked: z.string().optional(),
 })
 
 const AGENT_MARKER = '<!-- conveyor'

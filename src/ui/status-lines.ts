@@ -45,6 +45,7 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
       else if (task.state === 'in-progress') {
         const heartbeat = task.heartbeat ? ` · heartbeat ${span(now - Date.parse(task.heartbeat))} ago` : ''
         if (!status.runner.running) details.push('○ not running: [s] starts the conveyor')
+        else if (task.parked) details.push(`○ ${task.parked}${heartbeat}`)
         else if (status.runner.here) details.push(`○ waits for its next attempt${heartbeat}`)
         else details.push(`runs in conveyor pid ${status.runner.pid ?? '?'}${heartbeat}`)
       }

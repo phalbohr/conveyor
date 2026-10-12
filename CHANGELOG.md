@@ -3,6 +3,9 @@
 ## Unreleased
 
 - A missing or silent `gh`/`glab` gives a clear board error with the next step (`… is not installed or not in PATH`, `gh auth status`, `glab auth status`).
+- The fix task of a red base branch starts even when every `running` slot is taken; before, the tasks waiting for it could block it forever.
+- Tasks that wait to merge or wait for the base CI after their merge no longer take a `running` slot.
+- The control screen shows why a task waits to merge (for example `○ merge waits: the base branch CI is red; task #N fixes it first`) instead of `waits for its next attempt`.
 
 ## 0.1.0 — 2026-10-12
 

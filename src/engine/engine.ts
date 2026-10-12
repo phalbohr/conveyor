@@ -207,8 +207,11 @@ export class Engine {
         case 'in-progress':
         case 'queued': {
           if (!owned) fresh.push(task)
-          else if (await this.retryDue(task.id, now)) resumable.push(task)
-          else if (task.state === 'in-progress') backingOff++
+          else {
+            const { pad } = await this.workpad(task.id)
+            if (!pad?.state.retryAt || Date.parse(pad.state.retryAt) <= now) resumable.push(task)
+            else if (task.state === 'in-progress' && !pad.state.parked) backingOff++
+          }
           break
         }
         case undefined:
@@ -226,7 +229,7 @@ export class Engine {
     let slots = config.limits.running - this.running.size - backingOff
     let waiting = 0
     for (const task of this.sorted(resumable, me)) {
-      if (slots > 0) {
+      if (slots > 0 || this.isBaseFix(task, me)) {
         this.start(task, config)
         slots--
         continue
@@ -238,10 +241,12 @@ export class Engine {
     const overBudget =
       (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) ||
       config.stages.some((stage) => this.quotaBlock(stage.harness, config) !== undefined)
-    if (waiting > 0 || overBudget || awaitingMe >= config.limits.awaiting_me || awaitingReview >= config.limits.awaiting_review) return
+    const blocked = waiting > 0 || overBudget || awaitingMe >= config.limits.awaiting_me || awaitingReview >= config.limits.awaiting_review
 
     for (const task of this.sorted(fresh, me)) {
-      if (slots <= 0) break
+      const fix = this.isBaseFix(task, me)
+      if (!fix && (blocked || slots <= 0)) break
+      if (fix && overBudget) continue
       if (!(await this.lock(task.id, LOCK_TTL))) continue
       await board.setOwner(task.id, me)
       this.log(`claimed task ${task.id}: ${task.title}`)
@@ -362,6 +367,7 @@ export class Engine {
     if (waiting?.kind === 'error' && waiting.stage === LAND) state.landAttempts = 0
     delete state.waiting
     delete state.retryAt
+    delete state.parked
     state.private = Object.values(config.artifacts).some((artifact) => artifact.store === 'path')
 
     const run: TaskRun = {
@@ -665,6 +671,7 @@ export class Engine {
     const { id, config, state } = run
     const wait = async (reason: string) => {
       state.stage = LAND
+      state.parked = `merge waits: ${reason}`
       state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
       await run.save()
       this.log(`task ${id}: merge waits: ${reason}`)
@@ -753,9 +760,10 @@ export class Engine {
     this.verifying.set(verify.sha, id)
     const checks = await board.commitChecks(verify.sha).catch(() => 'pending' as const)
     if (checks === 'pending' || (checks === 'none' && Date.now() - Date.parse(verify.since) < CHECKS_GRACE)) {
+      state.parked = `merged; waits for the CI of the base branch at ${verify.sha.slice(0, 7)}`
       state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
       await run.save()
-      this.log(`task ${id}: merged; waits for the CI of the base branch at ${verify.sha.slice(0, 7)}`)
+      this.log(`task ${id}: ${state.parked}`)
       return false
     }
     delete state.verify
@@ -1212,9 +1220,8 @@ export class Engine {
     return repliesSince(comments, pad?.state.waiting?.commentId).length > 0
   }
 
-  private async retryDue(id: string, now: number) {
-    const { pad } = await this.workpad(id)
-    return !pad?.state.retryAt || Date.parse(pad.state.retryAt) <= now
+  private isBaseFix(task: Task, me: string) {
+    return task.body.includes(BASE_FIX) && task.author === me
   }
 
   private pickable(task: Task, config: Config, me: string) {
@@ -1224,7 +1231,7 @@ export class Engine {
   }
 
   private sorted(tasks: Task[], me: string) {
-    const rank = (task: Task) => (task.body.includes(BASE_FIX) && task.author === me ? -1 : task.assignees.includes(me) ? 0 : 1)
+    const rank = (task: Task) => (this.isBaseFix(task, me) ? -1 : task.assignees.includes(me) ? 0 : 1)
     const started = (task: Task) => (task.state && task.state !== 'backlog' ? 0 : 1)
     return [...tasks].sort(
       (a, b) =>

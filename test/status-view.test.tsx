@@ -596,6 +596,12 @@ describe('liveness of tasks in progress', () => {
     const elsewhere = { ...snapshot, runner: { running: true, pid: 42 }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, heartbeat: new Date(Date.now() - 3 * 60_000).toISOString() } : task)) }
     expect(login(elsewhere)?.detail).toContain('runs in conveyor pid 42 · heartbeat 3m ago')
   })
+
+  it('shows why a parked task waits instead of the next attempt', () => {
+    const parked = { ...snapshot, runner: { running: true, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, stage: 'land', parked: 'merge waits: the base branch CI is red; task #9 fixes it first' } : task)) }
+    expect(login(parked)?.detail).toContain('stage::land · ○ merge waits: the base branch CI is red; task #9 fixes it first')
+    expect(login(parked)?.detail).not.toContain('waits for its next attempt')
+  })
 })
 
 describe('released tasks in the backlog', () => {
