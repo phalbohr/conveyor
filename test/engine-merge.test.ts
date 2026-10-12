@@ -451,6 +451,23 @@ describe('merge against the latest base branch', () => {
     expect(board.merges).toHaveLength(1)
   })
 
+  it('rebases a branch with failed checks onto a newer base before it repairs anything', async () => {
+    const { board, workspaces, cycle, expireRetry, runs } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
+    board.checks = 'failure'
+    workspaces.syncs = ['rebased']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect(runs()).toEqual(['1:implement', '1:merge'])
+    expect(board.merges).toEqual([])
+
+    board.updatePullRequest('1', { checks: 'success' })
+    await expireRetry()
+    await cycle()
+    expect(runs()).toEqual(['1:implement', '1:merge'])
+    expect(board.merges).toHaveLength(1)
+  })
+
   it('sends a branch that conflicts with the new base back to the merge stage', async () => {
     const { board, harness, workspaces, cycle } = setup({ mode: 'ai' })
     workspaces.syncs = ['conflict', 'current']

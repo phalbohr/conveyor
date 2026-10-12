@@ -247,7 +247,6 @@ export class Engine {
     for (const task of this.sorted(fresh, me)) {
       const fix = this.isBaseFix(task, me)
       if (!fix && (blocked || slots <= 0)) break
-      if (fix && overBudget) continue
       if (!(await this.lock(task.id, LOCK_TTL))) continue
       await board.setOwner(task.id, me)
       this.log(`claimed task ${task.id}: ${task.title}`)
@@ -701,7 +700,13 @@ export class Engine {
     if (!pull || pull.state === 'closed') error = 'the pull request is closed'
     else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait('checks are pending')
     else if (pull.checks === 'none' && this.checksMayStart(state, pull.headSha)) return wait('no checks yet; waiting for CI to start')
-    else if (pull.checks === 'failure') error = 'checks failed'
+    else if (pull.checks === 'failure') {
+      if ((await this.options.workspaces.syncBase(id).catch(() => 'unknown' as const)) === 'rebased') {
+        state.headSha = await this.options.workspaces.push(id)
+        return wait('checks failed on an older base branch; the branch is rebased onto the latest one and waits for CI')
+      }
+      error = 'checks failed'
+    }
     else if (pull.mergeable === 'no') error = 'the branch has conflicts with the base branch'
     else {
       if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return wait('another workstation merges')
