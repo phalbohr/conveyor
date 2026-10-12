@@ -118,6 +118,17 @@ describe('CommandHarness', () => {
     expect(output.result.summary).toContain('I could not finish the plan')
   })
 
+  it('shows the last output of a json harness as readable lines when the result file is missing', async () => {
+    const events = [
+      { type: 'tool_use', part: { tool: 'bash', state: { status: 'completed', input: { command: './scripts/ci-local.sh &' } } } },
+      { type: 'text', part: { text: 'Rebase complete; full local CI verification running in the background. Waiting for it to finish.' } },
+      { type: 'step_finish', part: { reason: 'stop', tokens: { input: 69144, output: 26 } } },
+    ]
+    const { command } = agent(events.map((event) => `console.log(${JSON.stringify(JSON.stringify(event))})`).join('; '))
+    const output = await new CommandHarness({ command, args: ['{prompt}'], env: {} }).runStage(run())
+    expect(output.result.summary).toMatch(/^no result file \(.+ exited with code 0\): ▸ bash \.\/scripts\/ci-local\.sh &\nRebase complete; full local CI verification running in the background\. Waiting for it to finish\.$/)
+  })
+
   it('explains a length stop and a context overflow in plain words', async () => {
     const event = JSON.stringify({ type: 'step_finish', part: { reason: 'length', tokens: { input: 107464, output: 0, reasoning: 207 } } })
     const stopped = agent(`console.log(${JSON.stringify(event)})`)

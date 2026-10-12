@@ -468,6 +468,29 @@ describe('merge against the latest base branch', () => {
     expect(board.merges).toHaveLength(1)
   })
 
+  it('pushes commits that a failed push left behind before it judges the checks', async () => {
+    const { board, workspaces, cycle, expireRetry, runs } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
+    board.draft = true
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    const pushes = workspaces.pushes.length
+
+    board.ready('1')
+    board.updatePullRequest('1', { checks: 'failure' })
+    workspaces.heads.set('1', 'f'.repeat(40))
+    await expireRetry()
+    await cycle()
+    expect(workspaces.pushes.length).toBe(pushes + 1)
+    expect(runs()).toEqual(['1:implement', '1:merge'])
+    expect(board.merges).toEqual([])
+
+    workspaces.heads.set('1', '1'.padStart(40, '0'))
+    board.updatePullRequest('1', { checks: 'success' })
+    await expireRetry()
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+  })
+
   it('sends a branch that conflicts with the new base back to the merge stage', async () => {
     const { board, harness, workspaces, cycle } = setup({ mode: 'ai' })
     workspaces.syncs = ['conflict', 'current']

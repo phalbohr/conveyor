@@ -55,6 +55,12 @@ export class FakeWorkspaces implements Workspaces {
     return this.aheadBy
   }
 
+  readonly heads = new Map<string, string>()
+
+  async head(taskId: string) {
+    return this.heads.get(taskId)
+  }
+
   async syncBase() {
     return this.syncs.shift() ?? 'current'
   }

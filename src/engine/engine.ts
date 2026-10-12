@@ -697,6 +697,15 @@ export class Engine {
       this.log(`task ${id}: the branch changed after approval, back to review`)
       return 'stop'
     }
+    const local = pull?.state === 'open' ? await this.options.workspaces.head(id).catch(() => undefined) : undefined
+    if (pull && local && local !== pull.headSha) {
+      try {
+        state.headSha = await this.options.workspaces.push(id)
+      } catch (error) {
+        return wait(`the task branch has commits that are not pushed, and the push failed: ${(error as Error).message.split('\n')[0]}`)
+      }
+      return wait('the task branch had commits that were not pushed; they are pushed now and the branch waits for CI')
+    }
     let error: string | undefined
     if (!pull || pull.state === 'closed') error = 'the pull request is closed'
     else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait('checks are pending')

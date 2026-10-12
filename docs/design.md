@@ -388,6 +388,7 @@ If the board read fails, running stages continue; the next cycle tries again.
 - A task that waits to merge (checks, approvals, a red base, or the base CI after its merge) runs no harness and takes no `running` slot.
 - The fix task of a red base starts even when every slot is taken, the resume queue is not empty, or `awaiting_me`/`awaiting_review` is reached: no other task merges before it. The daily token limit and the subscription reserves still apply to it.
 - A task whose checks failed on an older base branch is rebased onto the latest base and waits for its new checks before any repair stage runs.
+- Before landing, the CLI pushes task branch commits that a failed push left in the workspace (for example after a network error) and waits for their checks.
 - `awaiting_review` only blocks the claim of new tasks. It never stops a task that is ready for review.
 - The CLI claims a new task only if all conditions are true:
   - `running < limits.running`;
