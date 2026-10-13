@@ -7,6 +7,7 @@ import {
   onBoard,
   OWNER_LABEL,
   PART_LABEL,
+  FIX_LABEL,
   PRIORITY_LABEL,
   STAGE_LABEL,
   STATE_LABEL,
@@ -177,6 +178,10 @@ export class FakeBoard implements Board {
 
   async setPart(id: string, part: string | undefined) {
     this.replaceLabel(id, PART_LABEL, part ? PART_LABEL + part : undefined)
+  }
+
+  async setFixing(id: string, fixing: boolean) {
+    this.replaceLabel(id, FIX_LABEL, fixing ? FIX_LABEL : undefined)
   }
 
   async setOwner(id: string, owner: string | undefined) {

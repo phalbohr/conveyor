@@ -203,6 +203,7 @@ Three kinds of labels describe a task. `conveyor init` creates all of them. On e
 | `conveyor::needs-input`, `queued`, `in-progress`, `review`, `done` | the column of a task the conveyor works on | the conveyor |
 | `stage::<name>` | the stage that runs or waits for input, one label for every stage in `config.yaml` | the conveyor; removed at review and done |
 | `conveyor::rework` | a signal: start the task over after `plan`, like `/rework` | humans |
+| `fix::ci` | the one task that fixes CI now (the fix task of a red base, or a task in its `fix-ci` repair); every workstation waits for it | the conveyor; removed when the task is done or reset |
 
 The board has one column per state: **Backlog → Needs input → Queued → In progress → Review → Done**, then Closed. Every stage, from `story` to `merge` and custom stages such as `polish`, runs in In progress; its `stage::` label shows which one. A card in In progress with `stage::plan` is a plan being written; a card in Needs input with `stage::plan` is a plan that waits for an answer.
 

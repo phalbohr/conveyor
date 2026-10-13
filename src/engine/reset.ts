@@ -22,6 +22,7 @@ export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remo
   await workspaces.remove(id)
   await workspaces.deleteBranch(id)
   if (session) removeSession(session)
+  if (task.fixing) await board.setFixing(id, false)
   if (pad) await board.updateComment(pad.id, renderWorkpad({ attempt: 0 }, ''))
   await board.setStage(id, undefined)
   if (pad?.state.parts) await board.setPart(id, undefined)

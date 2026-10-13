@@ -95,6 +95,10 @@ export class RedactingBoard implements Board {
     return this.board.setPart(id, part)
   }
 
+  setFixing(id: string, fixing: boolean) {
+    return this.board.setFixing(id, fixing)
+  }
+
   setOwner(id: string, owner: string | undefined) {
     return this.board.setOwner(id, owner)
   }

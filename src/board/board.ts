@@ -17,6 +17,7 @@ export type Task = {
   owner?: string
   assignees: string[]
   priority?: number
+  fixing?: boolean
   openBlockers: number
   closed: boolean
   createdAt: string
@@ -64,6 +65,7 @@ export interface Board {
   setForm(id: string, form: TaskForm | undefined): Promise<void>
   setStage(id: string, stage: string | undefined): Promise<void>
   setPart(id: string, part: string | undefined): Promise<void>
+  setFixing(id: string, fixing: boolean): Promise<void>
   setOwner(id: string, owner: string | undefined): Promise<void>
   updateBody(id: string, body: string): Promise<void>
   closeTask(id: string): Promise<void>
@@ -107,6 +109,7 @@ export const STATE_LABEL = 'conveyor::'
 export const FORM_LABEL = 'form::'
 export const STAGE_LABEL = 'stage::'
 export const PART_LABEL = 'part::'
+export const FIX_LABEL = 'fix::ci'
 export const OWNER_LABEL = 'claimed-by::'
 export const PRIORITY_LABEL = 'priority::'
 
@@ -126,7 +129,7 @@ export function onBoard(task: Task) {
   return task.form !== undefined || task.state !== undefined
 }
 
-export function labelsToTask(labels: string[]): Pick<Task, 'state' | 'form' | 'stage' | 'owner' | 'priority'> {
+export function labelsToTask(labels: string[]): Pick<Task, 'state' | 'form' | 'stage' | 'owner' | 'priority' | 'fixing'> {
   const value = (prefix: string) => labels.find((label) => label.startsWith(prefix))?.slice(prefix.length)
   const state = value(STATE_LABEL)
   const form = value(FORM_LABEL)
@@ -138,5 +141,6 @@ export function labelsToTask(labels: string[]): Pick<Task, 'state' | 'form' | 's
     ...(stage ? { stage } : {}),
     ...(value(OWNER_LABEL) ? { owner: value(OWNER_LABEL) } : {}),
     ...(Number.isInteger(priority) && priority > 0 ? { priority } : {}),
+    ...(labels.includes(FIX_LABEL) ? { fixing: true } : {}),
   }
 }

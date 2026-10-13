@@ -664,6 +664,46 @@ describe('one repair at a time', () => {
     expect(repairs()).toEqual([first, `${other}:fix-ci`])
     await cycle()
     expect(board.merges).toHaveLength(2)
+    expect((await board.listTasks()).filter((task) => task.fixing)).toEqual([])
+  })
+
+  it('waits while a task of another member fixes the CI on their workstation', async () => {
+    const { board, cycle, runs } = setup({ mode: 'ai' })
+    const theirs = await board.createTaskAs('alice', 'Search', 'p', { state: 'in-progress' })
+    await board.setOwner(theirs.id, 'alice')
+    await board.setFixing(theirs.id, true)
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect(runs()).toEqual([])
+
+    await board.setFixing(theirs.id, false)
+    await cycle()
+    expect(runs()).toEqual(['2:implement', '2:merge'])
+  })
+
+  it('takes the fix task of another member for a red base instead of creating a second one', async () => {
+    const { board, cycle, runs } = setup({ mode: 'ai' })
+    board.headChecks = 'failure'
+    const theirs = await board.createTaskAs('alice', 'Fix the CI of the base branch main', 'p', { state: 'in-progress' })
+    await board.setOwner(theirs.id, 'alice')
+    await board.setFixing(theirs.id, true)
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect((await board.listTasks()).filter((task) => task.title.startsWith('Fix the CI'))).toHaveLength(1)
+    expect(runs()).toEqual([])
+  })
+
+  it('ignores the fix label on a task of an outsider', async () => {
+    const { board, cycle, runs } = setup({ mode: 'ai' })
+    board.outsiders.add('mallory')
+    const planted = await board.createTaskAs('mallory', 'Freeze it', 'p', { state: 'in-progress' })
+    await board.setFixing(planted.id, true)
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    expect(runs()).toEqual(['2:implement', '2:merge'])
   })
 })
 

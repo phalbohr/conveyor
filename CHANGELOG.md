@@ -4,7 +4,8 @@
 
 - A missing or silent `gh`/`glab` gives a clear board error with the next step (`… is not installed or not in PATH`, `gh auth status`, `glab auth status`).
 - The fix task of a red base branch starts even when every `running` slot is taken; before, the tasks waiting for it could block it forever.
-- One fix at a time: while the fix task of a red base or a task in its `fix-ci` repair works, every other task of the workstation waits (running stages finish; no next stage, repair, merge, or new task starts), so two tasks never fix the same failure in different ways. The fixer starts outside the task limits. The control screen shows `○ waits: task #N fixes the CI first`.
+- One fix at a time, on the whole board: the fixer carries the label `fix::ci`, taken under the lock `conveyor-lock/fix`. While the fix task of a red base or a task in its `fix-ci` repair works, every other task on every workstation waits (running stages finish; no next stage, repair, merge, or new task starts), so two tasks never fix the same failure in different ways. The fixer starts outside the task limits. The control screen shows `○ waits: task #N fixes the CI first`.
+- A workstation accepts the fix task of a red base from any member with write access instead of creating a second one.
 - The `fix-ci` template and the fix task of a red base keep the base version when the base already fixes the same failure.
 - A task whose checks failed is rebased onto a newer base branch first and waits for its new checks; before, every task that waited for a red base ran its repair stage on the old failures once the base was green.
 - Landing first pushes commits that a failed push left in the workspace (for example after a network timeout) and waits for their checks, instead of judging the old pull request head.
