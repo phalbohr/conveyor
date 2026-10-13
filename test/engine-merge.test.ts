@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
@@ -8,7 +8,7 @@ import { renderWorkpad } from '../src/engine/workpad.js'
 import type { Script } from '../src/harness/fake.js'
 import { failed, type StageResult } from '../src/harness/harness.js'
 import { UsageLedger } from '../src/usage.js'
-import { FakeWorkspaces, stageHarness, stageRuns } from './fakes.js'
+import { FakeWorkspaces, deferred, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
 const done: StageResult = { outcome: 'done', summary: 'ok' }
@@ -494,6 +494,34 @@ describe('merge against the latest base branch', () => {
     expect(board.merges).toHaveLength(1)
   })
 
+  it('does not push a local branch that diverged from the pull request head', async () => {
+    const { board, workspaces, cycle, expireRetry } = setup({ mode: 'ai' })
+    board.draft = true
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    const pushes = workspaces.pushes.length
+
+    board.ready('1')
+    workspaces.heads.set('1', 'f'.repeat(40))
+    workspaces.containsRemote = false
+    await expireRetry()
+    await cycle()
+    expect(workspaces.pushes.length).toBe(pushes)
+    expect(board.merges).toHaveLength(1)
+  })
+
+  it('asks for a new review after it pushes left-behind commits of an approved task', async () => {
+    const { board, workspaces, cycle } = setup()
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    workspaces.heads.set('1', 'f'.repeat(40))
+    await board.addComment('1', '/approve')
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect((await board.getTask('1'))?.state).toBe('review')
+    expect((await board.listComments('1')).at(-1)?.body).toContain('after the review request')
+  })
+
   it('sends a branch that conflicts with the new base back to the merge stage', async () => {
     const { board, harness, workspaces, cycle } = setup({ mode: 'ai' })
     workspaces.syncs = ['conflict', 'current']
@@ -537,6 +565,34 @@ describe('the base branch after the merge', () => {
     await board.addComment('1', 'Known flaky job, fine.')
     await cycle()
     expect((await board.getTask('1'))?.state).toBe('done')
+  })
+
+  it('leaves the base to a fix task when the merged task has no repair stage', async () => {
+    const { board, cycle } = setup({ mode: 'ai' })
+    board.baseChecks = ['failure']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect((await board.getTask('1'))?.fixing).toBeFalsy()
+
+    board.headChecks = 'failure'
+    await cycle()
+    const fix = (await board.listTasks()).find((task) => task.title.startsWith('Fix the CI of the base branch'))
+    expect(fix?.fixing).toBe(true)
+  })
+
+  it('retries the repair when another workstation holds the fix lock', async () => {
+    const { board, cycle, runs, logs, expireRetry } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
+    board.baseChecks = ['failure']
+    await board.claim('fix')
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect(logs).toContain('task 1: another workstation chooses the task that fixes the CI; it checks again')
+    expect((await board.getTask('1'))?.state).toBe('in-progress')
+
+    await board.release('fix')
+    await expireRetry()
+    await cycle()
+    expect(runs()).toContain('1:fix-ci')
   })
 
   it('runs the repair stage from the latest base and merges a follow-up pull request', async () => {
@@ -671,7 +727,7 @@ describe('one repair at a time', () => {
   })
 
   it('waits while a task of another member fixes the CI on their workstation', async () => {
-    const { board, cycle, runs, logs } = setup({ mode: 'ai' })
+    const { board, cycle, runs, logs, expireRetry } = setup({ mode: 'ai' })
     const theirs = await board.createTaskAs('alice', 'Search', 'p', { state: 'in-progress' })
     await board.setOwner(theirs.id, 'alice')
     await board.setFixing(theirs.id, true)
@@ -683,6 +739,7 @@ describe('one repair at a time', () => {
     expect(logs).toContain('task 2: stops before stage merge; task #1 fixes the CI first')
 
     await board.setFixing(theirs.id, false)
+    await expireRetry('2')
     await cycle()
     expect(runs()).toEqual(['2:implement', '2:merge'])
     expect(board.merges).toHaveLength(1)
@@ -719,6 +776,73 @@ describe('one repair at a time', () => {
     await cycle()
     expect((await board.listTasks()).filter((task) => task.title.startsWith('Fix the CI'))).toHaveLength(1)
     expect(runs()).toEqual([])
+  })
+
+  it('keeps the freeze on its own workstation while the fixer runs', async () => {
+    const gate = deferred<StageResult>()
+    const { board, engine, logs, expireRetry } = setup({ mode: 'ai', limits: 'running: 2', script: (run) => (run.taskId === '1' ? gate.promise : done) })
+    const fixer = await board.createTask('Fix the flaky test', 'p', { state: 'in-progress' })
+    await board.setOwner(fixer.id, 'me')
+    await board.addComment(fixer.id, renderWorkpad({ attempt: 0, stage: 'implement' }, ''))
+    await board.setFixing(fixer.id, true)
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await engine.tick()
+    await vi.waitFor(() => expect(logs).toContain('task 2: stops before stage merge; task #1 fixes the CI first'))
+    await expireRetry('2')
+    await engine.tick()
+    await vi.waitFor(() => expect(logs.filter((line) => line === 'task 2: stops before stage merge; task #1 fixes the CI first')).toHaveLength(2))
+    expect(board.merges).toEqual([])
+    expect(logs.filter((line) => line.startsWith('CI freeze over'))).toEqual([])
+    gate.resolve(done)
+    await engine.idle()
+  })
+
+  it('takes the fix label only for failed checks, not for a conflict', async () => {
+    const { board, cycle, runs, expireRetry } = setup({
+      mode: 'ai',
+      stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}',
+      script: (run) => {
+        if (run.stage === 'fix-ci') board.updatePullRequest('1', { mergeable: 'yes' })
+        return done
+      },
+    })
+    board.draft = true
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    board.ready('1')
+    board.updatePullRequest('1', { mergeable: 'no' })
+    await expireRetry()
+    await cycle()
+    expect(runs()).toContain('1:fix-ci')
+    expect((await board.getTask('1'))?.fixing).toBeFalsy()
+  })
+
+  it('ignores the fix label on an issue that is not on the board', async () => {
+    const { board, cycle, runs } = setup({ mode: 'ai' })
+    const stray = await board.createTaskAs('alice', 'Notes', 'p')
+    await board.setFixing(stray.id, true)
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect(runs()).toEqual(['2:implement', '2:merge'])
+  })
+
+  it('notices that the fix task of a red base was reset and chooses a new one', async () => {
+    const { board, cycle } = setup({ mode: 'ai' })
+    board.headChecks = 'failure'
+    const theirs = await board.createTaskAs('alice', 'Fix the CI of the base branch main', 'p', { state: 'in-progress' })
+    await board.setOwner(theirs.id, 'alice')
+    await board.setFixing(theirs.id, true)
+    await cycle()
+    expect((await board.listTasks()).filter((task) => task.title.startsWith('Fix the CI'))).toHaveLength(1)
+
+    await board.setFixing(theirs.id, false)
+    await board.setOwner(theirs.id, undefined)
+    await board.setState(theirs.id, 'backlog')
+    await cycle()
+    const fixes = (await board.listTasks()).filter((task) => task.title.startsWith('Fix the CI'))
+    expect(fixes).toHaveLength(2)
+    expect(fixes[1]?.author).toBe('me')
   })
 
   it('ignores the fix label on a task of an outsider', async () => {

@@ -10,11 +10,12 @@
 - The `fix-ci` template and the fix task of a red base keep the base version when the base already fixes the same failure.
 - A task whose checks failed is rebased onto a newer base branch first and waits for its new checks; before, every task that waited for a red base ran its repair stage on the old failures once the base was green.
 - Landing first pushes commits that a failed push left in the workspace (for example after a network timeout) and waits for their checks, instead of judging the old pull request head.
-- A missing result file of a command harness (opencode, kilo, …) shows the last output as readable lines instead of raw JSON events.
+- A missing result file of a command harness (opencode, kilo, …) shows the last output as readable lines instead of raw JSON events. Long lines end before a cut word, so a token is never left half visible, and terminal control sequences are removed (also in the session logs).
 - Tasks that wait to merge or wait for the base CI after their merge no longer take a `running` slot.
 - The control screen shows why a task waits to merge (for example `○ merge waits: the base branch CI is red; task #N fixes it first`) instead of `waits for its next attempt`.
 - `w` on a task and `conveyor watch <number> [-f]` show what the harness does in its stage while it runs (commands, edited files, messages, errors) for claude, codex, opencode, and kilo. Turn it on with the personal setting `session_logs: true`. The log is `~/.conveyor/sessions/<project>/<number>.log` (mode 0600, secrets redacted), outside the repository; the conveyor deletes it when the task is done or reset.
-- The `merge` stage template tells the harness to run checks in the foreground and wait for them: a headless harness cannot schedule a later wakeup.
+- The `merge` and `fix-ci` stage templates tell the harness to run checks in the foreground and wait for them: a headless harness cannot schedule a later wakeup.
+- Questions of a stage say that the answer is free text in your own words.
 - A retry time in the past shows as `resumes next cycle` (or `resumes on start` while the conveyor is stopped).
 - After a soft stop the control screen says `All running stages finished. The conveyor stopped.`
 

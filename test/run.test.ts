@@ -93,4 +93,12 @@ describe('external commands', () => {
     expect(result.code).toBe(127)
     expect(result.stderr).toBe('conveyor-missing-command-for-test is not installed or not in PATH')
   })
+
+  it('keeps an error that a command writes only to stdout', async () => {
+    const { createRun } = await import('../src/run.js')
+    const result = await createRun()(process.execPath, ['-e', 'console.log("bad model"); process.exit(1)'])
+    expect(result.code).toBe(1)
+    expect(result.stderr).toBe('')
+    expect(result.stdout.trim()).toBe('bad model')
+  })
 })

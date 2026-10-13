@@ -61,6 +61,12 @@ export class FakeWorkspaces implements Workspaces {
     return this.heads.get(taskId)
   }
 
+  containsRemote = true
+
+  async contains() {
+    return this.containsRemote
+  }
+
   async syncBase() {
     return this.syncs.shift() ?? 'current'
   }

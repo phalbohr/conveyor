@@ -15,7 +15,7 @@ Only the maintainer publishes. npm 2FA is required.
    npm publish
    ```
 
-   `prepublishOnly` runs the type check and the tests, `prepack` builds a fresh `dist`.
+   `prepublishOnly` runs the type check, the linter, and the tests, `prepack` builds a fresh `dist`.
 6. Check the result: `npm view @phalbohr/conveyor version`, then `npm install -g @phalbohr/conveyor` and `conveyor --version`.
 7. Create a GitHub release for the tag with the changelog section.
 

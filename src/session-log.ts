@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { plain } from './engine/workpad.js'
 
 const TEXT_LINES = 6
 const LINE_WIDTH = 240
@@ -32,6 +33,10 @@ export function sessionWriter(file: string, cwd: string, redact: (text: string) 
 }
 
 export function describeEvent(line: string, cwd = ''): string[] {
+  return describe(line, cwd).map(plain)
+}
+
+function describe(line: string, cwd: string): string[] {
   let event: Json
   try {
     const parsed: unknown = JSON.parse(line)
@@ -112,5 +117,6 @@ function unwrap(command: unknown) {
 }
 
 function clip(line: string) {
-  return line.length > LINE_WIDTH ? `${line.slice(0, LINE_WIDTH - 1)}…` : line
+  const text = plain(line)
+  return text.length > LINE_WIDTH ? `${text.slice(0, LINE_WIDTH - 1).replace(/[^\s"'`,;:=()[\]{}<>|]*$/, '')}…` : text
 }

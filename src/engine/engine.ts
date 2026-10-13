@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import { join } from 'node:path'
-import type { Board, Comment, PullRequest, Task, TaskForm } from '../board/board.js'
+import { onBoard, type Board, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { LENGTH_LIMIT, NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
@@ -179,6 +179,12 @@ export class Engine {
       .then((synced) => synced && this.log(`board: moved ${synced} cards to the column of their conveyor:: label`))
       .catch((error: unknown) => this.log(`board: the project columns were not synced: ${(error as Error).message}`))
     for (const listed of listedTasks) {
+      if (this.isFixTask(listed) && (await this.trust.trusted(listed.author))) {
+        labeled = listed.id
+        break
+      }
+    }
+    for (const listed of listedTasks) {
       if (this.running.has(listed.id) || this.held.has(listed.id)) continue
       if (!(await this.trust.trusted(listed.author))) {
         if (!this.untrusted.has(listed.id)) this.log(`task ${listed.id}: skipped: its author @${listed.author} has no write access to the repository`)
@@ -186,7 +192,6 @@ export class Engine {
         continue
       }
       const task = (await this.releaseIfExpired(listed, me, config, now)) ? withoutOwner(listed) : listed
-      if (task.fixing && !task.closed && task.state !== 'done') labeled ??= task.id
       if (task.owner && task.owner !== me) continue
       const owned = task.owner === me
       if (owned && !task.assignees.includes(me)) await board.setOwner(task.id, me).catch((error: unknown) => this.log(`task ${task.id}: assigning @${me} failed: ${(error as Error).message}`))
@@ -514,8 +519,8 @@ export class Engine {
     }
 
     const landing = state.landing ?? 'success'
-    if (landing === 'failure') {
-      const held = await this.takeFix(id)
+    if (landing === 'failure' && state.mergeError === 'checks failed') {
+      const { held } = await this.takeFix(id)
       if (held) {
         delete state.landing
         state.landAttempts = Math.max(0, (state.landAttempts ?? 1) - 1)
@@ -594,6 +599,7 @@ export class Engine {
       if (held) {
         state.stage = stage.name
         state.parked = `waits: ${held}`
+        state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
         await run.save()
         this.log(`task ${id}: stops before stage ${stage.name}; ${held}`)
         return { status: 'stopped', summary }
@@ -721,24 +727,28 @@ export class Engine {
     const pull = await board.pullRequest(id)
     if (pull?.state === 'merged') return 'success'
     if (pull?.state === 'open' && pull.draft) return wait('the pull request is a draft; mark it ready for review')
-    if (pull?.state === 'open' && pull.headSha !== state.headSha) {
+    const review = async (sha: string) => {
       delete state.stage
-      state.headSha = pull.headSha
+      state.headSha = sha
       state.waiting = { kind: 'review', since: new Date().toISOString() }
-      await board.addComment(id, agentComment('review', changedText(pull.headSha)))
+      await board.addComment(id, agentComment('review', changedText(sha)))
       await board.setState(id, 'review')
       await board.setStage(id, undefined)
       await run.save()
       this.log(`task ${id}: the branch changed after approval, back to review`)
-      return 'stop'
+      return 'stop' as const
     }
+    if (pull?.state === 'open' && pull.headSha !== state.headSha) return review(pull.headSha)
     const local = pull?.state === 'open' ? await this.options.workspaces.head(id).catch(() => undefined) : undefined
-    if (pull && local && local !== pull.headSha) {
+    if (pull && local && local !== pull.headSha && (await this.options.workspaces.contains(id, pull.headSha).catch(() => false))) {
+      let pushed: string
       try {
-        state.headSha = await this.options.workspaces.push(id)
+        pushed = await this.options.workspaces.push(id)
       } catch (error) {
         return wait(`the task branch has commits that are not pushed, and the push failed: ${(error as Error).message.split('\n')[0]}`)
       }
+      if (config.transitions.merge !== 'ai') return review(pushed)
+      state.headSha = pushed
       return wait('the task branch had commits that were not pushed; they are pushed now and the branch waits for CI')
     }
     let error: string | undefined
@@ -826,13 +836,20 @@ export class Engine {
     this.log(`task ${id}: the CI of the base branch failed after the merge at ${verify.sha.slice(0, 7)}`)
     const names = config.stages.map((stage) => stage.name)
     const repair = config.stages.slice(names.indexOf('merge') + 1).some((stage) => stage.when === 'failure' || stage.when === 'always')
-    const other = await this.takeFix(id)
-    if (other) {
-      this.verifying.delete(verify.sha)
-      this.log(`task ${id}: ${other}`)
-      return true
-    }
     if (repair && (state.repairs ?? 0) < config.retry.max_attempts) {
+      const fix = await this.takeFix(id)
+      if (fix.busy) {
+        state.verify = verify
+        state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
+        await run.save()
+        this.log(`task ${id}: ${fix.held}; it checks again`)
+        return false
+      }
+      if (fix.held) {
+        this.verifying.delete(verify.sha)
+        this.log(`task ${id}: ${fix.held}`)
+        return true
+      }
       state.repairs = (state.repairs ?? 0) + 1
       state.broken = verify.sha
       return true
@@ -893,8 +910,8 @@ export class Engine {
       if (checks === 'success') this.baseRed = undefined
       return
     }
-    if (this.baseRed?.sha === sha && this.baseRed.fix && (!this.baseRed.repairing || this.verifying.has(sha))) return
-    const failed = await board.failedChecks(sha).catch(() => [])
+    if (this.baseRed?.sha === sha && this.baseRed.fix && (this.baseRed.repairing ? this.verifying.has(sha) : await this.stillFixes(this.baseRed.fix))) return
+    const failed = (await board.failedChecks(sha).catch(() => [])).map((name) => name.replace(/[\r\n`]/g, ' ').slice(0, 100))
     const owner = this.verifying.get(sha)
     let fix = await this.fixTask()
     if (!fix && owner) {
@@ -1295,27 +1312,36 @@ export class Engine {
     return fixer ? `task #${fixer} fixes the CI first` : 'the base branch CI is red; a fix task is chosen first'
   }
 
+  private isFixTask(task: Task) {
+    return task.fixing === true && !task.closed && task.state !== 'done' && onBoard(task)
+  }
+
+  private async stillFixes(id: string) {
+    const task = (await this.options.board.listTasks()).find((candidate) => candidate.id === id)
+    return task !== undefined && (task.state === 'done' || this.isFixTask(task))
+  }
+
   private async fixTask() {
     for (const task of await this.options.board.listTasks()) {
-      if (task.fixing && !task.closed && task.state !== 'done' && (await this.trust.trusted(task.author))) return task.id
+      if (this.isFixTask(task) && (await this.trust.trusted(task.author))) return task.id
     }
     return undefined
   }
 
-  private async takeFix(id: string) {
+  private async takeFix(id: string): Promise<{ held?: string; busy?: boolean }> {
     const held = this.heldBy(id)
-    if (held) return held
-    if (!(await this.lock(FIX_LOCK, LOCK_TTL))) return 'another task fixes the CI first'
+    if (held) return { held }
+    if (!(await this.lock(FIX_LOCK, LOCK_TTL))) return { held: 'another workstation chooses the task that fixes the CI', busy: true }
     try {
       const other = await this.fixTask()
       if (other && other !== id) {
         this.fixer = other
-        return `task #${other} fixes the CI first`
+        return { held: `task #${other} fixes the CI first` }
       }
       if (!other) await this.options.board.setFixing(id, true)
       if (this.fixer !== id) this.log(`CI freeze: task #${id} fixes the CI; merges wait`)
       this.fixer = id
-      return undefined
+      return {}
     } finally {
       await this.options.board.release(FIX_LOCK)
     }

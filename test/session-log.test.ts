@@ -46,7 +46,19 @@ describe('describeEvent', () => {
     const long = describeEvent(json({ type: 'text', part: { text: Array.from({ length: 9 }, (_, index) => `line ${index}`).join('\n') } }))
     expect(long).toHaveLength(7)
     expect(long.at(-1)).toBe('… 3 more lines')
-    expect(describeEvent('x'.repeat(500))[0]).toHaveLength(240)
+    const clipped = describeEvent('word '.repeat(100))[0] ?? ''
+    expect(clipped.length).toBeLessThanOrEqual(240)
+    expect(clipped).toMatch(/word …$/)
+  })
+
+  it('never cuts a token in half and drops terminal control sequences', () => {
+    const token = `ghp_${'A'.repeat(36)}`
+    const command = `${'x '.repeat(105)}curl -H "Authorization: ${token}"`
+    const [line] = describeEvent(JSON.stringify({ type: 'item.started', item: { type: 'command_execution', command } }))
+    expect(line).not.toContain('ghp_')
+    expect(line?.endsWith('…')).toBe(true)
+    expect(describeEvent(JSON.stringify({ type: 'text', part: { text: '\u001b]0;pwned\u0007\u001b[2Jclean' } }))).toEqual([']0;pwnedclean'])
+    expect(describeEvent(JSON.stringify({ type: 'tool_use', part: { tool: 'bash\u001b[2J', state: { input: { command: 'ls' } } } }))).toEqual(['▸ bash ls'])
   })
 })
 

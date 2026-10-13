@@ -17,6 +17,7 @@ export interface Workspaces {
   syncBase(taskId: string): Promise<'current' | 'rebased' | 'conflict'>
   ahead(taskId: string): Promise<number>
   head(taskId: string): Promise<string | undefined>
+  contains(taskId: string, sha: string): Promise<boolean>
   deleteBranch(taskId: string): Promise<void>
   push(taskId: string): Promise<string>
   remove(taskId: string): Promise<void>
@@ -117,6 +118,10 @@ export class GitWorkspaces implements Workspaces {
   async head(taskId: string) {
     const path = this.path(taskId)
     return existsSync(path) ? this.tryGit(path, 'rev-parse', 'HEAD') : undefined
+  }
+
+  async contains(taskId: string, sha: string) {
+    return (await this.tryGit(this.path(taskId), 'merge-base', '--is-ancestor', sha, 'HEAD')) !== undefined
   }
 
   async ahead(taskId: string) {

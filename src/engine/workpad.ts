@@ -117,7 +117,7 @@ export function repliesSince(comments: Comment[], commentId: string | undefined)
   return comments.slice(index + 1).filter((comment) => !isAgentComment(comment))
 }
 
-function plain(text: string) {
+export function plain(text: string) {
   return text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
 }
 
