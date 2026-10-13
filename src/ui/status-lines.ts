@@ -107,9 +107,10 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   ]
   if (blocked.length) lines.push({ text: `no new tasks: ${blocked.join(' and ')} reached · [u] usage`, tone: 'warning' })
   if (status.freeze) {
-    const { id, title, owner, stage, waitingSince } = status.freeze
-    const where = [owner ? `@${owner}` : 'not claimed yet', waitingSince ? `waits for an answer since ${time(waitingSince)}` : stage ? `stage::${stage}` : ''].filter(Boolean).join(', ')
-    lines.push({ text: `CI freeze: #${id} ${title} fixes the CI (${where}) · other tasks wait`, tone: 'warning' })
+    const { id, title, base, owner, stage, waitingSince } = status.freeze
+    const where = [owner ? `@${owner}` : 'not claimed yet', waitingSince ? `waits for an answer since ${time(waitingSince)}` : stage ? `stage::${stage}` : '', status.freeze.private ? 'private artifact' : ''].filter(Boolean).join(', ')
+    const handOver = owner && owner !== status.me ? ` · stuck? \`conveyor release ${id}${status.freeze.private ? ' --force' : ''}\` hands it to another workstation` : ''
+    lines.push({ text: `CI freeze: #${id} ${title} fixes the CI (${where}) · ${base ? 'new tasks and merges wait' : 'merges wait'}${handOver}`, tone: 'warning' })
   }
 
   lines.push({ text: '' }, { text: `Team: ${status.team.unclaimed} unclaimed · ${status.team.claimedByOthers} claimed by others`, tone: 'muted' })
@@ -188,7 +189,7 @@ export function helpLines(): Line[] {
     row('in progress 1/3', 'my tasks in this column against my limit; needs input and review the same'),
     row('queued 2', 'my answered tasks that wait for a free slot; they start before new tasks'),
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
-    row('CI freeze', 'one task fixes the CI (label fix::ci, on any workstation); all other tasks wait until it is done · when it waits for an answer, answer it or reset it'),
+    row('CI freeze', 'one task fixes the CI (label fix::ci, on any workstation); merges wait until it is done, and while the base is red no new task starts · stuck: answer it, reset it, or hand it over with `conveyor release N` (`--force` when it has a private artifact of another member)'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),
     row('● ○ in progress', '● running here with time and last harness activity: output or CPU work (yellow: quiet) · ○ waits or not running · pid N: another terminal'),
     row('s while running', 'first s: running stages finish, nothing new starts, then the conveyor stops · second s: stop at once · q twice: stop at once and quit'),

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
+import { renderWorkpad } from '../src/engine/workpad.js'
 import type { Script } from '../src/harness/fake.js'
 import { failed, type StageResult } from '../src/harness/harness.js'
 import { UsageLedger } from '../src/usage.js'
@@ -677,14 +678,34 @@ describe('one repair at a time', () => {
     await board.createTask('Add login', 'p', { form: 'plan' })
 
     await cycle()
-    expect(runs()).toEqual([])
-
-    expect(logs).toContain('CI freeze: task #1 fixes the CI; other tasks wait')
+    expect(runs()).toEqual(['2:implement'])
+    expect(logs).toContain('CI freeze: task #1 fixes the CI; merges wait')
+    expect(logs).toContain('task 2: stops before stage merge; task #1 fixes the CI first')
 
     await board.setFixing(theirs.id, false)
     await cycle()
     expect(runs()).toEqual(['2:implement', '2:merge'])
-    expect(logs).toContain('CI freeze over: task #1 no longer fixes the CI; other tasks continue')
+    expect(board.merges).toHaveLength(1)
+    expect(logs).toContain('CI freeze over: task #1 no longer fixes the CI; merges continue')
+  })
+
+  it('lets a started task work up to merge while the base is red, and tells it where the failures come from', async () => {
+    const { board, cycle, runs, harness } = setup({ mode: 'ai', stages: '  implement: {}\n  review: {}\n  merge: {}' })
+    const started = await board.createTask('Add login', 'p', { state: 'in-progress' })
+    await board.setOwner(started.id, 'me')
+    await board.addComment(started.id, renderWorkpad({ attempt: 0, stage: 'implement' }, ''))
+    board.headChecks = 'failure'
+    board.baseFailures = ['Backend (Java 21)']
+    const theirs = await board.createTaskAs('alice', 'Fix the CI of the base branch main', 'p', { state: 'in-progress' })
+    await board.setOwner(theirs.id, 'alice')
+    await board.setFixing(theirs.id, true)
+    await board.createTask('Add search', 'p', { form: 'plan' })
+
+    await cycle()
+    expect(runs()).toEqual(['1:implement', '1:review'])
+    expect(stageRuns(harness)[0]?.prompt).toContain('## Base branch\n\nThe CI of the base branch fails at')
+    expect(stageRuns(harness)[0]?.prompt).toContain(`(Backend (Java 21)), and this task did not cause it. Task #${theirs.id} fixes it`)
+    expect(board.merges).toEqual([])
   })
 
   it('takes the fix task of another member for a red base instead of creating a second one', async () => {
@@ -713,6 +734,26 @@ describe('one repair at a time', () => {
 })
 
 describe('draft and foreign pull requests', () => {
+  it('names the review commands with free-text notes when a task waits for review or after a failed merge', async () => {
+    const { board, cycle } = setup()
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    const review = (await board.listComments('1')).at(-1)?.body ?? ''
+    expect(review).toContain('**The pull request is ready for review:**')
+    expect(review).toContain('`/approve` (1 approval needed)')
+    expect(review).toContain('`/fix_from: <stage> <notes>`: the same from that stage (`story`, `plan`, `implement`, `merge`)')
+    expect(review).toContain('`<notes>` is free text in your own words')
+
+    const failing = setup({ mode: 'ai' })
+    failing.board.checks = 'failure'
+    await failing.board.createTask('Add search', 'p', { form: 'plan' })
+    await failing.cycle()
+    const error = (await failing.board.listComments('1')).at(-1)?.body ?? ''
+    expect(error).toContain('**The merge failed.**')
+    expect(error).toContain('reply with any comment to retry')
+    expect(error).toContain('`/rework <notes>`: start over from `plan` on a new branch.')
+  })
+
   it('does not merge a draft pull request until it is ready', async () => {
     const { board, cycle, expireRetry } = setup({ mode: 'ai' })
     board.draft = true

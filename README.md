@@ -91,7 +91,7 @@ Keys on the main screen:
 - `q`: quit. While the conveyor runs, press `q` twice; the conveyor then stops at once.
 - `←` `→` select a column, Enter lists its tasks with stage or form, `↓` moves into them.
 - `o`: log, the last 30 events; the full log is in `~/.conveyor/logs/<project>.log`.
-- A yellow `CI freeze: #N <title> fixes the CI (@owner, …)` line: one task fixes the CI (label `fix::ci`, on any workstation), and all other tasks wait until it is done. When it waits for an answer, answer it or reset it.
+- A yellow `CI freeze: #N <title> fixes the CI (@owner, …) · merges wait` line: one task fixes the CI (label `fix::ci`, on any workstation); until it is done, other tasks stop before `merge`, and with a red base no new task starts. When it is stuck, answer it, reset it, or hand it over with `conveyor release N` (`--force` for a private artifact of another member); the line shows the command.
 - `u`: usage: tokens today and the 5h and 7d subscription windows of every harness in use.
 - `k`: board check; Enter adds what is missing (labels, the `Conveyor` field, its options).
 - `r`: read the board again and run the board check; while the conveyor runs here, start a cycle at once instead of waiting for `poll_interval`.
@@ -204,7 +204,7 @@ Three kinds of labels describe a task. `conveyor init` creates all of them. On e
 | `conveyor::needs-input`, `queued`, `in-progress`, `review`, `done` | the column of a task the conveyor works on | the conveyor |
 | `stage::<name>` | the stage that runs or waits for input, one label for every stage in `config.yaml` | the conveyor; removed at review and done |
 | `conveyor::rework` | a signal: start the task over after `plan`, like `/rework` | humans |
-| `fix::ci` | the one task that fixes CI now (the fix task of a red base, or a task in its `fix-ci` repair); every workstation waits for it | the conveyor; removed when the task is done or reset |
+| `fix::ci` | the one task that fixes CI now (the fix task of a red base, or a task in its `fix-ci` repair); every workstation holds merges for it | the conveyor; removed when the task is done or reset |
 
 The board has one column per state: **Backlog → Needs input → Queued → In progress → Review → Done**, then Closed. Every stage, from `story` to `merge` and custom stages such as `polish`, runs in In progress; its `stage::` label shows which one. A card in In progress with `stage::plan` is a plan being written; a card in Needs input with `stage::plan` is a plan that waits for an answer.
 

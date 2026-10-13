@@ -5,7 +5,7 @@ import type { Config } from './config.js'
 import { findWorkpad, repliesSince } from './engine/workpad.js'
 import type { QuotaWindow } from './harness/harness.js'
 import { runningPid } from './lock.js'
-import type { Activity } from './engine/engine.js'
+import { BASE_FIX, type Activity } from './engine/engine.js'
 import { checkSettingsSync, type SettingsSync } from './settings-sync.js'
 import { undescribedStages } from './stage-catalog.js'
 import { QuotaStore, UsageLedger } from './usage.js'
@@ -35,7 +35,7 @@ export type BacklogTask = { id: string; title: string; url: string; form?: NonNu
 
 type Limit = { used: number; limit: number }
 
-export type Freeze = { id: string; title: string; owner?: string; stage?: string; waitingSince?: string }
+export type Freeze = { id: string; title: string; base: boolean; owner?: string; stage?: string; waitingSince?: string; private?: boolean }
 
 export type StatusSnapshot = {
   settings: string
@@ -77,8 +77,17 @@ export async function collectStatus(options: { board: Board; config: Config; set
   let freeze: Freeze | undefined
   for (const task of tasks) {
     if (!task.fixing || task.closed || task.state === 'done' || !(await board.canWrite(task.author))) continue
-    const waiting = task.state === 'needs-input' ? findWorkpad(await board.listComments(task.id))?.state.waiting?.since : undefined
-    freeze = { id: task.id, title: task.title, ...(task.owner ? { owner: task.owner } : {}), ...(task.stage ? { stage: task.stage } : {}), ...(waiting ? { waitingSince: waiting } : {}) }
+    const pad = findWorkpad(await board.listComments(task.id))?.state
+    const waiting = task.state === 'needs-input' ? pad?.waiting?.since : undefined
+    freeze = {
+      id: task.id,
+      title: task.title,
+      base: task.body.includes(BASE_FIX),
+      ...(task.owner ? { owner: task.owner } : {}),
+      ...(task.stage ? { stage: task.stage } : {}),
+      ...(waiting ? { waitingSince: waiting } : {}),
+      ...(pad?.private ? { private: true } : {}),
+    }
     break
   }
   const fixer = freeze?.id
@@ -103,7 +112,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     }
     mine.push(entry)
   }
-  for (const entry of mine) if (fixer && entry.id !== fixer && (entry.state === 'in-progress' || entry.state === 'queued' || entry.answered)) entry.held = `waits: task #${fixer} fixes the CI first`
+  for (const entry of mine) if (fixer && entry.id !== fixer && (entry.stage === 'merge' || entry.stage === 'land') && (entry.state === 'in-progress' || entry.state === 'queued' || entry.answered)) entry.held = `waits: task #${fixer} fixes the CI first`
   mine.sort((a, b) => Number(a.id) - Number(b.id))
   const backlog = tasks
     .filter((task) => !task.owner && task.state !== 'done' && (task.state !== undefined || task.form !== undefined))

@@ -5,6 +5,7 @@ import { FakeBoard } from '../src/board/fake.js'
 import { quotaFile, usageFile } from '../src/commands/run.js'
 import { loadConfig } from '../src/config.js'
 import { agentComment, renderWorkpad } from '../src/engine/workpad.js'
+import { BASE_FIX } from '../src/engine/engine.js'
 import { collectStatus } from '../src/status.js'
 import { QuotaStore, UsageLedger } from '../src/usage.js'
 import { tempDir } from './helpers.js'
@@ -87,36 +88,38 @@ describe('collectStatus', () => {
     expect(status.limits.subscription.claude).toMatchObject({ fiveHour: { utilization: 0.42 }, fiveHourReserve: 10 })
   })
 
-  it('marks the tasks that wait while another task fixes the CI', async () => {
+  it('marks the tasks that wait to merge while another task fixes the CI', async () => {
     const settings = tempDir()
     writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')
     const loaded = loadConfig(settings)
     if (!loaded.ok) throw new Error('invalid')
     const fake = new FakeBoard('me')
-    for (const title of ['Login', 'Search']) {
+    for (const [title, stage] of [['Login', 'fix-ci'], ['Search', 'land'], ['Profile', 'implement']] as const) {
       const task = await fake.createTask(title, 'body', { state: 'in-progress' })
       await fake.setOwner(task.id, 'me')
+      await fake.addComment(task.id, renderWorkpad({ attempt: 0, stage }, ''))
     }
-    const status = async () => (await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })).mine.map((task) => task.held)
-    expect(await status()).toEqual([undefined, undefined])
+    const collect = () => collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })
+    const held = async () => (await collect()).mine.map((task) => task.held)
+    expect(await held()).toEqual([undefined, undefined, undefined])
 
     await fake.setFixing('1', true)
-    expect(await status()).toEqual([undefined, 'waits: task #1 fixes the CI first'])
-    expect((await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })).freeze).toEqual({ id: '1', title: 'Login', owner: 'me' })
+    expect(await held()).toEqual([undefined, 'waits: task #1 fixes the CI first', undefined])
+    expect((await collect()).freeze).toEqual({ id: '1', title: 'Login', base: false, owner: 'me' })
 
     await fake.setFixing('1', false)
-    const fix = await fake.createTaskAs('alice', 'Fix the CI of the base branch main', 'body', { state: 'backlog', form: 'plan' })
+    const fix = await fake.createTaskAs('alice', 'Fix the CI of the base branch main', `body\n\n${BASE_FIX}`, { state: 'backlog', form: 'plan' })
     await fake.setFixing(fix.id, true)
-    expect(await status()).toEqual([`waits: task #${fix.id} fixes the CI first`, `waits: task #${fix.id} fixes the CI first`])
+    expect(await held()).toEqual([undefined, `waits: task #${fix.id} fixes the CI first`, undefined])
 
     await fake.setOwner(fix.id, 'alice')
     await fake.setState(fix.id, 'needs-input')
     await fake.setStage(fix.id, 'plan')
-    await fake.addComment(fix.id, renderWorkpad({ attempt: 0, waiting: { kind: 'questions', stage: 'plan', since: '2026-10-13T09:12:00.000Z' } }, ''))
-    expect((await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })).freeze).toEqual({ id: fix.id, title: 'Fix the CI of the base branch main', owner: 'alice', stage: 'plan', waitingSince: '2026-10-13T09:12:00.000Z' })
+    await fake.addComment(fix.id, renderWorkpad({ attempt: 0, private: true, waiting: { kind: 'questions', stage: 'plan', since: '2026-10-13T09:12:00.000Z' } }, ''))
+    expect((await collect()).freeze).toEqual({ id: fix.id, title: 'Fix the CI of the base branch main', base: true, owner: 'alice', stage: 'plan', waitingSince: '2026-10-13T09:12:00.000Z', private: true })
 
     fake.outsiders.add('alice')
-    expect((await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })).freeze).toBeUndefined()
+    expect((await collect()).freeze).toBeUndefined()
   })
 
   it('reports a stopped runner', async () => {

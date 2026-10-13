@@ -233,12 +233,11 @@ export class Engine {
     if (this.halt.signal.aborted || this.draining) return
     const previous = this.fixer
     const fixer = (this.fixer = this.baseRed ? (this.baseRed.fix ?? '') : labeled)
-    if (fixer && fixer !== previous) this.log(`CI freeze: task #${fixer} fixes the CI; other tasks wait`)
-    if (previous && fixer === undefined) this.log(`CI freeze over: task #${previous} no longer fixes the CI; other tasks continue`)
+    if (fixer && fixer !== previous) this.log(`CI freeze: task #${fixer} fixes the CI; ${this.baseRed ? 'new tasks and merges wait' : 'merges wait'}`)
+    if (previous && fixer === undefined) this.log(`CI freeze over: task #${previous} no longer fixes the CI; merges continue`)
     let slots = config.limits.running - this.running.size - backingOff
     let waiting = 0
     for (const task of this.sorted(resumable, me)) {
-      if (fixer !== undefined && task.id !== fixer) continue
       if (slots > 0 || task.id === fixer) {
         this.start(task, config)
         slots--
@@ -255,7 +254,7 @@ export class Engine {
 
     for (const task of this.sorted(fresh, me)) {
       const fix = task.id === fixer
-      if (fixer !== undefined && !fix) continue
+      if (this.baseRed && !fix) continue
       if (!fix && (blocked || slots <= 0)) break
       if (fix && overBudget) continue
       if (!(await this.lock(task.id, LOCK_TTL))) continue
@@ -478,6 +477,7 @@ export class Engine {
       if (chain.merge === 'review') {
         delete state.stage
         state.waiting = { kind: 'review', since: new Date().toISOString() }
+        await board.addComment(id, agentComment('review', `**The pull request is ready for review:** ${opened.url}\n\nApprove it with an Approve review or a comment \`/approve\` (${config.review.approvals} ${config.review.approvals === 1 ? 'approval' : 'approvals'} needed). A plain comment is a note for the team and does not change the task.\n\n${commandHelp(config)}`))
         await board.setState(id, 'review')
         await board.setStage(id, undefined)
         await run.save()
@@ -590,7 +590,7 @@ export class Engine {
         this.log(`task ${id}: stops before stage ${stage.name}; it starts there on the next start`)
         return { status: 'stopped', summary }
       }
-      const held = this.heldBy(id)
+      const held = stage.name === 'merge' ? this.heldBy(id) : undefined
       if (held) {
         state.stage = stage.name
         state.parked = `waits: ${held}`
@@ -795,7 +795,7 @@ export class Engine {
     this.log(`task ${id}: merge failed: ${error}`)
     if (repair && state.landAttempts < config.retry.max_attempts) return 'failure'
 
-    const text = `**The merge failed.**\n\n${error}\n\nFix the cause, then reply in a comment to retry.`
+    const text = `**The merge failed.**\n\n${error}\n\nFix the cause, then reply with any comment to retry.\n\n${commandHelp(config)}`
     const comment = await board.addComment(id, agentComment('error', text))
     state.stage = LAND
     state.waiting = { kind: 'error', stage: LAND, commentId: comment.id, since: new Date().toISOString() }
@@ -838,7 +838,7 @@ export class Engine {
       return true
     }
     this.verifying.delete(verify.sha)
-    const text = `**The base branch CI failed after this task was merged** (commit \`${verify.sha.slice(0, 7)}\`).\n\nReply \`/fix_from: implement <notes>\` to fix it in a follow-up pull request from the latest base branch, or reply with any comment to finish the task as it is.`
+    const text = `**The base branch CI failed after this task was merged** (commit \`${verify.sha.slice(0, 7)}\`).\n\nReply \`/fix_from: implement <notes>\` to fix it in a follow-up pull request from the latest base branch, or reply with any comment to finish the task as it is. \`<notes>\` is free text in your own words: what to change and why.`
     const comment = await board.addComment(id, agentComment('error', text))
     state.followUp = true
     state.waiting = { kind: 'error', stage: 'verify', commentId: comment.id, since: new Date().toISOString() }
@@ -899,7 +899,7 @@ export class Engine {
     let fix = await this.fixTask()
     if (!fix && owner) {
       this.baseRed = { sha, fix: owner, failed, repairing: true }
-      this.log(`the base branch CI fails at ${sha.slice(0, 7)} after the merge of task #${owner}; it repairs the base, and other tasks wait until it is green`)
+      this.log(`the base branch CI fails at ${sha.slice(0, 7)} after the merge of task #${owner}; it repairs the base, and new tasks and merges wait until it is green`)
       return
     }
     if (!fix && (await this.lock(FIX_LOCK, LOCK_TTL))) {
@@ -907,7 +907,7 @@ export class Engine {
         fix = await this.fixTask()
         if (!fix) {
           const base = await board.baseBranch()
-          const body = `The CI of the base branch \`${base}\` fails at commit \`${sha}\`${failed.length ? `: ${failed.join(', ')}` : ''}.\n\nFind the cause and fix it so that every check passes on the base branch again. If the latest base branch already fixes the failure in another way, keep the base version and drop this branch's own fix for it. Other tasks of the conveyor wait until this task is merged and the base branch is green.\n\n${BASE_FIX}`
+          const body = `The CI of the base branch \`${base}\` fails at commit \`${sha}\`${failed.length ? `: ${failed.join(', ')}` : ''}.\n\nFind the cause and fix it so that every check passes on the base branch again. If the latest base branch already fixes the failure in another way, keep the base version and drop this branch's own fix for it. Other tasks of the conveyor do not merge, and no new task starts, until this task is merged and the base branch is green.\n\n${BASE_FIX}`
           const task = await board.createTask(`Fix the CI of the base branch ${base}`, body, { state: 'backlog', form: 'plan' })
           await board.setPriority(task.id, 1)
           await board.setFixing(task.id, true)
@@ -918,7 +918,7 @@ export class Engine {
       }
     }
     this.baseRed = { sha, failed, ...(fix ? { fix } : {}) }
-    this.log(`the base branch CI fails at ${sha.slice(0, 7)}${failed.length ? ` (${failed.join(', ')})` : ''}; ${fix ? `task #${fix} fixes it` : 'a fix task is chosen'}, and other tasks wait until it is green`)
+    this.log(`the base branch CI fails at ${sha.slice(0, 7)}${failed.length ? ` (${failed.join(', ')})` : ''}; ${fix ? `task #${fix} fixes it` : 'a fix task is chosen'}, and new tasks and merges wait until it is green`)
   }
 
   private checksMayStart(state: WorkpadState, sha: string) {
@@ -1137,6 +1137,11 @@ export class Engine {
       ...(context.merge ? { merge: context.merge } : {}),
       ...(stage.name === 'merge' && config.transitions.merge === 'smart' ? { mergeCriteria: this.read('smart', 'merge.md') } : {}),
       ...(context.parts ? { parts: context.parts } : {}),
+      ...(this.baseRed && this.baseRed.fix !== task.id
+        ? {
+            base: `The CI of the base branch fails at \`${this.baseRed.sha.slice(0, 7)}\`${this.baseRed.failed.length ? ` (${this.baseRed.failed.join(', ')})` : ''}, and this task did not cause it. ${this.baseRed.fix ? `Task #${this.baseRed.fix}` : 'A fix task'} fixes it; this task merges only after the base branch is green again. Do not fix failures that also occur on the base branch. Make the tests of your change pass, and name the failures that come from the base branch in your summary.`,
+          }
+        : {}),
     })
 
     const controller = new AbortController()
@@ -1210,7 +1215,7 @@ export class Engine {
     state.attempt++
     state.lastError = publicText(result.summary, this.options.home)
     if (fatal) {
-      const text = `**The \`${stage.name}\` stage cannot start.**\n\n${state.lastError}\n\nFix the cause, then reply in a comment to retry.`
+      const text = `**The \`${stage.name}\` stage cannot start.**\n\n${state.lastError}\n\nFix the cause, then reply with any comment to retry.\n\n${commandHelp(config)}`
       const comment = await this.options.board.addComment(id, agentComment('error', text))
       state.attempt = 0
       state.waiting = { kind: 'error', stage: stage.name, commentId: comment.id, since: new Date().toISOString() }
@@ -1222,7 +1227,7 @@ export class Engine {
       state.retryAt = new Date(Date.now() + delay).toISOString()
       return
     }
-    const text = `**The \`${stage.name}\` stage failed ${state.attempt} times.**\n\n${state.lastError}\n\nReply in a comment to retry.`
+    const text = `**The \`${stage.name}\` stage failed ${state.attempt} times.**\n\n${state.lastError}\n\nReply with any comment to retry.\n\n${commandHelp(config)}`
     const comment = await this.options.board.addComment(id, agentComment('error', text))
     state.attempt = 0
     state.waiting = { kind: 'error', stage: stage.name, commentId: comment.id, since: new Date().toISOString() }
@@ -1234,7 +1239,7 @@ export class Engine {
       return `**The \`${stage}\` stage asks for approval.**\n\n${result.summary}\n\nReply to approve, or describe the changes you want.`
     }
     const questions = (result.questions ?? [result.summary]).map((question, index) => `${index + 1}. ${question}`).join('\n')
-    return `**Questions from the \`${stage}\` stage:**\n\n${questions}\n\nReply in a comment to continue.`
+    return `**Questions from the \`${stage}\` stage:**\n\n${questions}\n\nAnswer in a comment in your own words; the stage continues with your answer.`
   }
 
   private conversation(comments: Comment[], waiting: NonNullable<WorkpadState['waiting']>) {
@@ -1308,7 +1313,7 @@ export class Engine {
         return `task #${other} fixes the CI first`
       }
       if (!other) await this.options.board.setFixing(id, true)
-      if (this.fixer !== id) this.log(`CI freeze: task #${id} fixes the CI; other tasks wait`)
+      if (this.fixer !== id) this.log(`CI freeze: task #${id} fixes the CI; merges wait`)
       this.fixer = id
       return undefined
     } finally {
@@ -1343,6 +1348,18 @@ export class Engine {
   private log(message: string) {
     this.options.log?.(message)
   }
+}
+
+function commandHelp(config: Config) {
+  const stages = config.stages.slice(0, config.stages.findIndex((stage) => stage.name === 'merge') + 1).map((stage) => `\`${stage.name}\``).join(', ')
+  return [
+    'To send the task back to work with your notes, reply with one of:',
+    '- `/fix <notes>`: the `plan` stage adapts the plan to your notes, then the later stages run; the branch and the pull request stay.',
+    `- \`/fix_from: <stage> <notes>\`: the same from that stage (${stages}), for example \`/fix_from: implement Keep the old endpoint.\``,
+    '- `/rework <notes>`: start over from `plan` on a new branch.',
+    '',
+    '`<notes>` is free text in your own words: what to change and why.',
+  ].join('\n')
 }
 
 function changedText(sha: string) {
