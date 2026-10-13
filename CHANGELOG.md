@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — 2026-10-13
+
+- A pull request of the conveyor says `Part of #N` and never `Closes #N`. Before, with `close_on_done: true` GitHub closed the issue at the merge, the conveyor stopped seeing the task before its base CI check and post-merge stages, and the task stayed in `conveyor::in-progress` (sometimes with `fix::ci`) on a closed issue. Now the conveyor closes the issue itself when the task is done. Clean up such tasks by hand: set `conveyor::done` and remove `stage::`, `claimed-by::`, and `fix::ci`.
+- The help names GitHub's "Auto-close issues with merged linked pull requests" setting (Settings → General → Issues): turn it off when pull requests are linked to issues by hand, or the issue closes before the conveyor finishes.
+
 ## 0.2.0 — 2026-10-13
 
 - A missing or silent `gh`/`glab` gives a clear board error with the next step (`… is not installed or not in PATH`, `gh auth status`, `glab auth status`).

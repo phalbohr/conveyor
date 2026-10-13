@@ -1,6 +1,6 @@
 {
   "name": "@phalbohr/conveyor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Configurable development conveyor: coding harnesses move kanban tasks from idea to merge",
   "keywords": [
     "ai-agents",
