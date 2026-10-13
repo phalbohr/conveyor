@@ -102,11 +102,12 @@ describe('a plan in parts', () => {
 })
 
 describe('pull request references', () => {
-  it('closes the issue only from the last part when close_on_done is on', async () => {
+  it('never lets a pull request close the issue; the conveyor closes it when the task is done', async () => {
     const { board, cycle } = setup(() => (run) => (run.stage === 'plan' ? { outcome: 'done', summary: 'planned', parts: ['A', 'B'] } : { outcome: 'done', summary: 'ok' }), 'ai', 'close_on_done: true\n')
     await board.createTask('Big story', 'text', { form: 'story' })
     await cycle()
     await cycle()
-    expect(board.pullBodies.map((body) => body.split('.')[0])).toEqual(['Part of #1, part 1 of 2: A', 'Closes #1, part 2 of 2: B'])
+    expect(board.pullBodies.map((body) => body.split('.')[0])).toEqual(['Part of #1, part 1 of 2: A', 'Part of #1, part 2 of 2: B'])
+    expect(await board.getTask('1')).toMatchObject({ state: 'done', closed: true })
   })
 })

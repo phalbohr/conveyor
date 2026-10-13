@@ -476,7 +476,7 @@ export class Engine {
       const opened = await board.openPullRequest(
         id,
         part ? `${task.title} (part ${part.index}/${part.total}: ${part.title})` : task.title,
-        `${config.close_on_done && (!part || part.index === part.total) ? 'Closes' : 'Part of'} #${id}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
+        `Part of #${id}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
       )
       state.pull = { number: opened.number, url: opened.url }
       if (chain.merge === 'review') {
