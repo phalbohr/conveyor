@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-13
 
 - A missing or silent `gh`/`glab` gives a clear board error with the next step (`… is not installed or not in PATH`, `gh auth status`, `glab auth status`).
 - The fix task of a red base branch starts even when every `running` slot is taken; before, the tasks waiting for it could block it forever.
