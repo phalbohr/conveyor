@@ -102,11 +102,21 @@ describe('collectStatus', () => {
 
     await fake.setFixing('1', true)
     expect(await status()).toEqual([undefined, 'waits: task #1 fixes the CI first'])
+    expect((await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })).freeze).toEqual({ id: '1', title: 'Login', owner: 'me' })
 
     await fake.setFixing('1', false)
     const fix = await fake.createTaskAs('alice', 'Fix the CI of the base branch main', 'body', { state: 'backlog', form: 'plan' })
     await fake.setFixing(fix.id, true)
     expect(await status()).toEqual([`waits: task #${fix.id} fixes the CI first`, `waits: task #${fix.id} fixes the CI first`])
+
+    await fake.setOwner(fix.id, 'alice')
+    await fake.setState(fix.id, 'needs-input')
+    await fake.setStage(fix.id, 'plan')
+    await fake.addComment(fix.id, renderWorkpad({ attempt: 0, waiting: { kind: 'questions', stage: 'plan', since: '2026-10-13T09:12:00.000Z' } }, ''))
+    expect((await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })).freeze).toEqual({ id: fix.id, title: 'Fix the CI of the base branch main', owner: 'alice', stage: 'plan', waitingSince: '2026-10-13T09:12:00.000Z' })
+
+    fake.outsiders.add('alice')
+    expect((await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })).freeze).toBeUndefined()
   })
 
   it('reports a stopped runner', async () => {

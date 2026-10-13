@@ -35,6 +35,8 @@ export type BacklogTask = { id: string; title: string; url: string; form?: NonNu
 
 type Limit = { used: number; limit: number }
 
+export type Freeze = { id: string; title: string; owner?: string; stage?: string; waitingSince?: string }
+
 export type StatusSnapshot = {
   settings: string
   project: string
@@ -45,6 +47,7 @@ export type StatusSnapshot = {
   board?: BoardCheck
   undescribed: string[]
   mine: MyTask[]
+  freeze?: Freeze
   backlog: BacklogTask[]
   team: { unclaimed: number; claimedByOthers: number }
   limits: {
@@ -71,7 +74,14 @@ export async function collectStatus(options: { board: Board; config: Config; set
   const me = await board.user()
   const tasks = await board.listTasks()
   const mine: MyTask[] = []
-  const fixer = tasks.find((task) => task.fixing && !task.closed && task.state !== 'done')?.id
+  let freeze: Freeze | undefined
+  for (const task of tasks) {
+    if (!task.fixing || task.closed || task.state === 'done' || !(await board.canWrite(task.author))) continue
+    const waiting = task.state === 'needs-input' ? findWorkpad(await board.listComments(task.id))?.state.waiting?.since : undefined
+    freeze = { id: task.id, title: task.title, ...(task.owner ? { owner: task.owner } : {}), ...(task.stage ? { stage: task.stage } : {}), ...(waiting ? { waitingSince: waiting } : {}) }
+    break
+  }
+  const fixer = freeze?.id
 
   for (const task of tasks.filter((candidate) => candidate.owner === me && candidate.state)) {
     const comments = await board.listComments(task.id)
@@ -93,7 +103,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     }
     mine.push(entry)
   }
-  for (const entry of mine) if (fixer && entry.id !== fixer && (entry.state === 'in-progress' || entry.state === 'queued')) entry.held = `waits: task #${fixer} fixes the CI first`
+  for (const entry of mine) if (fixer && entry.id !== fixer && (entry.state === 'in-progress' || entry.state === 'queued' || entry.answered)) entry.held = `waits: task #${fixer} fixes the CI first`
   mine.sort((a, b) => Number(a.id) - Number(b.id))
   const backlog = tasks
     .filter((task) => !task.owner && task.state !== 'done' && (task.state !== undefined || task.form !== undefined))
@@ -123,6 +133,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     me,
     runner: pid ? { running: true, pid } : { running: false },
     settingsSync,
+    ...(freeze ? { freeze } : {}),
     ...(boardCheck ? { board: boardCheck } : {}),
     undescribed: undescribedStages(options.settings, config),
     mine,

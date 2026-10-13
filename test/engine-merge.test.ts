@@ -29,8 +29,10 @@ function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; 
   const board = new FakeBoard('me')
   const harness = stageHarness(options.script)
   const workspaces = new FakeWorkspaces()
+  const logs: string[] = []
   const engine = new Engine({
     board,
+    log: (message) => logs.push(message),
     harnesses: { claude: harness },
     workspaces,
     settingsDir: settings,
@@ -49,7 +51,7 @@ function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; 
     const pad = comments.find((c) => c.body.includes('conveyor:workpad'))
     if (pad) await board.updateComment(pad.id, pad.body.replace(/"retryAt":"[^"]+"/, '"retryAt":"2000-01-01T00:00:00.000Z"'))
   }
-  return { board, harness, workspaces, engine, cycle, runs, expireRetry }
+  return { board, harness, workspaces, engine, cycle, runs, expireRetry, logs }
 }
 
 describe('merge mode human', () => {
@@ -668,7 +670,7 @@ describe('one repair at a time', () => {
   })
 
   it('waits while a task of another member fixes the CI on their workstation', async () => {
-    const { board, cycle, runs } = setup({ mode: 'ai' })
+    const { board, cycle, runs, logs } = setup({ mode: 'ai' })
     const theirs = await board.createTaskAs('alice', 'Search', 'p', { state: 'in-progress' })
     await board.setOwner(theirs.id, 'alice')
     await board.setFixing(theirs.id, true)
@@ -677,9 +679,12 @@ describe('one repair at a time', () => {
     await cycle()
     expect(runs()).toEqual([])
 
+    expect(logs).toContain('CI freeze: task #1 fixes the CI; other tasks wait')
+
     await board.setFixing(theirs.id, false)
     await cycle()
     expect(runs()).toEqual(['2:implement', '2:merge'])
+    expect(logs).toContain('CI freeze over: task #1 no longer fixes the CI; other tasks continue')
   })
 
   it('takes the fix task of another member for a red base instead of creating a second one', async () => {

@@ -231,7 +231,10 @@ export class Engine {
     }
 
     if (this.halt.signal.aborted || this.draining) return
+    const previous = this.fixer
     const fixer = (this.fixer = this.baseRed ? (this.baseRed.fix ?? '') : labeled)
+    if (fixer && fixer !== previous) this.log(`CI freeze: task #${fixer} fixes the CI; other tasks wait`)
+    if (previous && fixer === undefined) this.log(`CI freeze over: task #${previous} no longer fixes the CI; other tasks continue`)
     let slots = config.limits.running - this.running.size - backingOff
     let waiting = 0
     for (const task of this.sorted(resumable, me)) {
@@ -1305,6 +1308,7 @@ export class Engine {
         return `task #${other} fixes the CI first`
       }
       if (!other) await this.options.board.setFixing(id, true)
+      if (this.fixer !== id) this.log(`CI freeze: task #${id} fixes the CI; other tasks wait`)
       this.fixer = id
       return undefined
     } finally {

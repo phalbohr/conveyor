@@ -5,6 +5,7 @@ import type { StatusSnapshot } from '../src/status.js'
 import { columnTasks, statusLines, usageLines } from '../src/ui/status-lines.js'
 import { StatusScreen, type HubAction, type RunnerControl } from '../src/ui/status-screen.js'
 import type { TaskControl } from '../src/ui/task-lines.js'
+import { dateTime } from '../src/ui/time.js'
 import type { RunnerEvent } from '../src/runner.js'
 import { runCli } from './helpers.js'
 
@@ -657,6 +658,24 @@ describe('liveness of tasks in progress', () => {
     expect(login(due(true))?.detail).not.toContain('retry 11.10.')
     const later = { ...snapshot, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, retryAt: new Date(Date.now() + 60 * 60_000).toISOString() } : task)) }
     expect(login(later)?.detail).toMatch(/retry \d\d\.\d\d\. \d\d:\d\d/)
+  })
+
+  it('names the task that fixes the CI and marks my waiting tasks in every column', () => {
+    const held = 'waits: task #9 fixes the CI first'
+    const frozen = {
+      ...snapshot,
+      runner: { running: true, here: true },
+      freeze: { id: '9', title: 'Fix the CI of the base branch main', owner: 'alice', waitingSince: '2026-10-13T09:12:00.000Z' },
+      mine: [
+        { id: '4', title: 'Login', url: 'https://example.test/issues/4', state: 'in-progress' as const, attempt: 0, stage: 'review', held },
+        { id: '5', title: 'Search', url: 'https://example.test/issues/5', state: 'queued' as const, attempt: 0, held },
+        { id: '6', title: 'Profile', url: 'https://example.test/issues/6', state: 'needs-input' as const, attempt: 0, answered: true, held },
+      ],
+    }
+    expect(statusLines(frozen).map((line) => line.text).join('\n')).toContain(`CI freeze: #9 Fix the CI of the base branch main fixes the CI (@alice, waits for an answer since ${dateTime('2026-10-13T09:12:00.000Z')}) · other tasks wait`)
+    expect(columnTasks(frozen, 1)[0]?.detail).toContain(`○ ${held}`)
+    expect(columnTasks(frozen, 2)[0]?.detail).toBe(held)
+    expect(columnTasks(frozen, 3)[0]?.detail).toBe(`answered, ${held}`)
   })
 
   it('shows why a parked task waits instead of the next attempt', () => {

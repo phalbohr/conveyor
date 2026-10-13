@@ -49,10 +49,10 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
         else if (status.runner.here) details.push(`○ waits for its next attempt${heartbeat}`)
         else details.push(`runs in conveyor pid ${status.runner.pid ?? '?'}${heartbeat}`)
       }
-      if (task.state === 'queued') details.push('answered, waits for a free slot')
+      if (task.state === 'queued') details.push(task.held ?? 'answered, waits for a free slot')
       if (task.attempt > 0 && !task.activity) details.push(`attempt ${task.attempt + 1}`)
       if (task.retryAt && !task.activity) details.push(Date.parse(task.retryAt) > now ? `retry ${time(task.retryAt)}` : status.runner.running ? 'resumes next cycle' : 'resumes on start')
-      if (task.state === 'needs-input') details.push(task.answered ? 'answered, resumes next cycle' : `waits for your answer since ${task.waitingSince ? time(task.waitingSince) : '?'}`)
+      if (task.state === 'needs-input') details.push(task.answered ? (task.held ? `answered, ${task.held}` : 'answered, resumes next cycle') : `waits for your answer since ${task.waitingSince ? time(task.waitingSince) : '?'}`)
       if (task.state === 'review' && task.pullRequest) details.push(task.pullRequest)
       if (task.lastError && !task.activity) details.push(`last error: ${task.lastError}`)
       const tone = task.lastError && !task.activity ? 'error' : (task.state === 'needs-input' && !task.answered) || quiet >= QUIET ? 'warning' : task.activity ? 'ok' : undefined
@@ -106,6 +106,11 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
       .map(([harness]) => `the ${harness} subscription reserve`),
   ]
   if (blocked.length) lines.push({ text: `no new tasks: ${blocked.join(' and ')} reached · [u] usage`, tone: 'warning' })
+  if (status.freeze) {
+    const { id, title, owner, stage, waitingSince } = status.freeze
+    const where = [owner ? `@${owner}` : 'not claimed yet', waitingSince ? `waits for an answer since ${time(waitingSince)}` : stage ? `stage::${stage}` : ''].filter(Boolean).join(', ')
+    lines.push({ text: `CI freeze: #${id} ${title} fixes the CI (${where}) · other tasks wait`, tone: 'warning' })
+  }
 
   lines.push({ text: '' }, { text: `Team: ${status.team.unclaimed} unclaimed · ${status.team.claimedByOthers} claimed by others`, tone: 'muted' })
   return lines
@@ -183,6 +188,7 @@ export function helpLines(): Line[] {
     row('in progress 1/3', 'my tasks in this column against my limit; needs input and review the same'),
     row('queued 2', 'my answered tasks that wait for a free slot; they start before new tasks'),
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
+    row('CI freeze', 'one task fixes the CI (label fix::ci, on any workstation); all other tasks wait until it is done · when it waits for an answer, answer it or reset it'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),
     row('● ○ in progress', '● running here with time and last harness activity: output or CPU work (yellow: quiet) · ○ waits or not running · pid N: another terminal'),
     row('s while running', 'first s: running stages finish, nothing new starts, then the conveyor stops · second s: stop at once · q twice: stop at once and quit'),

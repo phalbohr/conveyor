@@ -91,6 +91,7 @@ Keys on the main screen:
 - `q`: quit. While the conveyor runs, press `q` twice; the conveyor then stops at once.
 - `←` `→` select a column, Enter lists its tasks with stage or form, `↓` moves into them.
 - `o`: log, the last 30 events; the full log is in `~/.conveyor/logs/<project>.log`.
+- A yellow `CI freeze: #N <title> fixes the CI (@owner, …)` line: one task fixes the CI (label `fix::ci`, on any workstation), and all other tasks wait until it is done. When it waits for an answer, answer it or reset it.
 - `u`: usage: tokens today and the 5h and 7d subscription windows of every harness in use.
 - `k`: board check; Enter adds what is missing (labels, the `Conveyor` field, its options).
 - `r`: read the board again and run the board check; while the conveyor runs here, start a cycle at once instead of waiting for `poll_interval`.
