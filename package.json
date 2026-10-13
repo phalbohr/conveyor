@@ -31,7 +31,9 @@
     "!dist/board/fake.*",
     "!dist/harness/fake.*",
     "templates",
-    "skills"
+    "skills",
+    "CHANGELOG.md",
+    "SECURITY.md"
   ],
   "engines": {
     "node": ">=22.12"

@@ -23,6 +23,8 @@
 
 - `npm run typecheck` also checks the tests; unused locals and parameters are errors.
 - `npm run lint` runs oxlint; CI and `prepublishOnly` run it.
+- Tests use their own git identity and settings, so a global `commit.gpgsign` or another default branch on the machine does not break them.
+- The npm package also contains `CHANGELOG.md` and `SECURITY.md`.
 
 ## 0.1.0 — 2026-10-12
 
