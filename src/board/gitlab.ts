@@ -13,6 +13,7 @@ import {
   STAGE_LABEL,
   STATE_LABEL,
   taskLabels,
+  taskSlug,
   type Board,
   type BoardInspection,
   type LinkedProject,
@@ -27,6 +28,7 @@ import {
 
 type GraphIssue = {
   iid: string
+  reference: string
   title: string
   description: string | null
   webUrl: string
@@ -54,7 +56,7 @@ type MergeRequest = {
 
 type Call = { code: number; stdout: string; stderr: string; status: number }
 
-const ISSUE_FIELDS = 'iid title description webUrl author { username } state createdAt blockedByCount labels { nodes { title } } assignees { nodes { username } }'
+const ISSUE_FIELDS = 'iid reference(full: true) title description webUrl author { username } state createdAt blockedByCount labels { nodes { title } } assignees { nodes { username } }'
 const BLOCKED_BY = /^Blocked by: (.+)$/m
 const LOCK_PREFIX = 'conveyor-lock/'
 const DEVELOPER = 30
@@ -64,15 +66,47 @@ const CONNECT = /dial tcp/i
 
 export class GitLabBoard implements Board {
   private readonly api: string
+  private readonly scope: string
   private login?: string
   private defaultBranch?: string
+  private webUrl?: string
 
   constructor(
     private readonly project: string,
     private readonly run: Run,
-    private readonly options: { retryDelay?: number; baseBranch?: string } = {},
+    private readonly options: { retryDelay?: number; baseBranch?: string; group?: string } = {},
   ) {
     this.api = `projects/${encodeURIComponent(project)}`
+    this.scope = options.group ? `groups/${encodeURIComponent(options.group)}` : this.api
+  }
+
+  reference(id: string) {
+    const issue = this.split(id)
+    return this.options.group ? `${issue.project}#${issue.iid}` : `#${id}`
+  }
+
+  async branchUrl(branch: string) {
+    this.webUrl ??= (await this.json<{ web_url: string }>([this.api])).web_url
+    return `${this.webUrl}/-/tree/${branch}`
+  }
+
+  private split(id: string) {
+    const at = id.lastIndexOf('#')
+    if (at < 0 || !this.options.group) return { project: this.project, iid: id }
+    return { project: `${this.options.group}/${id.slice(0, at)}`, iid: id.slice(at + 1) }
+  }
+
+  private issuePath(id: string) {
+    const issue = this.split(id)
+    return `projects/${encodeURIComponent(issue.project)}/issues/${issue.iid}`
+  }
+
+  private idOf(reference: string) {
+    const at = reference.lastIndexOf('#')
+    const project = reference.slice(0, at)
+    const iid = reference.slice(at + 1)
+    const group = this.options.group
+    return group && project.startsWith(`${group}/`) ? `${project.slice(group.length + 1)}#${iid}` : iid
   }
 
   async user() {
@@ -82,15 +116,15 @@ export class GitLabBoard implements Board {
 
   async prepare(stages: string[]) {
     for (const label of boardLabels(stages)) {
-      const result = await this.call(['-X', 'POST', `${this.api}/labels`, '-f', `name=${label.name}`, '-f', `color=#${label.color}`])
+      const result = await this.call(['-X', 'POST', `${this.scope}/labels`, '-f', `name=${label.name}`, '-f', `color=#${label.color}`])
       if (result.code !== 0 && result.status !== 409) this.fail(result, 'labels')
     }
   }
 
   async inspect(): Promise<BoardInspection> {
-    const labels = (await this.pages<{ name: string }>(`${this.api}/labels?include_ancestor_groups=false`)).map((label) => label.name)
-    const issues = (await this.pages<{ iid: number; title: string; labels: string[] }>(`${this.api}/issues?state=opened`))
-      .map((issue) => ({ id: String(issue.iid), title: issue.title, labels: issue.labels }))
+    const labels = (await this.pages<{ name: string }>(`${this.scope}/labels?include_ancestor_groups=false`)).map((label) => label.name)
+    const issues = (await this.pages<{ references: { full: string }; title: string; labels: string[] }>(`${this.scope}/issues?state=opened`))
+      .map((issue) => ({ id: this.idOf(issue.references.full), title: issue.title, labels: issue.labels }))
       .filter((issue) => issue.labels.some((label) => CONVEYOR_PREFIXES.some((prefix) => label.startsWith(prefix))))
     return { labels, issues }
   }
@@ -108,21 +142,21 @@ export class GitLabBoard implements Board {
   }
 
   async boardUrl() {
-    return `${(await this.json<{ web_url: string }>([this.api])).web_url}/-/boards`
+    return `${(await this.json<{ web_url: string }>([this.scope])).web_url}/-/boards`
   }
 
   async canWrite(user: string) {
     if (!user) return false
-    const members = await this.json<{ username: string; access_level: number }[]>([`${this.api}/members/all?query=${encodeURIComponent(user)}&per_page=100`])
+    const members = await this.json<{ username: string; access_level: number }[]>([`${this.scope}/members/all?query=${encodeURIComponent(user)}&per_page=100`])
     return members.some((member) => member.username === user && member.access_level >= DEVELOPER)
   }
 
   async createTask(title: string, body: string, labels: TaskLabels = {}) {
     const names = taskLabels(labels)
     const flags = names.length ? ['-f', `labels=${names.join(',')}`] : []
-    const created = await this.json<{ iid: number }>(['-X', 'POST', `${this.api}/issues`, '-f', `title=${title}`, '-f', `description=${body}`, ...flags])
-    const task = await this.getTask(String(created.iid))
-    if (!task) throw new Error(`issue ${created.iid} not found after creation`)
+    const created = await this.json<{ references: { full: string } }>(['-X', 'POST', `${this.api}/issues`, '-f', `title=${title}`, '-f', `description=${body}`, ...flags])
+    const task = await this.getTask(this.idOf(created.references.full))
+    if (!task) throw new Error(`issue ${created.references.full} not found after creation`)
     return task
   }
 
@@ -131,11 +165,12 @@ export class GitLabBoard implements Board {
     let after: string | null = null
     do {
       const cursor: string = after ? `, after: ${JSON.stringify(after)}` : ''
+      const scope = this.options.group ? `group(fullPath: ${JSON.stringify(this.options.group)})` : `project(fullPath: ${JSON.stringify(this.project)})`
       const page: { nodes: GraphIssue[]; pageInfo: { hasNextPage: boolean; endCursor: string } } = (
-        await this.graphql<{ project: { issues: { nodes: GraphIssue[]; pageInfo: { hasNextPage: boolean; endCursor: string } } } }>(
-          `query { project(fullPath: ${JSON.stringify(this.project)}) { issues(state: opened, first: 100${cursor}) { nodes { ${ISSUE_FIELDS} } pageInfo { hasNextPage endCursor } } } }`,
+        await this.graphql<{ scope: { issues: { nodes: GraphIssue[]; pageInfo: { hasNextPage: boolean; endCursor: string } } } }>(
+          `query { scope: ${scope} { issues(state: opened, ${this.options.group ? 'includeSubgroups: true, ' : ''}first: 100${cursor}) { nodes { ${ISSUE_FIELDS} } pageInfo { hasNextPage endCursor } } } }`,
         )
-      ).project.issues
+      ).scope.issues
       issues.push(...page.nodes)
       after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null
     } while (after)
@@ -144,9 +179,11 @@ export class GitLabBoard implements Board {
   }
 
   async getTask(id: string) {
-    const data = await this.graphql<{ project: { issue: GraphIssue | null } }>(
-      `query { project(fullPath: ${JSON.stringify(this.project)}) { issue(iid: ${JSON.stringify(id)}) { ${ISSUE_FIELDS} } } }`,
+    const issue = this.split(id)
+    const data = await this.graphql<{ project: { issue: GraphIssue | null } | null }>(
+      `query { project(fullPath: ${JSON.stringify(issue.project)}) { issue(iid: ${JSON.stringify(issue.iid)}) { ${ISSUE_FIELDS} } } }`,
     )
+    if (!data.project) return undefined
     if (!data.project.issue) return undefined
     return (await this.toTasks([data.project.issue]))[0]
   }
@@ -172,14 +209,14 @@ export class GitLabBoard implements Board {
   }
 
   async setOwner(id: string, owner: string | undefined) {
-    const issue = await this.json<{ labels: string[]; assignees: { id: number; username: string }[] }>([`${this.api}/issues/${id}`])
+    const issue = await this.json<{ labels: string[]; assignees: { id: number; username: string }[] }>([`${this.issuePath(id)}`])
     const previous = issue.labels.find((name) => name.startsWith(OWNER_LABEL))?.slice(OWNER_LABEL.length)
     await this.replaceLabel(id, OWNER_LABEL, owner ? OWNER_LABEL + owner : undefined)
     const kept = issue.assignees.filter(({ username }) => username !== previous || username === owner).map(({ id: user }) => user)
     const added = owner && !issue.assignees.some(({ username }) => username === owner) ? [await this.userId(owner)] : []
     const ids = [...kept, ...added]
     if (ids.length === issue.assignees.length && added.length === 0) return
-    await this.json(['-X', 'PUT', `${this.api}/issues/${id}`, ...(ids.length ? ids.flatMap((user) => ['-f', `assignee_ids[]=${user}`]) : ['-f', 'assignee_ids=0'])])
+    await this.json(['-X', 'PUT', `${this.issuePath(id)}`, '-F', `assignee_ids=${JSON.stringify(ids)}`])
   }
 
   private async userId(username: string) {
@@ -194,67 +231,69 @@ export class GitLabBoard implements Board {
   }
 
   async updateBody(id: string, body: string) {
-    const current = await this.json<{ description: string | null }>([`${this.api}/issues/${id}`])
+    const current = await this.json<{ description: string | null }>([`${this.issuePath(id)}`])
     const blockers = current.description?.match(BLOCKED_BY)?.[0]
     const keep = blockers && !BLOCKED_BY.test(body) ? `${body}\n\n${blockers}` : body
-    await this.json(['-X', 'PUT', `${this.api}/issues/${id}`, '-f', `description=${keep}`])
+    await this.json(['-X', 'PUT', `${this.issuePath(id)}`, '-f', `description=${keep}`])
   }
 
   async closeTask(id: string) {
-    await this.json(['-X', 'PUT', `${this.api}/issues/${id}`, '-f', 'state_event=close'])
+    await this.json(['-X', 'PUT', `${this.issuePath(id)}`, '-f', 'state_event=close'])
   }
 
   async listComments(id: string) {
-    const notes = await this.pages<Note>(`${this.api}/issues/${id}/notes?sort=asc&order_by=created_at`)
+    const notes = await this.pages<Note>(`${this.issuePath(id)}/notes?sort=asc&order_by=created_at`)
     return notes.filter((note) => !note.system).map((note) => toComment(id, note))
   }
 
   async addComment(id: string, body: string) {
-    return toComment(id, await this.json<Note>(['-X', 'POST', `${this.api}/issues/${id}/notes`, '-f', `body=${body}`]))
+    return toComment(id, await this.json<Note>(['-X', 'POST', `${this.issuePath(id)}/notes`, '-f', `body=${body}`]))
   }
 
   async updateComment(commentId: string, body: string) {
-    const [issue, note] = commentId.split(':')
-    await this.json(['-X', 'PUT', `${this.api}/issues/${issue}/notes/${note}`, '-f', `body=${body}`])
+    const at = commentId.lastIndexOf(':')
+    await this.json(['-X', 'PUT', `${this.issuePath(commentId.slice(0, at))}/notes/${commentId.slice(at + 1)}`, '-f', `body=${body}`])
   }
 
   async addBlocker(id: string, blockerId: string) {
-    const project = await this.json<{ id: number }>([this.api])
-    const linked = await this.call(['-X', 'POST', `${this.api}/issues/${id}/links`, '-f', `target_project_id=${project.id}`, '-f', `target_issue_iid=${blockerId}`, '-f', 'link_type=is_blocked_by'])
+    const blocker = this.split(blockerId)
+    const project = await this.json<{ id: number }>([`projects/${encodeURIComponent(blocker.project)}`])
+    const linked = await this.call(['-X', 'POST', `${this.issuePath(id)}/links`, '-f', `target_project_id=${project.id}`, '-f', `target_issue_iid=${blocker.iid}`, '-f', 'link_type=is_blocked_by'])
     if (linked.code === 0 || linked.status === 409) return
     if (![403, 404, 400].includes(linked.status)) this.fail(linked, 'issue link')
-    const current = await this.json<{ description: string | null }>([`${this.api}/issues/${id}`])
+    const current = await this.json<{ description: string | null }>([`${this.issuePath(id)}`])
     const description = current.description ?? ''
-    const existing: string[] = description.match(BLOCKED_BY)?.[1]?.match(/#\d+/g) ?? []
-    if (existing.includes(`#${blockerId}`)) return
-    const line = `Blocked by: ${[...existing, `#${blockerId}`].join(', ')}`
+    const existing: string[] = description.match(BLOCKED_BY)?.[1]?.match(/[\w./-]*#\d+/g) ?? []
+    const mark = this.split(id).project === blocker.project ? `#${blocker.iid}` : blockerId
+    if (existing.includes(mark)) return
+    const line = `Blocked by: ${[...existing, mark].join(', ')}`
     const updated = BLOCKED_BY.test(description) ? description.replace(BLOCKED_BY, line) : `${description}${description ? '\n\n' : ''}${line}`
-    await this.json(['-X', 'PUT', `${this.api}/issues/${id}`, '-f', `description=${updated}`])
+    await this.json(['-X', 'PUT', `${this.issuePath(id)}`, '-f', `description=${updated}`])
   }
 
   async claim(id: string) {
-    const result = await this.call(['-X', 'POST', `${this.api}/repository/branches`, '-f', `branch=${LOCK_PREFIX}${id}`, '-f', `ref=${await this.baseBranch()}`])
+    const result = await this.call(['-X', 'POST', `${this.api}/repository/branches`, '-f', `branch=${LOCK_PREFIX}${taskSlug(id)}`, '-f', `ref=${await this.baseBranch()}`])
     if (result.status === 400 && /already exists/i.test(result.stderr + result.stdout)) return false
     if (result.code !== 0) this.fail(result, 'claim')
     return true
   }
 
   async release(id: string) {
-    const result = await this.call(['-X', 'DELETE', `${this.api}/repository/branches/${encodeURIComponent(LOCK_PREFIX + id)}`])
+    const result = await this.call(['-X', 'DELETE', `${this.api}/repository/branches/${encodeURIComponent(LOCK_PREFIX + taskSlug(id))}`])
     if (result.code !== 0 && result.status !== 404) this.fail(result, 'release')
   }
 
   async openPullRequest(id: string, title: string, body: string) {
     const existing = await this.pullRequest(id)
     if (existing?.state === 'open') return existing
-    await this.json(['-X', 'POST', `${this.api}/merge_requests`, '-f', `source_branch=conveyor/${id}`, '-f', `target_branch=${await this.baseBranch()}`, '-f', `title=${title}`, '-f', `description=${body}`, '-f', `assignee_id=${await this.userId(await this.user())}`])
+    await this.json(['-X', 'POST', `${this.api}/merge_requests`, '-f', `source_branch=conveyor/${taskSlug(id)}`, '-f', `target_branch=${await this.baseBranch()}`, '-f', `title=${title}`, '-f', `description=${body}`, '-f', `assignee_id=${await this.userId(await this.user())}`])
     const opened = await this.pullRequest(id)
     if (!opened) throw new Error(`merge request for task ${id} not found after creation`)
     return opened
   }
 
   async pullRequest(id: string): Promise<PullRequest | undefined> {
-    const listed = await this.json<MergeRequest[]>([`${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${id}`)}&state=all&order_by=created_at&sort=desc`])
+    const listed = await this.json<MergeRequest[]>([`${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${taskSlug(id)}`)}&state=all&order_by=created_at&sort=desc`])
     const first = listed.find((request) => request.source_project_id === request.target_project_id)
     if (!first) return undefined
     const request = await this.json<MergeRequest>([`${this.api}/merge_requests/${first.iid}`])
@@ -305,14 +344,14 @@ export class GitLabBoard implements Board {
 
   async mergeCommit(id: string) {
     const listed = await this.json<{ merge_commit_sha: string | null; squash_commit_sha: string | null; source_project_id: number; target_project_id: number }[]>([
-      `${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${id}`)}&state=merged&order_by=updated_at&sort=desc`,
+      `${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${taskSlug(id)}`)}&state=merged&order_by=updated_at&sort=desc`,
     ])
     const merged = listed.find((request) => request.source_project_id === request.target_project_id)
     return merged?.merge_commit_sha ?? merged?.squash_commit_sha ?? undefined
   }
 
   async linkedPulls(id: string): Promise<LinkedPull[]> {
-    const related = await this.json<{ iid: number; web_url: string; source_branch: string; state: string; draft?: boolean; source_project_id: number; target_project_id: number; author: { username: string } }[]>([`${this.api}/issues/${id}/related_merge_requests`])
+    const related = await this.json<{ iid: number; web_url: string; source_branch: string; state: string; draft?: boolean; source_project_id: number; target_project_id: number; author: { username: string } }[]>([`${this.issuePath(id)}/related_merge_requests`])
     return related
       .filter((request) => request.state === 'opened' && request.source_project_id === request.target_project_id)
       .map((request) => ({ number: String(request.iid), url: request.web_url, branch: request.source_branch, draft: request.draft ?? false, author: request.author.username }))
@@ -341,36 +380,47 @@ export class GitLabBoard implements Board {
   }
 
   private async toTasks(issues: GraphIssue[]): Promise<Task[]> {
-    const referenced = [...new Set(issues.flatMap((issue) => fallbackBlockers(issue.description)))]
+    const blockers = new Map(issues.map((issue) => [issue, this.fallbackBlockers(issue)]))
+    const byProject = new Map<string, Set<string>>()
+    for (const list of blockers.values()) for (const blocker of list) byProject.set(blocker.project, (byProject.get(blocker.project) ?? new Set()).add(blocker.iid))
     const open = new Set<string>()
-    if (referenced.length > 0) {
-      const states = await this.graphql<{ project: { issues: { nodes: { iid: string; state: string }[] } } }>(
-        `query { project(fullPath: ${JSON.stringify(this.project)}) { issues(iids: ${JSON.stringify(referenced)}, first: 100) { nodes { iid state } } } }`,
+    for (const [project, iids] of byProject) {
+      const states = await this.graphql<{ project: { issues: { nodes: { iid: string; state: string }[] } } | null }>(
+        `query { project(fullPath: ${JSON.stringify(project)}) { issues(iids: ${JSON.stringify([...iids])}, first: 100) { nodes { iid state } } } }`,
       )
-      for (const node of states.project.issues.nodes) if (node.state === 'opened') open.add(node.iid)
+      for (const node of states.project?.issues.nodes ?? []) if (node.state === 'opened') open.add(`${project}#${node.iid}`)
     }
     return issues.map((issue) => ({
-      id: issue.iid,
+      id: this.idOf(issue.reference),
       title: issue.title,
       body: (issue.description ?? '').replace(BLOCKED_BY, '').trim(),
       author: issue.author.username,
       url: issue.webUrl,
       labels: issue.labels.nodes.map((node) => node.title),
       assignees: issue.assignees.nodes.map((node) => node.username),
-      openBlockers: (issue.blockedByCount ?? 0) + fallbackBlockers(issue.description).filter((iid) => open.has(iid)).length,
+      openBlockers: (issue.blockedByCount ?? 0) + (blockers.get(issue) ?? []).filter((blocker) => open.has(`${blocker.project}#${blocker.iid}`)).length,
       closed: issue.state === 'closed',
       createdAt: issue.createdAt,
       ...labelsToTask(issue.labels.nodes.map((node) => node.title)),
     }))
   }
 
+  private fallbackBlockers(issue: GraphIssue) {
+    const home = issue.reference.slice(0, issue.reference.lastIndexOf('#'))
+    const group = this.options.group
+    return [...(issue.description?.match(BLOCKED_BY)?.[1]?.matchAll(/([\w./-]*)#(\d+)/g) ?? [])].map((match) => {
+      const path = match[1] ?? ''
+      return { project: !path ? home : group && !path.startsWith(`${group}/`) ? `${group}/${path}` : path, iid: match[2] ?? '' }
+    })
+  }
+
   private async replaceLabel(id: string, prefix: string, label: string | undefined) {
-    const issue = await this.json<{ labels: string[] }>([`${this.api}/issues/${id}`])
+    const issue = await this.json<{ labels: string[] }>([`${this.issuePath(id)}`])
     const remove = issue.labels.filter((name) => name.startsWith(prefix) && name !== label)
     const add = label && !issue.labels.includes(label) ? [label] : []
     if (remove.length === 0 && add.length === 0) return
     await this.json([
-      '-X', 'PUT', `${this.api}/issues/${id}`,
+      '-X', 'PUT', `${this.issuePath(id)}`,
       ...(add.length ? ['-f', `add_labels=${add.join(',')}`] : []),
       ...(remove.length ? ['-f', `remove_labels=${remove.join(',')}`] : []),
     ])
@@ -418,10 +468,6 @@ export class GitLabBoard implements Board {
     const hint = result.status === 0 ? ' Check that glab is installed and signed in to this GitLab host: glab auth status.' : ''
     throw new Error(`glab api ${what} failed (HTTP ${result.status}): ${detail || 'no answer from glab'}.${hint}`)
   }
-}
-
-function fallbackBlockers(description: string | null): string[] {
-  return [...(description?.match(BLOCKED_BY)?.[1]?.matchAll(/#(\d+)/g) ?? [])].map((match) => match[1] ?? '').filter(Boolean)
 }
 
 function checks(status: string | undefined): PullRequest['checks'] {

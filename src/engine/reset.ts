@@ -1,4 +1,4 @@
-import type { Board, TaskForm } from '../board/board.js'
+import { taskSlug, type Board, type TaskForm } from '../board/board.js'
 import { removeSession } from '../session-log.js'
 import type { Workspaces } from '../workspaces.js'
 import { releaseClaim } from './release.js'
@@ -30,7 +30,7 @@ export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remo
   await board.setState(id, 'backlog')
   const merged = pad?.state.parts && pad.state.part ? ` Parts 1–${pad.state.part} stay merged in the base branch.` : ''
   const closed = pull?.state === 'open' ? `, closed pull request ${pull.number}` : ''
-  const summary = `Reset by @${me}: stopped the work${closed}, deleted the branch conveyor/${id} and the workspace, cleared the workpad; back in Backlog ${chosen ? `with form::${chosen}` : 'without a form'}.${merged}`
+  const summary = `Reset by @${me}: stopped the work${closed}, deleted the branch conveyor/${taskSlug(id)} and the workspace, cleared the workpad; back in Backlog ${chosen ? `with form::${chosen}` : 'without a form'}.${merged}`
   if (task.owner) await releaseClaim(board, id, summary)
   else await board.release(id)
   return summary

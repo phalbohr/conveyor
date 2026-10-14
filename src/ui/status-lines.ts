@@ -3,6 +3,7 @@ import { undescribedNotice } from '../stage-catalog.js'
 import { boardCheckLines, needsAttention, type BoardCheck } from '../board-check.js'
 import { dateTime } from './time.js'
 import type { StatusSnapshot } from '../status.js'
+import { taskRef } from '../board/board.js'
 
 export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean; marked?: boolean }[]; cells?: [string, string]; cellWidth?: number; selected?: boolean }
 export const CELL_WIDTH = 28
@@ -85,7 +86,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   if (!view) {
     STATUS_COLUMNS.forEach((label, column) => {
       const tasks = columnTasks(status, column)
-      lines.push({ text: `${label}:`, tone: 'title' }, ...(tasks.length ? tasks.map((task): Line => ({ text: `  #${task.id} ${task.title}${task.detail ? ` — ${task.detail}` : ''}`, ...(task.tone ? { tone: task.tone } : {}) })) : [{ text: '  none', tone: 'muted' as const }]))
+      lines.push({ text: `${label}:`, tone: 'title' }, ...(tasks.length ? tasks.map((task): Line => ({ text: `  ${taskRef(task.id)} ${task.title}${task.detail ? ` — ${task.detail}` : ''}`, ...(task.tone ? { tone: task.tone } : {}) })) : [{ text: '  none', tone: 'muted' as const }]))
     })
   }
   if (view?.open) {
@@ -94,7 +95,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
     const width = Math.max(...tasks.map((task) => task.id.length)) + 4
     tasks.forEach((task, index) => {
       const selected = view.focus === 'tasks' && view.task === index
-      const left = `${selected ? '› ' : '  '}#${task.id}`
+      const left = `${selected ? '› ' : '  '}${taskRef(task.id)}`
       const right = `${task.title}${task.detail ? ` — ${task.detail}` : ''}`
       lines.push({ text: `${left.padEnd(width)}${right}`, cells: [left, right], cellWidth: width, ...(selected ? { selected } : {}), ...(task.tone ? { tone: task.tone } : {}) })
     })
@@ -110,7 +111,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
     const { id, title, base, owner, stage, waitingSince } = status.freeze
     const where = [owner ? `@${owner}` : 'not claimed yet', waitingSince ? `waits for an answer since ${time(waitingSince)}` : stage ? `stage::${stage}` : '', status.freeze.private ? 'private artifact' : ''].filter(Boolean).join(', ')
     const handOver = owner && owner !== status.me ? ` · stuck? \`conveyor release ${id}${status.freeze.private ? ' --force' : ''}\` hands it to another workstation` : ''
-    lines.push({ text: `CI freeze: #${id} ${title} fixes the CI (${where}) · ${base ? 'new tasks and merges wait' : 'merges wait'}${handOver}`, tone: 'warning' })
+    lines.push({ text: `CI freeze: ${taskRef(id)} ${title} fixes the CI (${where}) · ${base ? 'new tasks and merges wait' : 'merges wait'}${handOver}`, tone: 'warning' })
   }
 
   lines.push({ text: '' }, { text: `Team: ${status.team.unclaimed} unclaimed · ${status.team.claimedByOthers} claimed by others`, tone: 'muted' })

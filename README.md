@@ -130,6 +130,7 @@ A stop at once aborts the running stages. They restart from their beginning on t
 | I want to change … | File | Key |
 |---|---|---|
 | the board and its GitHub project | `config.yaml` | `board.project`, `board.github_project` |
+| a GitLab board of a whole group (tasks become `project#number`, for example `frontend#12`) | `config.yaml` | `board.group`; `board.project` must be in the group, new tasks are created there |
 | the branch that task branches start from and pull requests merge into | `config.yaml` | `board.base_branch` (empty: the default branch of the repository) |
 | from which state the conveyor takes tasks | `config.yaml` | `pickup_from` (`idea`, `story`, `plan`) |
 | where human decisions happen | `config.yaml` | `transitions` (`interactive`, `autonomous`, `smart`; merge: `human`, `ai`, `smart`) |

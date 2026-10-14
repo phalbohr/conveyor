@@ -22,6 +22,7 @@ import {
   type TaskForm,
   type TaskLabels,
   type TaskState,
+  taskRef,
 } from './board.js'
 
 type Issue = {
@@ -127,6 +128,14 @@ export class FakeBoard implements Board {
 
   async syncMirror() {
     return 0
+  }
+
+  async branchUrl(branch: string) {
+    return `https://example.test/tree/${branch}`
+  }
+
+  reference(id: string) {
+    return taskRef(id)
   }
 
   async boardUrl() {

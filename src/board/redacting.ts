@@ -63,6 +63,14 @@ export class RedactingBoard implements Board {
     return this.board.boardUrl()
   }
 
+  branchUrl(branch: string) {
+    return this.board.branchUrl(branch)
+  }
+
+  reference(id: string) {
+    return this.board.reference(id)
+  }
+
   canWrite(user: string) {
     return this.board.canWrite(user)
   }

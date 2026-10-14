@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import { join } from 'node:path'
-import { onBoard, type Board, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
+import { onBoard, taskRef, type Board, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { LENGTH_LIMIT, NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
@@ -238,8 +238,8 @@ export class Engine {
     if (this.halt.signal.aborted || this.draining) return
     const previous = this.fixer
     const fixer = (this.fixer = this.baseRed ? (this.baseRed.fix ?? '') : labeled)
-    if (fixer && fixer !== previous) this.log(`CI freeze: task #${fixer} fixes the CI; ${this.baseRed ? 'new tasks and merges wait' : 'merges wait'}`)
-    if (previous && fixer === undefined) this.log(`CI freeze over: task #${previous} no longer fixes the CI; merges continue`)
+    if (fixer && fixer !== previous) this.log(`CI freeze: task ${taskRef(fixer)} fixes the CI; ${this.baseRed ? 'new tasks and merges wait' : 'merges wait'}`)
+    if (previous && fixer === undefined) this.log(`CI freeze over: task ${taskRef(previous)} no longer fixes the CI; merges continue`)
     let slots = config.limits.running - this.running.size - backingOff
     let waiting = 0
     for (const task of this.sorted(resumable, me)) {
@@ -407,7 +407,7 @@ export class Engine {
       state.form = initial.form
       await board.setForm(id, undefined)
     }
-    state.branch = initial.url.replace(/\/issues\/\d+$/, `/tree/${taskBranch(id)}`)
+    state.branch = await board.branchUrl(taskBranch(id)).catch(() => initial.url)
     await run.save()
     if (!state.source && !state.stage && !rework && !verdict) {
       const decided = await this.chooseSource(run, comments, waiting)
@@ -476,7 +476,7 @@ export class Engine {
       const opened = await board.openPullRequest(
         id,
         part ? `${task.title} (part ${part.index}/${part.total}: ${part.title})` : task.title,
-        `Part of #${id}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
+        `Part of ${board.reference(id)}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
       )
       state.pull = { number: opened.number, url: opened.url }
       if (chain.merge === 'review') {
@@ -509,7 +509,7 @@ export class Engine {
       })
       if (fixed.status !== 'done') return
       const task = (await board.getTask(id)) ?? initial
-      const opened = await board.openPullRequest(id, `Fix the base branch after: ${task.title}`, `Part of #${id}: the base branch CI failed after its merge.\n\n${fixed.summary}`)
+      const opened = await board.openPullRequest(id, `Fix the base branch after: ${task.title}`, `Part of ${board.reference(id)}: the base branch CI failed after its merge.\n\n${fixed.summary}`)
       state.pull = { number: opened.number, url: opened.url }
       delete state.broken
       delete state.landing
@@ -721,7 +721,7 @@ export class Engine {
 
     const task = await this.mustGetTask(id)
     if (task.openBlockers > 0) return wait('open blockers')
-    if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; ${this.baseRed.fix ? `task #${this.baseRed.fix} fixes it first` : 'a fix task is chosen first'}`)
+    if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; ${this.baseRed.fix ? `task ${taskRef(this.baseRed.fix)} fixes it first` : 'a fix task is chosen first'}`)
     const held = this.heldBy(id)
     if (held) return wait(held)
     const pull = await board.pullRequest(id)
@@ -916,7 +916,7 @@ export class Engine {
     let fix = await this.fixTask()
     if (!fix && owner) {
       this.baseRed = { sha, fix: owner, failed, repairing: true }
-      this.log(`the base branch CI fails at ${sha.slice(0, 7)} after the merge of task #${owner}; it repairs the base, and new tasks and merges wait until it is green`)
+      this.log(`the base branch CI fails at ${sha.slice(0, 7)} after the merge of task ${taskRef(owner)}; it repairs the base, and new tasks and merges wait until it is green`)
       return
     }
     if (!fix && (await this.lock(FIX_LOCK, LOCK_TTL))) {
@@ -935,7 +935,7 @@ export class Engine {
       }
     }
     this.baseRed = { sha, failed, ...(fix ? { fix } : {}) }
-    this.log(`the base branch CI fails at ${sha.slice(0, 7)}${failed.length ? ` (${failed.join(', ')})` : ''}; ${fix ? `task #${fix} fixes it` : 'a fix task is chosen'}, and new tasks and merges wait until it is green`)
+    this.log(`the base branch CI fails at ${sha.slice(0, 7)}${failed.length ? ` (${failed.join(', ')})` : ''}; ${fix ? `task ${taskRef(fix)} fixes it` : 'a fix task is chosen'}, and new tasks and merges wait until it is green`)
   }
 
   private checksMayStart(state: WorkpadState, sha: string) {
@@ -1156,7 +1156,7 @@ export class Engine {
       ...(context.parts ? { parts: context.parts } : {}),
       ...(this.baseRed && this.baseRed.fix !== task.id
         ? {
-            base: `The CI of the base branch fails at \`${this.baseRed.sha.slice(0, 7)}\`${this.baseRed.failed.length ? ` (${this.baseRed.failed.join(', ')})` : ''}, and this task did not cause it. ${this.baseRed.fix ? `Task #${this.baseRed.fix}` : 'A fix task'} fixes it; this task merges only after the base branch is green again. Do not fix failures that also occur on the base branch. Make the tests of your change pass, and name the failures that come from the base branch in your summary.`,
+            base: `The CI of the base branch fails at \`${this.baseRed.sha.slice(0, 7)}\`${this.baseRed.failed.length ? ` (${this.baseRed.failed.join(', ')})` : ''}, and this task did not cause it. ${this.baseRed.fix ? `Task ${taskRef(this.baseRed.fix)}` : 'A fix task'} fixes it; this task merges only after the base branch is green again. Do not fix failures that also occur on the base branch. Make the tests of your change pass, and name the failures that come from the base branch in your summary.`,
           }
         : {}),
     })
@@ -1309,7 +1309,7 @@ export class Engine {
   private heldBy(id: string) {
     const fixer = this.baseRed ? (this.baseRed.fix ?? '') : this.fixer
     if (fixer === undefined || fixer === id) return undefined
-    return fixer ? `task #${fixer} fixes the CI first` : 'the base branch CI is red; a fix task is chosen first'
+    return fixer ? `task ${taskRef(fixer)} fixes the CI first` : 'the base branch CI is red; a fix task is chosen first'
   }
 
   private isFixTask(task: Task) {
@@ -1336,10 +1336,10 @@ export class Engine {
       const other = await this.fixTask()
       if (other && other !== id) {
         this.fixer = other
-        return { held: `task #${other} fixes the CI first` }
+        return { held: `task ${taskRef(other)} fixes the CI first` }
       }
       if (!other) await this.options.board.setFixing(id, true)
-      if (this.fixer !== id) this.log(`CI freeze: task #${id} fixes the CI; merges wait`)
+      if (this.fixer !== id) this.log(`CI freeze: task ${taskRef(id)} fixes the CI; merges wait`)
       this.fixer = id
       return {}
     } finally {

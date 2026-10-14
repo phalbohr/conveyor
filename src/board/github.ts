@@ -145,6 +145,14 @@ export class GitHubBoard implements Board {
     return { labels, issues, field: field ? { options: (field.options ?? []).map((option) => option.name) } : 'missing' }
   }
 
+  async branchUrl(branch: string) {
+    return `https://github.com/${this.project}/tree/${branch}`
+  }
+
+  reference(id: string) {
+    return `#${id}`
+  }
+
   async boardUrl() {
     const number = this.options.projectNumber
     if (!number) return `https://github.com/${this.project}/issues`

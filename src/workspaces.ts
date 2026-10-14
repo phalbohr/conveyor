@@ -4,6 +4,7 @@ import type { Config } from './config.js'
 import { childEnv } from './harness/harness.js'
 import { spawnLines } from './harness/process.js'
 import { createRun } from './run.js'
+import { taskFile, taskOfFile, taskSlug } from './board/board.js'
 
 type Hooks = Config['hooks']
 type HookName = 'after_create' | 'before_run' | 'after_run' | 'before_remove'
@@ -24,8 +25,8 @@ export interface Workspaces {
   list(): Promise<string[]>
 }
 
-export const taskBranch = (taskId: string) => `conveyor/${taskId}`
-const leaseRef = (taskId: string) => `refs/conveyor/pushed/${taskId}`
+export const taskBranch = (taskId: string) => `conveyor/${taskSlug(taskId)}`
+const leaseRef = (taskId: string) => `refs/conveyor/pushed/${taskSlug(taskId)}`
 
 export class GitWorkspaces implements Workspaces {
   constructor(private readonly options: { repo: string; root: string; base: () => Promise<string>; hooks: () => Hooks }) {}
@@ -152,11 +153,11 @@ export class GitWorkspaces implements Workspaces {
     if (!existsSync(this.options.root)) return []
     return readdirSync(this.options.root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
+      .map((entry) => taskOfFile(entry.name))
   }
 
   private path(taskId: string) {
-    return join(this.options.root, taskId)
+    return join(this.options.root, taskFile(taskId))
   }
 
   private async baseRef() {

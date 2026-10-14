@@ -441,9 +441,9 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 - Comments count because GitHub does not let the author approve their own pull request, and pull requests are opened with the personal token.
 - Branch protection on GitHub (required reviews, required checks) still applies: if it rejects the merge, the task goes to the failure path.
 
-## Group boards and several repositories (planned, 0.3.0)
+## Group boards and several repositories
 
-GitLab only. The single-repository setup stays the default: without the keys below, the conveyor works on `board.project` with one branch and one merge request per task.
+GitLab only. Group boards work; several repositories per task are planned for 0.3.0. The single-repository setup stays the default: without the keys below, the conveyor works on `board.project` with one branch and one merge request per task.
 
 ```yaml
 board:
@@ -464,7 +464,8 @@ repos:                         # tasks can change several repositories
 - The workspace of a task holds one worktree per changed repository, side by side; every changed repository gets the branch `conveyor/<task>` and one merge request that says `Part of <issue>`.
 - Every merge request is approved on its own. The feature lands as a whole: all its merge requests merge, in the planned order and under the merge lock, only when every one is approved and green. When a later one fails to merge after an earlier one merged, the task becomes the fixer (`fix::ci`).
 - Base CI checks and the fixer rule apply per repository. The order between features comes from triage (blocked-by links).
-- Until the feature is ready, the conveyor refuses `board.group` and `repos` with a clear error.
+- Group board: the conveyor lists the open issues of every project of `board.group` (with subgroups), keeps its labels on the group, checks write access against the members of the group, and links the board of the group. Issue work (labels, comments, owner, blockers) goes to the project of each issue; locks, branches, and merge requests stay in `board.project` until several repositories are available. A task is `<project path below the group>#<number>`, for example `frontend#12`; branches and locks use `frontend-12`, local folders `frontend-12` (a `/` becomes `+`). Pull request bodies use the full reference (`group/frontend#12`) so that GitLab links them across projects.
+- Until several repositories are ready, the conveyor refuses `repos` with a clear error.
 
 ## Triage
 

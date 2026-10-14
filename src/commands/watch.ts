@@ -1,6 +1,7 @@
 import type { Context } from '../cli.js'
 import { readSession, sessionFile } from '../session-log.js'
 import { prepare } from './run.js'
+import { taskRef } from '../board/board.js'
 
 export async function watchCommand(context: Context, id: string, follow: boolean, signal?: AbortSignal): Promise<number> {
   const prepared = prepare(context)
@@ -11,7 +12,7 @@ export async function watchCommand(context: Context, id: string, follow: boolean
     context.stderr('Session logs are off. Turn them on with `conveyor config set session_logs true` (personal setting); stages that start after that are recorded.\n')
     return 1
   }
-  if (printed.length === 0) context.stdout(`Nothing recorded yet for #${id}: the next stage of the task writes to ${file}.\n`)
+  if (printed.length === 0) context.stdout(`Nothing recorded yet for ${taskRef(id)}: the next stage of the task writes to ${file}.\n`)
   for (const line of printed) context.stdout(`${line}\n`)
   if (!follow) return 0
   const stop = signal ?? abortOnInterrupt()

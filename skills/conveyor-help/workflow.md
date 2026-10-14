@@ -96,7 +96,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 
 | File | Controls |
 |---|---|
-| `config.yaml` (team) | board (`board.base_branch`), `pickup_from`, `transitions`, `stages`, `defaults`, `triage`, `harnesses`, `artifacts`, `hooks`, `timeouts`, `retry`, `merge_method`, `close_on_done`, `review.approvals`, `language.docs` |
+| `config.yaml` (team) | board (`board.base_branch`; GitLab `board.group`: the board and labels cover every project of the group, tasks are named `project#number`, for example `frontend#12`, and commands take that form: `conveyor attach frontend#12`; new tasks are created in `board.project`, which must be in the group), `pickup_from`, `transitions`, `stages`, `defaults`, `triage`, `harnesses`, `artifacts`, `hooks`, `timeouts`, `retry`, `merge_method`, `close_on_done`, `review.approvals`, `language.docs` |
 | `local.yaml` (personal) | `limits` (running, awaiting_me, awaiting_review, daily_tokens, subscription reserves), `poll_interval`, `pickup`, `workspace.root`, `language.chat`, `live` (harness, model, and effort of my live sessions), `session_logs` (record stages for `w` and `conveyor watch`), personal `harnesses` overrides, private `artifacts` |
 | `stages/<name>.md` | what a stage does: Liquid template with `issue`, `stage`, `attempt`, `artifacts`, `review`, `language`, `formats`; frontmatter `skills: [a, b]` attaches skills (claude stages), `after_merge: success\|failure\|always` places the stage after merge when you turn it on |
 | `smart/<gate>.md` | when a smart gate asks a human (`idea-story`, `story-plan`, `merge`) |

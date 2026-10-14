@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { Board } from './board/board.js'
+import { taskRef, type Board } from './board/board.js'
 import { probesOf, type Context } from './cli.js'
 import { harnessesInUse, modelsFile } from './commands/models.js'
 import { checkStages, cleanupWorkspaces, quotaFile, usageFile } from './commands/run.js'
@@ -192,7 +192,7 @@ export class Runner {
     this.draining = true
     const engine = this.engine
     const running = engine.drain()
-    this.emit('info', `finishing: ${running.length ? `the stages of ${running.map((id) => `#${id}`).join(', ')} run to their end` : 'no stage runs'}; no new stages or tasks start; the conveyor stops after them`)
+    this.emit('info', `finishing: ${running.length ? `the stages of ${running.map((id) => `${taskRef(id)}`).join(', ')} run to their end` : 'no stage runs'}; no new stages or tasks start; the conveyor stops after them`)
     this.notify()
     void engine.idle().then(() => this.stop())
   }
@@ -202,7 +202,7 @@ export class Runner {
     if (!this.stopping) {
       this.stopping = true
       const aborted = this.engine?.abort() ?? []
-      this.emit('info', `stopping: ${aborted.length ? `aborting the stages of ${aborted.map((id) => `#${id}`).join(', ')}` : 'no stage runs'}; the current cycle ends without new tasks, tasks resume on the next start`)
+      this.emit('info', `stopping: ${aborted.length ? `aborting the stages of ${aborted.map((id) => `${taskRef(id)}`).join(', ')}` : 'no stage runs'}; the current cycle ends without new tasks, tasks resume on the next start`)
       this.wake()
     }
     await this.loop
@@ -222,7 +222,7 @@ export class Runner {
   async reset(id: string, form?: ResetForm) {
     const { settings, config, board } = this.setup
     const pid = this.loop ? undefined : runningPid(this.context.home, config.board.project)
-    if (pid) throw new Error(`the conveyor runs in another terminal (pid ${pid}); stop it there first, then reset #${id}`)
+    if (pid) throw new Error(`the conveyor runs in another terminal (pid ${pid}); stop it there first, then reset ${taskRef(id)}`)
     const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form, sessionFile(this.context.home, config.board.project, id))
     const summary = await (this.loop && this.engine ? this.engine.hold(id, work) : work())
     this.emit('info', `task ${id}: ${summary}`)

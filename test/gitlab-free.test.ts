@@ -9,6 +9,7 @@ function gitlabFree() {
   }
   const graphIssue = (iid: string) => ({
     iid,
+    reference: `group/project#${iid}`,
     title: `Issue ${iid}`,
     description: issues[iid]?.description ?? '',
     state: issues[iid]?.state ?? 'opened',
