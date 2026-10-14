@@ -107,8 +107,9 @@ export async function collectStatus(options: { board: Board; config: Config; set
     if (state?.waiting) entry.waitingSince = state.waiting.since
     if (task.state === 'needs-input') entry.answered = repliesSince(comments, state?.waiting?.commentId).length > 0
     if (task.state === 'review') {
-      const pull = await board.pullRequest(task.id)
-      if (pull) entry.pullRequest = pull.url
+      const repos = Object.values(state?.repos ?? {}).map((pull) => pull.url)
+      const pull = repos.length ? undefined : await board.pullRequest(task.id)
+      if (repos.length || pull) entry.pullRequest = repos.length ? repos.join(' ') : (pull?.url ?? '')
     }
     mine.push(entry)
   }

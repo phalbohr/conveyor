@@ -18,6 +18,7 @@ export type PromptInput = {
   reviewMode?: 'fix' | 'rework'
   merge?: string
   base?: string
+  repos?: string[]
   mergeCriteria?: string
   parts?: { list: string[]; current: number }
 }
@@ -90,6 +91,11 @@ export function buildPrompt(input: PromptInput): string {
   }
   if (input.merge) sections.push(`## Merge\n\n${input.merge}`)
   if (input.base) sections.push(`## Base branch\n\n${input.base}`)
+  if (input.repos?.length) {
+    sections.push(
+      `## Repositories\n\nThe workspace holds one folder per repository of the task: ${input.repos.map((repo) => `\`${repo}\``).join(', ')}. Every repository you change gets its own merge request; repositories you do not change get none. Change only what the task needs, and run the tests of every repository you change.${input.stage === 'plan' ? ' Return in `repos` the repositories this task changes, in the order their merge requests must merge (for example a service before the frontend that uses its new API).' : ''}`,
+    )
+  }
   if (input.mergeCriteria !== undefined) {
     sections.push(
       `## Merge decision\n\nDecide if this change needs human review. Return outcome \`approval\` with the reason in the summary if the criteria below require human review. Otherwise return outcome \`done\`, and the conveyor merges the change.\n\n${input.mergeCriteria.trim()}`,
@@ -100,7 +106,7 @@ export function buildPrompt(input: PromptInput): string {
     `## Language\n\nWrite the artifact, the summary, the questions, and the workpad in ${input.language}. The whole team reads them.`,
   )
   sections.push(
-    '## Result\n\nReturn the structured result: `outcome` (`done`, `needs_input`, `approval`, or `failed`), a short `summary`, an `artifact` if this stage produces one, `questions` with `needs_input`, and an updated `workpad` in markdown (plan, checklist, validation, notes), and `parts`: in the plan stage, the ordered titles of the parts when the work needs several pull requests that merge one after another, otherwise null. Do not write to the issue tracker yourself.',
+    '## Result\n\nReturn the structured result: `outcome` (`done`, `needs_input`, `approval`, or `failed`), a short `summary`, an `artifact` if this stage produces one, `questions` with `needs_input`, and an updated `workpad` in markdown (plan, checklist, validation, notes), `parts`: in the plan stage, the ordered titles of the parts when the work needs several pull requests that merge one after another, otherwise null; and `repos`: in the plan stage of a task with several repositories, the repositories it changes in merge order, otherwise null. Do not write to the issue tracker yourself.',
   )
   return `${sections.join('\n\n')}\n`
 }

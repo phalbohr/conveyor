@@ -35,7 +35,11 @@ export type WorkpadState = {
   split?: boolean
   pull?: { number: string; url: string }
   parked?: string
+  repos?: Record<string, RepoPull>
+  mergeOrder?: string[]
 }
+
+export type RepoPull = { number: string; url: string; headSha?: string; merged?: boolean; verify?: { sha: string; since: string } }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
 
@@ -73,6 +77,19 @@ const stateSchema = z.object({
   split: z.boolean().optional(),
   pull: z.object({ number: z.string(), url: z.string() }).optional(),
   parked: z.string().optional(),
+  repos: z
+    .record(
+      z.string(),
+      z.object({
+        number: z.string(),
+        url: z.string(),
+        headSha: z.string().optional(),
+        merged: z.boolean().optional(),
+        verify: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
+      }),
+    )
+    .optional(),
+  mergeOrder: z.array(z.string()).optional(),
 })
 
 const AGENT_MARKER = '<!-- conveyor'
@@ -106,7 +123,11 @@ export function renderWorkpad(state: WorkpadState, text: string) {
   state = JSON.parse(JSON.stringify(state, (_, value: unknown) => (typeof value === 'string' ? plain(value) : value))) as WorkpadState
   const stage = state.stage ? `Stage: \`${state.stage}\`${state.attempt ? ` · failed attempts: ${state.attempt}` : ''}\n\n` : ''
   const error = state.lastError ? `Last error: ${state.lastError.replaceAll('\n', ' ')}\n\n` : ''
-  const links = [state.branch ? `[${state.branch.split('/tree/').at(-1)}](${state.branch})` : '', state.pull ? `pull request [#${state.pull.number}](${state.pull.url})` : ''].filter(Boolean)
+  const links = [
+    state.branch ? `[${state.branch.split('/tree/').at(-1)}](${state.branch})` : '',
+    state.pull ? `pull request [#${state.pull.number}](${state.pull.url})` : '',
+    state.repos && Object.keys(state.repos).length ? `merge requests ${Object.entries(state.repos).map(([repo, pull]) => `[${repo} !${pull.number}](${pull.url})${pull.merged ? ' (merged)' : ''}`).join(', ')}` : '',
+  ].filter(Boolean)
   const linked = links.length ? `Branch: ${links.join(' · ')}\n\n` : ''
   return `${AGENT_MARKER}:workpad ${JSON.stringify(state).replaceAll('>', '\\u003e')} -->\n### Conveyor workpad\n\n${stage}${linked}${error}${text}`
 }

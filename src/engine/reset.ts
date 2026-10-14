@@ -19,6 +19,7 @@ export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remo
   const chosen = form === 'none' ? undefined : (form ?? pad?.state.form)
   const pull = await board.pullRequest(id)
   if (pull?.state === 'open') await board.closePullRequest(id)
+  for (const [repo, entry] of Object.entries(pad?.state.repos ?? {})) if (!entry.merged) await board.closePullRequest(id, repo)
   await workspaces.remove(id)
   await workspaces.deleteBranch(id)
   if (session) removeSession(session)
