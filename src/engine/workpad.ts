@@ -39,7 +39,7 @@ export type WorkpadState = {
   mergeOrder?: string[]
 }
 
-export type RepoPull = { number: string; url: string; headSha?: string; merged?: boolean; verify?: { sha: string; since: string } }
+export type RepoPull = { number: string; url: string; headSha?: string; merged?: boolean; verify?: { sha: string; since: string }; checksWait?: { sha: string; since: string } }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
 
@@ -86,6 +86,7 @@ const stateSchema = z.object({
         headSha: z.string().optional(),
         merged: z.boolean().optional(),
         verify: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
+        checksWait: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
       }),
     )
     .optional(),

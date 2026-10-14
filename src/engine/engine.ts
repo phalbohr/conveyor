@@ -865,7 +865,7 @@ export class Engine {
         return wait(`${repo} had commits that were not pushed; they are pushed now and the branch waits for CI`)
       }
       if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait(`checks of ${repo} are pending`)
-      if (pull.checks === 'none' && this.checksMayStart(state, pull.headSha)) return wait(`no checks yet in ${repo}; waiting for CI to start`)
+      if (pull.checks === 'none' && this.checksMayStart(entry, pull.headSha)) return wait(`no checks yet in ${repo}; waiting for CI to start`)
       if (pull.checks === 'failure') {
         if ((await multi.repoSync(id, repo).catch(() => 'unknown' as const)) === 'rebased') {
           entry.headSha = await multi.repoPush(id, repo)
@@ -1092,7 +1092,7 @@ export class Engine {
     return 'red'
   }
 
-  private checksMayStart(state: WorkpadState, sha: string) {
+  private checksMayStart(state: { checksWait?: { sha: string; since: string } }, sha: string) {
     if (state.checksWait?.sha !== sha) state.checksWait = { sha, since: new Date().toISOString() }
     return Date.now() - Date.parse(state.checksWait.since) < CHECKS_GRACE
   }

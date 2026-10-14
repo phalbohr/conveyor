@@ -255,7 +255,7 @@ export class FakeBoard implements Board {
     const pull: PullRequest = {
       number: String(1000 + this.pulls.size),
       url: `https://example.test/${repo ? `${repo}/` : ''}pull/${id}`,
-      headSha: id.padStart(40, '0'),
+      headSha: `${repo ? `${repo}-` : ''}${id}`.padStart(40, '0'),
       state: 'open',
       checks: this.checks,
       ...(this.draft ? { draft: true } : {}),
