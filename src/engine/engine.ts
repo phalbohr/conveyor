@@ -1006,8 +1006,8 @@ export class Engine {
 
   private async chooseSource(run: TaskRun, comments: Comment[], waiting: WorkpadState['waiting']): Promise<boolean> {
     const { board } = this.options
-    const { id, state } = run
-    const linked = (await board.linkedPulls(id).catch(() => [])).filter((pull) => pull.branch !== taskBranch(id))
+    const { id, state, config } = run
+    const linked = this.repoWorkspaces(config) ? [] : (await board.linkedPulls(id).catch(() => [])).filter((pull) => pull.branch !== taskBranch(id))
     const foreign = await this.trust.only(linked)
     if (foreign.length === 0) {
       state.source = BASE_SOURCE
