@@ -441,6 +441,31 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 - Comments count because GitHub does not let the author approve their own pull request, and pull requests are opened with the personal token.
 - Branch protection on GitHub (required reviews, required checks) still applies: if it rejects the merge, the task goes to the failure path.
 
+## Group boards and several repositories (planned, 0.3.0)
+
+GitLab only. The single-repository setup stays the default: without the keys below, the conveyor works on `board.project` with one branch and one merge request per task.
+
+```yaml
+board:
+  provider: gitlab
+  project: <group>/<project>   # main project: new tasks and fix tasks are created here; local files are named after it
+  group: <group>               # the board and its labels cover every project of the group
+repos:                         # tasks can change several repositories
+  group: <group>               # default: board.group
+  include: [frontend, user-service]   # default: every project of the group
+  exclude: [docs]
+  base: {frontend: develop}    # default: the default branch of each project
+```
+
+`local.yaml` names existing local clones: `repo_paths: {frontend: ../umbrella/frontend}`; other repositories are cloned under `~/.conveyor/repos/`.
+
+- One feature is one issue, in any project of the group. A task is named by its full reference `project#number`.
+- The `plan` stage names the repositories the task changes and the order in which their merge requests merge; the conveyor labels the task `repo::<name>`.
+- The workspace of a task holds one worktree per changed repository, side by side; every changed repository gets the branch `conveyor/<task>` and one merge request that says `Part of <issue>`.
+- Every merge request is approved on its own. The feature lands as a whole: all its merge requests merge, in the planned order and under the merge lock, only when every one is approved and green. When a later one fails to merge after an earlier one merged, the task becomes the fixer (`fix::ci`).
+- Base CI checks and the fixer rule apply per repository. The order between features comes from triage (blocked-by links).
+- Until the feature is ready, the conveyor refuses `board.group` and `repos` with a clear error.
+
 ## Triage
 
 - Runs at the start of a cycle when unclaimed tasks in `idea`, `story`, or `plan` have no priority.

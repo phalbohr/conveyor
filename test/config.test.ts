@@ -298,3 +298,33 @@ describe('model and effort names', () => {
     expect(load(`${BOARD}stages:\n  implement: {model: litellm/qwen3-coder, effort: high}\n`).ok).toBe(true)
   })
 })
+
+describe('group boards and several repositories', () => {
+  const gitlab = 'board: {provider: gitlab, project: shop/frontend, group: shop}\n'
+  const errors = (text: string, local?: string) => {
+    const result = load(text, local)
+    return result.ok ? [] : result.errors
+  }
+
+  it('keeps one repository and one board project without the new keys', () => {
+    expect(config('board: {provider: gitlab, project: shop/frontend}\n').repos).toBeUndefined()
+  })
+
+  it('accepts the keys for GitLab and says that they are not available yet', () => {
+    expect(errors(gitlab)).toEqual(['config.yaml: board.group: group boards come with conveyor 0.3.0 and are not available yet'])
+    expect(errors(`${gitlab}repos: {include: [frontend, user-service], base: {frontend: develop}}\n`, 'repo_paths: {frontend: ../umbrella/frontend}\n')).toEqual([
+      'config.yaml: repos: several repositories per task come with conveyor 0.3.0 and are not available yet',
+    ])
+  })
+
+  it('rejects them on GitHub and checks the repository names', () => {
+    expect(errors('board: {provider: github, project: acme/app, group: acme}\n')).toContain('config.yaml: board.group: group boards need provider gitlab')
+    expect(errors('board: {provider: gitlab, project: shop/frontend}\nrepos: {}\n')).toContain('config.yaml: repos.group: name the group of the repositories, or set board.group')
+    const listed = errors(`${gitlab}repos: {include: [frontend], exclude: [frontend], base: {cart: main}}\n`, 'repo_paths: {docs: ../docs}\n')
+    expect(listed).toContain('config.yaml: repos: frontend is both included and excluded')
+    expect(listed).toContain('config.yaml: repos.base.cart: not one of the repositories')
+    expect(listed).toContain('local.yaml: repo_paths.docs: not one of the repositories')
+    expect(errors('board: {provider: gitlab, project: shop/frontend}\n', 'repo_paths: {frontend: ../frontend}\n')).toContain('local.yaml: repo_paths: the team configuration has no repos')
+    expect(errors(`${gitlab}repos: {base: {frontend: 'bad branch'}}\n`).join('\n')).toContain('repos.base.frontend: a branch name')
+  })
+})
