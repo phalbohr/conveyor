@@ -61,7 +61,7 @@ export interface Board {
   boardUrl(): Promise<string>
   branchUrl(branch: string): Promise<string>
   reference(id: string): string
-  baseBranch(): Promise<string>
+  baseBranch(repo?: string): Promise<string>
   inspect(): Promise<BoardInspection>
   syncMirror(tasks: Task[]): Promise<number>
   linkedProjects(): Promise<LinkedProject[]>
@@ -86,16 +86,16 @@ export interface Board {
   claim(id: string): Promise<boolean>
   release(id: string): Promise<void>
   setPriority(id: string, priority: number): Promise<void>
-  openPullRequest(id: string, title: string, body: string): Promise<PullRequest>
-  pullRequest(id: string): Promise<PullRequest | undefined>
-  mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }>
-  closePullRequest(id: string): Promise<void>
-  mergeCommit(id: string): Promise<string | undefined>
-  commitChecks(sha: string): Promise<PullRequest['checks']>
-  failedChecks(sha: string): Promise<string[]>
-  baseHead(): Promise<string>
+  openPullRequest(id: string, title: string, body: string, repo?: string): Promise<PullRequest>
+  pullRequest(id: string, repo?: string): Promise<PullRequest | undefined>
+  mergePullRequest(id: string, method: MergeMethod, sha: string, repo?: string): Promise<{ ok: true } | { ok: false; error: string }>
+  closePullRequest(id: string, repo?: string): Promise<void>
+  mergeCommit(id: string, repo?: string): Promise<string | undefined>
+  commitChecks(sha: string, repo?: string): Promise<PullRequest['checks']>
+  failedChecks(sha: string, repo?: string): Promise<string[]>
+  baseHead(repo?: string): Promise<string>
   linkedPulls(id: string): Promise<LinkedPull[]>
-  commentPullRequest(id: string, body: string): Promise<void>
+  commentPullRequest(id: string, body: string, repo?: string): Promise<void>
 }
 
 export type TaskLabels = { state?: TaskState; form?: TaskForm }

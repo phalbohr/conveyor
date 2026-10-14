@@ -58,10 +58,11 @@ function gitlabGroup() {
     if (path === `groups/${GROUP}/members/all?query=alice&per_page=100`) return ok([{ username: 'alice', access_level: 30 }])
     if (path === `groups/${GROUP}`) return ok({ web_url: 'https://gitlab.example/groups/shop' })
     if (path === `projects/${encodeURIComponent('shop/frontend')}`) return ok({ id: 7, web_url: 'https://gitlab.example/shop/frontend', default_branch: 'develop' })
-    if (path.startsWith('projects/')) return ok({ id: 9 })
+    if (path === `projects/${encodeURIComponent('shop/inventory')}`) return ok({ id: 11, default_branch: 'develop' })
+    if (path.startsWith('projects/')) return ok(path.includes('/merge_requests') ? [] : { id: 9 })
     return ok([])
   }
-  return { board: new GitLabBoard('shop/frontend', run, { retryDelay: 0, group: GROUP }), issues, calls, raw }
+  return { board: new GitLabBoard('shop/frontend', run, { retryDelay: 0, group: GROUP, repos: { group: GROUP, base: { 'user-service': 'main' } } }), issues, calls, raw }
 }
 
 describe('GitLabBoard on a group board', () => {
@@ -112,5 +113,16 @@ describe('GitLabBoard on a group board', () => {
     expect(update).toContain('assignee_ids=[77]')
     expect(update?.[update.indexOf('assignee_ids=[77]') - 1]).toBe('-F')
     expect(raw.flat().some((arg) => /^\w+\[\]=/.test(arg))).toBe(false)
+  })
+
+  it('sends merge request, base, and check calls of a task repository to that project', async () => {
+    const { board, calls } = gitlabGroup()
+    expect(await board.pullRequest('frontend#12', 'user-service')).toBeUndefined()
+    expect(calls.some((call) => call.startsWith(`GET projects/${encodeURIComponent('shop/user-service')}/merge_requests?source_branch=${encodeURIComponent('conveyor/frontend-12')}`))).toBe(true)
+    expect(await board.baseBranch('user-service')).toBe('main')
+    expect(await board.baseBranch('inventory')).toBe('develop')
+    expect(await board.baseBranch()).toBe('develop')
+    await board.commitChecks('abc', 'user-service').catch(() => undefined)
+    expect(calls).toContain(`GET projects/${encodeURIComponent('shop/user-service')}/repository/commits/abc`)
   })
 })
