@@ -6,8 +6,8 @@ import { spawnLines } from './harness/process.js'
 import { createRun } from './run.js'
 import { taskFile, taskOfFile, taskSlug } from './board/board.js'
 
-type Hooks = Config['hooks']
-type HookName = 'after_create' | 'before_run' | 'after_run' | 'before_remove'
+export type Hooks = Config['hooks']
+export type HookName = 'after_create' | 'before_run' | 'after_run' | 'before_remove'
 
 export interface Workspaces {
   prepare(taskId: string, from?: string): Promise<{ path: string; created: boolean }>
@@ -25,11 +25,24 @@ export interface Workspaces {
   list(): Promise<string[]>
 }
 
+export async function runHookScript(hooks: Hooks, name: HookName, path: string) {
+  const script = hooks[name]
+  if (!script) return
+  const result = await spawnLines('sh', ['-c', script], {
+    cwd: path,
+    env: childEnv(process.env),
+    signal: AbortSignal.timeout(hooks.timeout),
+    onLine: () => undefined,
+  })
+  if (result.aborted) throw new Error(`hook ${name} timed out after ${hooks.timeout} ms`)
+  if (result.code !== 0) throw new Error(`hook ${name} failed with code ${result.code}: ${result.stderr.trim()}`)
+}
+
 export const taskBranch = (taskId: string) => `conveyor/${taskSlug(taskId)}`
 const leaseRef = (taskId: string) => `refs/conveyor/pushed/${taskSlug(taskId)}`
 
 export class GitWorkspaces implements Workspaces {
-  constructor(private readonly options: { repo: string; root: string; base: () => Promise<string>; hooks: () => Hooks }) {}
+  constructor(private readonly options: { repo: string; root: string; base: () => Promise<string>; hooks: () => Hooks; subdir?: string }) {}
 
   async prepare(taskId: string, from?: string) {
     const path = this.path(taskId)
@@ -45,7 +58,7 @@ export class GitWorkspaces implements Workspaces {
     const start = (await exists(remote)) ? remote : source && (await exists(source)) ? source : await this.baseRef()
     if (start === remote) await this.git(this.options.repo, 'update-ref', leaseRef(taskId), remote)
     else await this.tryGit(this.options.repo, 'update-ref', '-d', leaseRef(taskId))
-    mkdirSync(this.options.root, { recursive: true, mode: 0o700 })
+    mkdirSync(this.options.subdir ? dirname(path) : this.options.root, { recursive: true, mode: 0o700 })
     await this.git(this.options.repo, 'worktree', 'add', '--quiet', '-B', taskBranch(taskId), path, start)
 
     try {
@@ -157,7 +170,7 @@ export class GitWorkspaces implements Workspaces {
   }
 
   private path(taskId: string) {
-    return join(this.options.root, taskFile(taskId))
+    return this.options.subdir ? join(this.options.root, taskFile(taskId), this.options.subdir) : join(this.options.root, taskFile(taskId))
   }
 
   private async baseRef() {
@@ -165,17 +178,7 @@ export class GitWorkspaces implements Workspaces {
   }
 
   private async hook(name: HookName, path: string) {
-    const hooks = this.options.hooks()
-    const script = hooks[name]
-    if (!script) return
-    const result = await spawnLines('sh', ['-c', script], {
-      cwd: path,
-      env: childEnv(process.env),
-      signal: AbortSignal.timeout(hooks.timeout),
-      onLine: () => undefined,
-    })
-    if (result.aborted) throw new Error(`hook ${name} timed out after ${hooks.timeout} ms`)
-    if (result.code !== 0) throw new Error(`hook ${name} failed with code ${result.code}: ${result.stderr.trim()}`)
+    await runHookScript(this.options.hooks(), name, path)
   }
 
   private async git(cwd: string, ...args: string[]) {
