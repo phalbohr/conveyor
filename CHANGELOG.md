@@ -3,8 +3,11 @@
 ## Unreleased
 
 - GitLab group boards: `board.group` makes the board and its labels cover every project of the group. Tasks are named `project#number` (for example `frontend#12`) on the screen, in the log, and in commands such as `conveyor attach frontend#12`; issue work goes to the project of each issue, new tasks are created in `board.project`, and merge requests link the issue with its full reference.
-- GitLab: assigning the conveyor user to a task works with glab 1.119 and later, which reject field names with brackets (`assignee_ids[]`). Before, claiming a task failed with `glab api PUT … failed (HTTP 0): ERROR`.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
+
+## 0.2.2 — 2026-10-14
+
+- GitLab: assigning the conveyor user to a task works with glab 1.119 and later, which reject field names with brackets (`assignee_ids[]`). Before, claiming a task on GitLab failed with `glab api PUT … failed (HTTP 0): ERROR`.
 
 ## 0.2.1 — 2026-10-13
 
