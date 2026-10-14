@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 — 2026-10-14
+
+- GitLab: assigning the conveyor user to a task works with glab 1.119 and later, which reject field names with brackets (`assignee_ids[]`). Before, claiming a task on GitLab failed with `glab api PUT … failed (HTTP 0): ERROR`.
+
 ## 0.2.1 — 2026-10-13
 
 - A pull request of the conveyor says `Part of #N` and never `Closes #N`. Before, with `close_on_done: true` GitHub closed the issue at the merge, the conveyor stopped seeing the task before its base CI check and post-merge stages, and the task stayed in `conveyor::in-progress` (sometimes with `fix::ci`) on a closed issue. Now the conveyor closes the issue itself when the task is done. Clean up such tasks by hand: set `conveyor::done` and remove `stage::`, `claimed-by::`, and `fix::ci`.
