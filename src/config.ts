@@ -22,6 +22,8 @@ const name = z.string().min(1)
 const model = z.string().regex(/^[\w.:/@+][\w.:/@+-]*$/, 'a model name: letters, digits, and . : / @ + - (not first)')
 const effort = z.string().regex(/^\w[\w-]*$/, 'an effort: letters, digits, and -')
 const count = z.int().positive()
+const branch = z.string().regex(/^[\w.][\w./-]*$/, 'a branch name: letters, digits, ".", "_", "-", "/"')
+const gitlabPath = z.string().regex(/^[\w.-]+(\/[\w.-]+)*$/, 'a GitLab path such as group/subgroup or group/project')
 const store = z.enum(['board', 'repo', 'path'])
 const write = z.enum(['replace', 'append'])
 const gateMode = z.enum(['interactive', 'autonomous', 'smart'])
@@ -73,8 +75,17 @@ const teamSchema = z.strictObject({
     provider: z.enum(['github', 'gitlab']),
     project: name,
     github_project: count.optional(),
-    base_branch: z.string().regex(/^[\w.][\w./-]*$/, 'a branch name: letters, digits, ".", "_", "-", "/"').optional(),
+    base_branch: branch.optional(),
+    group: gitlabPath.optional(),
   }),
+  repos: z
+    .strictObject({
+      group: gitlabPath.optional(),
+      include: z.array(gitlabPath).min(1).optional(),
+      exclude: z.array(gitlabPath).default([]),
+      base: z.record(gitlabPath, branch).default({}),
+    })
+    .optional(),
   artifacts: z
     .strictObject({ idea: teamArtifact.prefault({}), story: teamArtifact.prefault({}), plan: teamArtifact.prefault({}) })
     .prefault({}),
@@ -145,6 +156,7 @@ const localSchema = z.strictObject({
   language: z.strictObject({ chat: name.optional() }).prefault({}),
   live: stageSettings.prefault({}),
   session_logs: z.boolean().default(false),
+  repo_paths: z.record(gitlabPath, name).default({}),
   harnesses: z.record(harness, harnessOverride).default({}),
 })
 
@@ -173,7 +185,9 @@ export type HarnessDefinition = {
   interactive?: string[]
 }
 
-export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' | 'language' | 'harnesses'> &
+export type Repos = { group: string; include?: string[]; exclude: string[]; base: Record<string, string> }
+
+export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' | 'language' | 'harnesses' | 'repos'> &
   Omit<Local, 'artifacts' | 'language' | 'harnesses' | 'live'> & {
     harnesses: Record<string, HarnessDefinition>
     language: { docs: string; chat?: string }
@@ -181,6 +195,7 @@ export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' |
     triage: StageSettings
     live: StageSettings
     stages: Stage[]
+    repos?: Repos
   }
 
 export type LoadResult = { ok: true; config: Config } | { ok: false; errors: string[] }
@@ -208,15 +223,36 @@ export function loadConfig(settingsDir: string): LoadResult {
   for (const [path, used] of [['defaults.harness', team.defaults.harness], ['triage.harness', triageHarness], ['live.harness', local.live.harness], ...stages.map((stage) => [`stages.${stage.name}.harness`, stage.harness])]) {
     if (used && !BUILT_IN_HARNESSES.includes(used) && !harnesses[used]) errors.push(`${CONFIG_FILE}: ${path}: unknown harness ${used}`)
   }
+  const repos = resolveRepos(team, local, errors)
   if (errors.length > 0) return { ok: false, errors }
 
-  const { artifacts: _teamArtifacts, defaults, triage, stages: _stages, language: teamLanguage, harnesses: _teamHarnesses, ...teamRest } = team
+  const { artifacts: _teamArtifacts, defaults, triage, stages: _stages, language: teamLanguage, harnesses: _teamHarnesses, repos: _repos, ...teamRest } = team
   const { artifacts: _localArtifacts, language: localLanguage, harnesses: _localHarnesses, live, ...localRest } = local
   const language = { docs: teamLanguage.docs, ...(localLanguage.chat ? { chat: localLanguage.chat } : {}) }
   return {
     ok: true,
-    config: { ...teamRest, ...localRest, language, harnesses, artifacts, triage: withDefaults(triage, defaults), live: withDefaults(live, defaults), stages },
+    config: { ...teamRest, ...localRest, language, harnesses, artifacts, triage: withDefaults(triage, defaults), live: withDefaults(live, defaults), stages, ...(repos ? { repos } : {}) },
   }
+}
+
+function resolveRepos(team: Team, local: Local, errors: string[]): Repos | undefined {
+  const gitlab = team.board.provider === 'gitlab'
+  if (team.board.group && !gitlab) errors.push(`${CONFIG_FILE}: board.group: group boards need provider gitlab`)
+  if (!team.repos) {
+    if (Object.keys(local.repo_paths).length > 0) errors.push(`${LOCAL_FILE}: repo_paths: the team configuration has no repos`)
+    if (team.board.group) errors.push(`${CONFIG_FILE}: board.group: group boards come with conveyor 0.3.0 and are not available yet`)
+    return undefined
+  }
+  if (!gitlab) errors.push(`${CONFIG_FILE}: repos: several repositories need provider gitlab`)
+  const group = team.repos.group ?? team.board.group
+  if (!group) errors.push(`${CONFIG_FILE}: repos.group: name the group of the repositories, or set board.group`)
+  const { include, exclude, base } = team.repos
+  for (const repo of exclude.filter((name) => include?.includes(name))) errors.push(`${CONFIG_FILE}: repos: ${repo} is both included and excluded`)
+  const known = (repo: string) => !exclude.includes(repo) && (!include || include.includes(repo))
+  for (const repo of Object.keys(base).filter((name) => !known(name))) errors.push(`${CONFIG_FILE}: repos.base.${repo}: not one of the repositories`)
+  for (const repo of Object.keys(local.repo_paths).filter((name) => !known(name))) errors.push(`${LOCAL_FILE}: repo_paths.${repo}: not one of the repositories`)
+  errors.push(`${CONFIG_FILE}: repos: several repositories per task come with conveyor 0.3.0 and are not available yet`)
+  return group ? { group, ...(include ? { include } : {}), exclude, base } : undefined
 }
 
 function readYaml(path: string, file: string, errors: string[]): unknown {
