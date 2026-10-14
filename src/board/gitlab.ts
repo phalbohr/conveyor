@@ -70,11 +70,12 @@ export class GitLabBoard implements Board {
   private login?: string
   private defaultBranch?: string
   private webUrl?: string
+  private readonly repoBranches = new Map<string, string>()
 
   constructor(
     private readonly project: string,
     private readonly run: Run,
-    private readonly options: { retryDelay?: number; baseBranch?: string; group?: string } = {},
+    private readonly options: { retryDelay?: number; baseBranch?: string; group?: string; repos?: { group: string; base: Record<string, string> } } = {},
   ) {
     this.api = `projects/${encodeURIComponent(project)}`
     this.scope = options.group ? `groups/${encodeURIComponent(options.group)}` : this.api
@@ -283,25 +284,27 @@ export class GitLabBoard implements Board {
     if (result.code !== 0 && result.status !== 404) this.fail(result, 'release')
   }
 
-  async openPullRequest(id: string, title: string, body: string) {
-    const existing = await this.pullRequest(id)
+  async openPullRequest(id: string, title: string, body: string, repo?: string) {
+    const api = this.repoApi(repo)
+    const existing = await this.pullRequest(id, repo)
     if (existing?.state === 'open') return existing
-    await this.json(['-X', 'POST', `${this.api}/merge_requests`, '-f', `source_branch=conveyor/${taskSlug(id)}`, '-f', `target_branch=${await this.baseBranch()}`, '-f', `title=${title}`, '-f', `description=${body}`, '-f', `assignee_id=${await this.userId(await this.user())}`])
-    const opened = await this.pullRequest(id)
+    await this.json(['-X', 'POST', `${api}/merge_requests`, '-f', `source_branch=conveyor/${taskSlug(id)}`, '-f', `target_branch=${await this.baseBranch(repo)}`, '-f', `title=${title}`, '-f', `description=${body}`, '-f', `assignee_id=${await this.userId(await this.user())}`])
+    const opened = await this.pullRequest(id, repo)
     if (!opened) throw new Error(`merge request for task ${id} not found after creation`)
     return opened
   }
 
-  async pullRequest(id: string): Promise<PullRequest | undefined> {
-    const listed = await this.json<MergeRequest[]>([`${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${taskSlug(id)}`)}&state=all&order_by=created_at&sort=desc`])
+  async pullRequest(id: string, repo?: string): Promise<PullRequest | undefined> {
+    const api = this.repoApi(repo)
+    const listed = await this.json<MergeRequest[]>([`${api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${taskSlug(id)}`)}&state=all&order_by=created_at&sort=desc`])
     const first = listed.find((request) => request.source_project_id === request.target_project_id)
     if (!first) return undefined
-    const request = await this.json<MergeRequest>([`${this.api}/merge_requests/${first.iid}`])
-    const approvals = await this.json<{ approved_by: { user: { username: string } }[] }>([`${this.api}/merge_requests/${first.iid}/approvals`])
+    const request = await this.json<MergeRequest>([`${api}/merge_requests/${first.iid}`])
+    const approvals = await this.json<{ approved_by: { user: { username: string } }[] }>([`${api}/merge_requests/${first.iid}/approvals`])
     const reviewers = await this.json<{ user: { username: string }; state: string; updated_at?: string; created_at?: string }[]>([
-      `${this.api}/merge_requests/${first.iid}/reviewers`,
+      `${api}/merge_requests/${first.iid}/reviewers`,
     ])
-    const all = await this.pages<Note>(`${this.api}/merge_requests/${first.iid}/notes?sort=asc&order_by=created_at`)
+    const all = await this.pages<Note>(`${api}/merge_requests/${first.iid}/notes?sort=asc&order_by=created_at`)
     const notes = all.filter((note) => !note.system)
     const approvedAt = new Map(all.filter((note) => note.system && APPROVED.test(note.body)).map((note) => [note.author.username, note.created_at]))
     const now = new Date().toISOString()
@@ -329,22 +332,25 @@ export class GitLabBoard implements Board {
     }
   }
 
-  async mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }> {
-    const pull = await this.pullRequest(id)
+  async mergePullRequest(id: string, method: MergeMethod, sha: string, repo?: string): Promise<{ ok: true } | { ok: false; error: string }> {
+    const api = this.repoApi(repo)
+    const pull = await this.pullRequest(id, repo)
     if (!pull || pull.state !== 'open') return { ok: false, error: 'no open merge request' }
-    const result = await this.call(['-X', 'PUT', `${this.api}/merge_requests/${pull.number}/merge`, '-f', `sha=${sha}`, ...(method === 'squash' ? ['-F', 'squash=true'] : [])])
+    const result = await this.call(['-X', 'PUT', `${api}/merge_requests/${pull.number}/merge`, '-f', `sha=${sha}`, ...(method === 'squash' ? ['-F', 'squash=true'] : [])])
     return result.code === 0 ? { ok: true } : { ok: false, error: (result.stderr || result.stdout).trim() || `merge failed with HTTP ${result.status}` }
   }
 
-  async commentPullRequest(id: string, body: string) {
-    const pull = await this.pullRequest(id)
+  async commentPullRequest(id: string, body: string, repo?: string) {
+    const api = this.repoApi(repo)
+    const pull = await this.pullRequest(id, repo)
     if (!pull) throw new Error(`task ${id} has no merge request`)
-    await this.json(['-X', 'POST', `${this.api}/merge_requests/${pull.number}/notes`, '-f', `body=${body}`])
+    await this.json(['-X', 'POST', `${api}/merge_requests/${pull.number}/notes`, '-f', `body=${body}`])
   }
 
-  async mergeCommit(id: string) {
+  async mergeCommit(id: string, repo?: string) {
+    const api = this.repoApi(repo)
     const listed = await this.json<{ merge_commit_sha: string | null; squash_commit_sha: string | null; source_project_id: number; target_project_id: number }[]>([
-      `${this.api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${taskSlug(id)}`)}&state=merged&order_by=updated_at&sort=desc`,
+      `${api}/merge_requests?source_branch=${encodeURIComponent(`conveyor/${taskSlug(id)}`)}&state=merged&order_by=updated_at&sort=desc`,
     ])
     const merged = listed.find((request) => request.source_project_id === request.target_project_id)
     return merged?.merge_commit_sha ?? merged?.squash_commit_sha ?? undefined
@@ -357,26 +363,30 @@ export class GitLabBoard implements Board {
       .map((request) => ({ number: String(request.iid), url: request.web_url, branch: request.source_branch, draft: request.draft ?? false, author: request.author.username }))
   }
 
-  async baseHead() {
-    const branch = await this.json<{ commit: { id: string } }>([`${this.api}/repository/branches/${encodeURIComponent(await this.baseBranch())}`])
+  async baseHead(repo?: string) {
+    const api = this.repoApi(repo)
+    const branch = await this.json<{ commit: { id: string } }>([`${api}/repository/branches/${encodeURIComponent(await this.baseBranch(repo))}`])
     return branch.commit.id
   }
 
-  async failedChecks(sha: string) {
-    const commit = await this.json<{ last_pipeline: { id: number; status: string } | null }>([`${this.api}/repository/commits/${sha}`])
+  async failedChecks(sha: string, repo?: string) {
+    const api = this.repoApi(repo)
+    const commit = await this.json<{ last_pipeline: { id: number; status: string } | null }>([`${api}/repository/commits/${sha}`])
     if (!commit.last_pipeline || checks(commit.last_pipeline.status) !== 'failure') return []
-    const jobs = await this.json<{ name: string; status: string }[]>([`${this.api}/pipelines/${commit.last_pipeline.id}/jobs?scope[]=failed&per_page=100`])
+    const jobs = await this.json<{ name: string; status: string }[]>([`${api}/pipelines/${commit.last_pipeline.id}/jobs?scope[]=failed&per_page=100`])
     return jobs.map((job) => job.name)
   }
 
-  async commitChecks(sha: string) {
-    const commit = await this.json<{ last_pipeline: { status: string } | null }>([`${this.api}/repository/commits/${sha}`])
+  async commitChecks(sha: string, repo?: string) {
+    const api = this.repoApi(repo)
+    const commit = await this.json<{ last_pipeline: { status: string } | null }>([`${api}/repository/commits/${sha}`])
     return checks(commit.last_pipeline?.status)
   }
 
-  async closePullRequest(id: string) {
-    const pull = await this.pullRequest(id)
-    if (pull?.state === 'open') await this.json(['-X', 'PUT', `${this.api}/merge_requests/${pull.number}`, '-f', 'state_event=close'])
+  async closePullRequest(id: string, repo?: string) {
+    const api = this.repoApi(repo)
+    const pull = await this.pullRequest(id, repo)
+    if (pull?.state === 'open') await this.json(['-X', 'PUT', `${api}/merge_requests/${pull.number}`, '-f', 'state_event=close'])
   }
 
   private async toTasks(issues: GraphIssue[]): Promise<Task[]> {
@@ -426,9 +436,20 @@ export class GitLabBoard implements Board {
     ])
   }
 
-  async baseBranch() {
-    this.defaultBranch ??= this.options.baseBranch ?? (await this.json<{ default_branch: string }>([this.api])).default_branch
-    return this.defaultBranch
+  async baseBranch(repo?: string) {
+    if (!repo) {
+      this.defaultBranch ??= this.options.baseBranch ?? (await this.json<{ default_branch: string }>([this.api])).default_branch
+      return this.defaultBranch
+    }
+    const known = this.repoBranches.get(repo) ?? this.options.repos?.base[repo] ?? (await this.json<{ default_branch: string }>([this.repoApi(repo)])).default_branch
+    this.repoBranches.set(repo, known)
+    return known
+  }
+
+  private repoApi(repo?: string) {
+    if (!repo) return this.api
+    if (!this.options.repos) throw new Error(`task repositories need repos in the settings (${repo})`)
+    return `projects/${encodeURIComponent(`${this.options.repos.group}/${repo}`)}`
   }
 
   private async pages<T>(path: string): Promise<T[]> {

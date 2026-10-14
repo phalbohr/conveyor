@@ -124,7 +124,11 @@ export function boardAdapter(context: Context, config: Config): Board {
   return (
     context.boardFor?.(config) ??
     (provider === 'gitlab'
-      ? new GitLabBoard(project, context.run, { ...(base_branch ? { baseBranch: base_branch } : {}), ...(group ? { group } : {}) })
+      ? new GitLabBoard(project, context.run, {
+          ...(base_branch ? { baseBranch: base_branch } : {}),
+          ...(group ? { group } : {}),
+          ...(config.repos ? { repos: { group: config.repos.group, base: config.repos.base } } : {}),
+        })
       : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), ...(base_branch ? { baseBranch: base_branch } : {}), warn }))
   )
 }

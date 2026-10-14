@@ -27,28 +27,28 @@ export class RedactingBoard implements Board {
     return this.board.syncMirror(tasks)
   }
 
-  mergeCommit(id: string) {
-    return this.board.mergeCommit(id)
+  mergeCommit(id: string, repo?: string) {
+    return this.board.mergeCommit(id, repo)
   }
 
-  commitChecks(sha: string) {
-    return this.board.commitChecks(sha)
+  commitChecks(sha: string, repo?: string) {
+    return this.board.commitChecks(sha, repo)
   }
 
-  failedChecks(sha: string) {
-    return this.board.failedChecks(sha)
+  failedChecks(sha: string, repo?: string) {
+    return this.board.failedChecks(sha, repo)
   }
 
-  baseHead() {
-    return this.board.baseHead()
+  baseHead(repo?: string) {
+    return this.board.baseHead(repo)
   }
 
   linkedPulls(id: string) {
     return this.board.linkedPulls(id)
   }
 
-  baseBranch() {
-    return this.board.baseBranch()
+  baseBranch(repo?: string) {
+    return this.board.baseBranch(repo)
   }
 
   linkedProjects() {
@@ -147,23 +147,23 @@ export class RedactingBoard implements Board {
     return this.board.setPriority(id, priority)
   }
 
-  openPullRequest(id: string, title: string, body: string) {
-    return this.board.openPullRequest(id, this.clean(title), this.clean(body))
+  openPullRequest(id: string, title: string, body: string, repo?: string) {
+    return this.board.openPullRequest(id, this.clean(title), this.clean(body), repo)
   }
 
-  pullRequest(id: string) {
-    return this.board.pullRequest(id)
+  pullRequest(id: string, repo?: string) {
+    return this.board.pullRequest(id, repo)
   }
 
-  mergePullRequest(id: string, method: MergeMethod, sha: string) {
-    return this.board.mergePullRequest(id, method, sha)
+  mergePullRequest(id: string, method: MergeMethod, sha: string, repo?: string) {
+    return this.board.mergePullRequest(id, method, sha, repo)
   }
 
-  commentPullRequest(id: string, body: string) {
-    return this.board.commentPullRequest(id, this.clean(body))
+  commentPullRequest(id: string, body: string, repo?: string) {
+    return this.board.commentPullRequest(id, this.clean(body), repo)
   }
 
-  closePullRequest(id: string) {
-    return this.board.closePullRequest(id)
+  closePullRequest(id: string, repo?: string) {
+    return this.board.closePullRequest(id, repo)
   }
 }

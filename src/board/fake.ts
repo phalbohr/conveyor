@@ -44,11 +44,11 @@ export class FakeBoard implements Board {
   checks: PullRequest['checks'] = 'success'
   draft = false
 
-  ready(id: string) {
-    const pull = this.pulls.get(id)
+  ready(id: string, repo?: string) {
+    const pull = this.pulls.get(pullKey(id, repo))
     if (pull) delete pull.draft
   }
-  readonly merges: { id: string; method: MergeMethod }[] = []
+  readonly merges: { id: string; method: MergeMethod; repo?: string }[] = []
   readonly outsiders = new Set<string>()
   readonly pullTitles: string[] = []
   readonly pullBodies: string[] = []
@@ -83,8 +83,8 @@ export class FakeBoard implements Board {
 
   baseChecks: PullRequest['checks'][] = []
 
-  async mergeCommit(id: string) {
-    return this.pulls.get(id)?.state === 'merged' ? `merged-${id}`.padEnd(40, '0') : undefined
+  async mergeCommit(id: string, repo?: string) {
+    return this.pulls.get(pullKey(id, repo))?.state === 'merged' ? `merged-${repo ? `${repo}-` : ''}${id}`.padEnd(40, '0') : undefined
   }
 
   headChecks: PullRequest['checks'] = 'success'
@@ -249,12 +249,12 @@ export class FakeBoard implements Board {
     this.replaceLabel(id, PRIORITY_LABEL, PRIORITY_LABEL + priority)
   }
 
-  async openPullRequest(id: string, title: string, body = '') {
-    const existing = this.pulls.get(id)
+  async openPullRequest(id: string, title: string, body = '', repo?: string) {
+    const existing = this.pulls.get(pullKey(id, repo))
     if (existing?.state === 'open') return { ...existing }
     const pull: PullRequest = {
       number: String(1000 + this.pulls.size),
-      url: `https://example.test/pull/${id}`,
+      url: `https://example.test/${repo ? `${repo}/` : ''}pull/${id}`,
       headSha: id.padStart(40, '0'),
       state: 'open',
       checks: this.checks,
@@ -264,40 +264,40 @@ export class FakeBoard implements Board {
       reviews: [],
       comments: [],
     }
-    this.pulls.set(id, pull)
+    this.pulls.set(pullKey(id, repo), pull)
     this.pullBodies.push(body)
     this.pullTitles.push(title)
     return { ...pull }
   }
 
-  async pullRequest(id: string) {
-    const pull = this.pulls.get(id)
+  async pullRequest(id: string, repo?: string) {
+    const pull = this.pulls.get(pullKey(id, repo))
     return pull ? { ...pull, feedback: [...pull.feedback], reviews: [...pull.reviews], comments: [...pull.comments] } : undefined
   }
 
-  async mergePullRequest(id: string, method: MergeMethod, sha: string): Promise<{ ok: true } | { ok: false; error: string }> {
-    const pull = this.pulls.get(id)
+  async mergePullRequest(id: string, method: MergeMethod, sha: string, repo?: string): Promise<{ ok: true } | { ok: false; error: string }> {
+    const pull = this.pulls.get(pullKey(id, repo))
     if (!pull || pull.state !== 'open') return { ok: false, error: 'no open pull request' }
     if (pull.headSha !== sha) return { ok: false, error: 'the head of the branch changed' }
     if (this.mergeError) return { ok: false, error: this.mergeError }
     pull.state = 'merged'
-    this.merges.push({ id, method })
+    this.merges.push({ id, method, ...(repo ? { repo } : {}) })
     return { ok: true }
   }
 
-  async commentPullRequest(id: string, body: string) {
-    const pull = this.pulls.get(id)
+  async commentPullRequest(id: string, body: string, repo?: string) {
+    const pull = this.pulls.get(pullKey(id, repo))
     if (!pull) throw new Error(`task ${id} has no pull request`)
     pull.comments.push({ author: this.login, body, createdAt: this.now().toISOString() })
   }
 
-  async closePullRequest(id: string) {
-    const pull = this.pulls.get(id)
+  async closePullRequest(id: string, repo?: string) {
+    const pull = this.pulls.get(pullKey(id, repo))
     if (pull) pull.state = 'closed'
   }
 
-  updatePullRequest(id: string, patch: Partial<PullRequest>) {
-    const pull = this.pulls.get(id)
+  updatePullRequest(id: string, patch: Partial<PullRequest>, repo?: string) {
+    const pull = this.pulls.get(pullKey(id, repo))
     if (!pull) throw new Error(`no pull request for task ${id}`)
     Object.assign(pull, patch)
   }
@@ -341,4 +341,8 @@ export class FakeBoard implements Board {
       ...labelsToTask(issue.labels),
     }
   }
+}
+
+function pullKey(id: string, repo?: string) {
+  return repo ? `${repo}:${id}` : id
 }
