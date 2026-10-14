@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
 import { Engine } from '../src/engine/engine.js'
@@ -116,5 +116,26 @@ describe('a feature in several repositories', () => {
     await cycle()
     expect((await board.listComments('1')).at(-1)?.body).toContain('The branch of `frontend` changed to `fffffff`')
     expect(board.merges).toEqual([])
+  })
+
+  it('waits for CI to start in every repository on its own clock', async () => {
+    const { board, cycle, expireRetry } = setup()
+    board.checks = 'none'
+    await board.createTask('Checkout', 'story', { form: 'story' })
+    await cycle()
+    expect(board.merges).toEqual([])
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      for (const minutes of [2, 4, 6, 8, 10, 12]) {
+        vi.setSystemTime(Date.now() + 2 * 60_000)
+        await expireRetry()
+        await cycle()
+        if (board.merges.length === 2) break
+        expect(minutes).toBeLessThan(12)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(board.merges.map((merge) => merge.repo)).toEqual(['user-service', 'frontend'])
   })
 })

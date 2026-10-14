@@ -124,8 +124,8 @@ export class FakeRepoWorkspaces extends FakeWorkspaces implements RepoWorkspaces
     return [...this.changedRepos]
   }
 
-  async repoHead(taskId: string) {
-    return taskId.padStart(40, '0')
+  async repoHead(taskId: string, repo: string) {
+    return `${repo}-${taskId}`.padStart(40, '0')
   }
 
   async repoContains() {
@@ -138,6 +138,6 @@ export class FakeRepoWorkspaces extends FakeWorkspaces implements RepoWorkspaces
 
   async repoPush(taskId: string, repo: string) {
     this.repoPushes.push(`${repo}:${taskId}`)
-    return taskId.padStart(40, '0')
+    return `${repo}-${taskId}`.padStart(40, '0')
   }
 }
