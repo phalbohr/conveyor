@@ -19,8 +19,11 @@ function gitlabFree() {
     author: { username: 'alice' },
   })
   const ok = (value: unknown) => ({ code: 0, stdout: JSON.stringify(value), stderr: '' })
+  const calls: string[][] = []
   const run: Run = async (_command, args) => {
     const call = args.slice(1)
+    calls.push(call)
+    if (call.some((arg) => arg.startsWith('users?username='))) return ok([{ id: 77 }])
     const field = (name: string) => call.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1)
     const path = call.find((arg) => arg.startsWith('projects/') || arg === 'graphql') ?? ''
     if (path === 'graphql') {
@@ -37,10 +40,10 @@ function gitlabFree() {
       if (description !== undefined) (issues[issue] as { description: string }).description = description
       return ok({})
     }
-    if (issue) return ok({ description: issues[issue]?.description ?? '', labels: [] })
+    if (issue) return ok({ description: issues[issue]?.description ?? '', labels: [], assignees: [] })
     return ok({ id: 42 })
   }
-  return { board: new GitLabBoard('group/project', run, { retryDelay: 0 }), issues }
+  return { board: new GitLabBoard('group/project', run, { retryDelay: 0 }), issues, calls }
 }
 
 describe('GitLabBoard without issue links (Free)', () => {
@@ -62,5 +65,14 @@ describe('GitLabBoard without issue links (Free)', () => {
     await board.addBlocker('1', '2')
     await board.updateBody('1', 'The story')
     expect(issues['1']?.description).toBe('The story\n\nBlocked by: #2')
+  })
+
+  it('sends assignees as one JSON array, because glab 1.119 rejects field names with brackets', async () => {
+    const { board, calls } = gitlabFree()
+    await board.setOwner('1', 'alice')
+    const update = calls.find((call) => call.includes('PUT') && call.some((arg) => arg.startsWith('assignee_ids')))
+    expect(update).toContain('assignee_ids=[77]')
+    expect(update?.[update.indexOf('assignee_ids=[77]') - 1]).toBe('-F')
+    expect(calls.flat().some((arg) => /^\w+\[\]=/.test(arg))).toBe(false)
   })
 })

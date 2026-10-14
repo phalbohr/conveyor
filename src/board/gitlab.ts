@@ -179,7 +179,7 @@ export class GitLabBoard implements Board {
     const added = owner && !issue.assignees.some(({ username }) => username === owner) ? [await this.userId(owner)] : []
     const ids = [...kept, ...added]
     if (ids.length === issue.assignees.length && added.length === 0) return
-    await this.json(['-X', 'PUT', `${this.api}/issues/${id}`, ...(ids.length ? ids.flatMap((user) => ['-f', `assignee_ids[]=${user}`]) : ['-f', 'assignee_ids=0'])])
+    await this.json(['-X', 'PUT', `${this.api}/issues/${id}`, '-F', `assignee_ids=${JSON.stringify(ids)}`])
   }
 
   private async userId(username: string) {
