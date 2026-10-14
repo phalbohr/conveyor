@@ -251,7 +251,6 @@ function resolveRepos(team: Team, local: Local, errors: string[]): Repos | undef
   const known = (repo: string) => !exclude.includes(repo) && (!include || include.includes(repo))
   for (const repo of Object.keys(base).filter((name) => !known(name))) errors.push(`${CONFIG_FILE}: repos.base.${repo}: not one of the repositories`)
   for (const repo of Object.keys(local.repo_paths).filter((name) => !known(name))) errors.push(`${LOCAL_FILE}: repo_paths.${repo}: not one of the repositories`)
-  errors.push(`${CONFIG_FILE}: repos: several repositories per task come with conveyor 0.3.0 and are not available yet`)
   return group ? { group, ...(include ? { include } : {}), exclude, base } : undefined
 }
 

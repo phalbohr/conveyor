@@ -14,6 +14,7 @@ import { Artifacts } from './artifacts.js'
 import { buildPrompt, buildTriagePrompt, type GateMode } from './prompt.js'
 import { releaseClaim } from './release.js'
 import { sessionFile, sessionWriter, removeSession } from '../session-log.js'
+import type { RepoWorkspaces } from '../multi-workspaces.js'
 import { publicText, redactSecrets } from './redact.js'
 import { Trust } from './trust.js'
 import { parseStageFile, readFormat, renderInstructions } from './stage-file.js'
@@ -25,6 +26,7 @@ import {
   isAgentComment,
   renderWorkpad,
   repliesSince,
+  type RepoPull,
   type Workpad,
   type WorkpadState,
 } from './workpad.js'
@@ -56,6 +58,7 @@ type Verdict = {
   feedback: string[]
   from?: string
   error?: string
+  repo?: string
 }
 
 const FIX_FROM = /^\/fix_from:?\s+([a-z][a-z0-9-]*)/i
@@ -160,7 +163,7 @@ export class Engine {
     }
     const config = loaded.config
     if (this.draining) return
-    await this.guardBase().catch((error: unknown) => this.log(`the base branch check failed: ${(error as Error).message}`))
+    await this.guardBase(config).catch((error: unknown) => this.log(`the base branch check failed: ${(error as Error).message}`))
     await this.probeQuotas(config)
     await this.triage(config).catch((error: unknown) => this.log(`triage failed: ${(error as Error).message}`))
     if (this.halt.signal.aborted || this.draining) return
@@ -199,7 +202,7 @@ export class Engine {
         case 'review': {
           const verdict = await this.reviewSignal(task.id, config)
           if (verdict.kind === 'invalid') await this.rejectCommand(task.id, verdict.error ?? 'Invalid command.')
-          if (verdict.kind === 'stale' && verdict.pull) await this.reviewAgain(task.id, verdict.pull.headSha)
+          if (verdict.kind === 'stale' && verdict.pull) await this.reviewAgain(task.id, verdict.pull.headSha, verdict.repo)
           if (verdict.kind !== 'wait' && verdict.kind !== 'invalid' && verdict.kind !== 'stale') (owned ? resumable : fresh).push(task)
           else if (owned) awaitingReview++
           break
@@ -428,6 +431,8 @@ export class Engine {
       state.review = [failure, ...feedback].filter(Boolean).join('\n\n') || 'The reviewer asked for changes. Read the issue comments for details.'
       if (rework) {
         if (pull?.state === 'open') await board.closePullRequest(id)
+        for (const repo of Object.keys(state.repos ?? {})) if (!state.repos?.[repo]?.merged) await board.closePullRequest(id, repo)
+        delete state.repos
         await workspaces.reset(id)
         run.text = ''
         state.reviewMode = 'rework'
@@ -473,16 +478,28 @@ export class Engine {
       const chain = pendingPull
       const task = (await board.getTask(id)) ?? initial
       const part = state.parts ? { index: (state.part ?? 0) + 1, total: state.parts.length, title: state.parts[state.part ?? 0] ?? '' } : undefined
-      const opened = await board.openPullRequest(
-        id,
-        part ? `${task.title} (part ${part.index}/${part.total}: ${part.title})` : task.title,
-        `Part of ${board.reference(id)}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`,
-      )
-      state.pull = { number: opened.number, url: opened.url }
+      const title = part ? `${task.title} (part ${part.index}/${part.total}: ${part.title})` : task.title
+      const body = `Part of ${board.reference(id)}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`
+      const multi = this.repoWorkspaces(config)
+      const needed = `${config.review.approvals} ${config.review.approvals === 1 ? 'approval' : 'approvals'}`
+      let request: string
+      if (multi) {
+        state.repos ??= {}
+        for (const repo of this.repoOrder(state, await multi.changed(id))) {
+          const opened = await board.openPullRequest(id, title, body, repo)
+          state.repos[repo] = { number: opened.number, url: opened.url, headSha: opened.headSha }
+        }
+        const listed = this.repoOrder(state, Object.keys(state.repos)).map((repo) => `- \`${repo}\`: ${state.repos?.[repo]?.url}`).join('\n')
+        request = `**The merge requests are ready for review**, one per repository, in merge order:\n\n${listed}\n\nApprove each merge request in its project with an Approve review or a comment \`/approve\` on it (${needed} each). The feature merges as a whole when every merge request is approved and green. A plain comment is a note for the team and does not change the task.`
+      } else {
+        const opened = await board.openPullRequest(id, title, body)
+        state.pull = { number: opened.number, url: opened.url }
+        request = `**The pull request is ready for review:** ${opened.url}\n\nApprove it with an Approve review or a comment \`/approve\` (${needed} needed). A plain comment is a note for the team and does not change the task.`
+      }
       if (chain.merge === 'review') {
         delete state.stage
         state.waiting = { kind: 'review', since: new Date().toISOString() }
-        await board.addComment(id, agentComment('review', `**The pull request is ready for review:** ${opened.url}\n\nApprove it with an Approve review or a comment \`/approve\` (${config.review.approvals} ${config.review.approvals === 1 ? 'approval' : 'approvals'} needed). A plain comment is a note for the team and does not change the task.\n\n${commandHelp(config)}`))
+        await board.addComment(id, agentComment('review', `${request}\n\n${commandHelp(config)}`))
         await board.setState(id, 'review')
         await board.setStage(id, undefined)
         await run.save()
@@ -498,7 +515,7 @@ export class Engine {
       delete state.stage
     }
 
-    if (state.landing === 'success' && state.verify && !(await this.verifyBase(run))) return
+    if (state.landing === 'success' && (state.verify || Object.values(state.repos ?? {}).some((entry) => entry.verify)) && !(await this.verifyBase(run))) return
     if (state.broken) {
       this.verifying.set(state.broken, id)
       const repair = config.stages.slice(mergeIndex + 1).filter((stage) => stage.when === 'failure' || stage.when === 'always')
@@ -519,7 +536,7 @@ export class Engine {
     }
 
     const landing = state.landing ?? 'success'
-    if (landing === 'failure' && state.mergeError === 'checks failed') {
+    if (landing === 'failure' && state.mergeError?.startsWith('checks failed')) {
       const { held } = await this.takeFix(id)
       if (held) {
         delete state.landing
@@ -659,6 +676,11 @@ export class Engine {
         .push(id)
         .then((sha) => (state.headSha = sha))
         .catch((error: unknown) => this.log(`task ${id}: push failed: ${(error as Error).message}`))
+      const multi = this.repoWorkspaces(config)
+      for (const [repo, entry] of Object.entries(state.repos ?? {})) {
+        const head = multi && !entry.merged ? await multi.repoHead(id, repo).catch(() => undefined) : undefined
+        if (head) entry.headSha = head
+      }
 
       let result = output.result
       if (result.workpad) run.text = result.workpad
@@ -670,6 +692,7 @@ export class Engine {
       if (result.outcome === 'done' && gate?.mode === 'interactive' && options.approvalStage !== stage.name) result = { ...result, outcome: 'approval' }
       if (result.outcome === 'approval' && gate?.mode === 'autonomous') result = { ...result, outcome: 'done' }
       if (stage.name === 'plan' && result.outcome === 'done') await this.takeParts(run, result.parts)
+      if (stage.name === 'plan' && result.outcome === 'done' && result.repos) state.mergeOrder = result.repos
       if (result.artifact && result.outcome !== 'failed') {
         const kind = GATES[stage.name] || ['idea', 'story'].includes(result.artifact.kind) ? stage.name : result.artifact.kind
         await run.artifacts.store(task, kind, result.artifact.content, comments)
@@ -724,6 +747,8 @@ export class Engine {
     if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; ${this.baseRed.fix ? `task ${taskRef(this.baseRed.fix)} fixes it first` : 'a fix task is chosen first'}`)
     const held = this.heldBy(id)
     if (held) return wait(held)
+    const multi = this.repoWorkspaces(config)
+    if (multi && state.repos) return this.landRepos(run, multi, wait)
     const pull = await board.pullRequest(id)
     if (pull?.state === 'merged') return 'success'
     if (pull?.state === 'open' && pull.draft) return wait('the pull request is a draft; mark it ready for review')
@@ -796,8 +821,107 @@ export class Engine {
       delete state.mergeError
       return 'success'
     }
-    error = publicText(error, this.options.home)
+    return this.landFailed(run, error)
+  }
 
+  private async landRepos(run: TaskRun, multi: RepoWorkspaces, wait: (reason: string) => Promise<'stop'>): Promise<'success' | 'failure' | 'stop'> {
+    const { board } = this.options
+    const { id, config, state } = run
+    const repos = state.repos ?? {}
+    const review = async (repo: string, sha: string) => {
+      const entry = repos[repo]
+      if (entry) entry.headSha = sha
+      delete state.stage
+      state.waiting = { kind: 'review', since: new Date().toISOString() }
+      await board.addComment(id, agentComment('review', changedText(sha, repo)))
+      await board.setState(id, 'review')
+      await board.setStage(id, undefined)
+      await run.save()
+      this.log(`task ${id}: the branch of ${repo} changed after approval, back to review`)
+      return 'stop' as const
+    }
+    const ready: { repo: string; sha: string }[] = []
+    for (const repo of this.repoOrder(state, Object.keys(repos))) {
+      const entry = repos[repo]
+      if (!entry || entry.merged) continue
+      const pull = await board.pullRequest(id, repo)
+      if (pull?.state === 'merged') {
+        entry.merged = true
+        continue
+      }
+      if (!pull || pull.state === 'closed') return this.landFailed(run, `the merge request of ${repo} is closed`)
+      if (pull.draft) return wait(`the merge request of ${repo} is a draft; mark it ready for review`)
+      if (pull.headSha !== entry.headSha) return review(repo, pull.headSha)
+      const local = await multi.repoHead(id, repo).catch(() => undefined)
+      if (local && local !== pull.headSha && (await multi.repoContains(id, repo, pull.headSha).catch(() => false))) {
+        let pushed: string
+        try {
+          pushed = await multi.repoPush(id, repo)
+        } catch (error) {
+          return wait(`${repo} has commits that are not pushed, and the push failed: ${(error as Error).message.split('\n')[0]}`)
+        }
+        if (config.transitions.merge !== 'ai') return review(repo, pushed)
+        entry.headSha = pushed
+        return wait(`${repo} had commits that were not pushed; they are pushed now and the branch waits for CI`)
+      }
+      if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait(`checks of ${repo} are pending`)
+      if (pull.checks === 'none' && this.checksMayStart(state, pull.headSha)) return wait(`no checks yet in ${repo}; waiting for CI to start`)
+      if (pull.checks === 'failure') {
+        if ((await multi.repoSync(id, repo).catch(() => 'unknown' as const)) === 'rebased') {
+          entry.headSha = await multi.repoPush(id, repo)
+          return wait(`checks of ${repo} failed on an older base branch; the branch is rebased onto the latest one and waits for CI`)
+        }
+        return this.landFailed(run, `checks failed in ${repo}`)
+      }
+      if (pull.mergeable === 'no') return this.landFailed(run, `the branch of ${repo} has conflicts with its base branch`)
+      ready.push({ repo, sha: pull.headSha })
+    }
+    if (ready.length === 0) {
+      delete state.mergeError
+      return 'success'
+    }
+    if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return wait('another workstation merges')
+    let error: string | undefined
+    try {
+      for (const { repo, sha } of ready) {
+        const entry = repos[repo] as RepoPull
+        const synced = await multi.repoSync(id, repo).catch(() => 'unknown' as const)
+        if (synced === 'unknown') return wait(`${repo} could not be compared with its latest base branch`)
+        if (synced === 'rebased') {
+          entry.headSha = await multi.repoPush(id, repo)
+          return wait(`the base branch of ${repo} moved; the branch is rebased onto it and waits for CI`)
+        }
+        if (synced === 'conflict') {
+          state.stage = 'merge'
+          state.reviewMode = 'fix'
+          state.review = `The base branch of ${repo} moved while this task waited for merge, and the task branch of ${repo} no longer rebases onto it without conflicts. Rebase it onto the latest base branch, resolve the conflicts by the intent of each side (the base side is already merged work of other tasks; keep what fulfils both; ask with outcome \`questions\` when the intents contradict), and run the tests.`
+          await run.save()
+          this.log(`task ${id}: the base branch of ${repo} moved and the rebase conflicts; the merge stage runs again`)
+          return 'stop'
+        }
+        const merged = await board.mergePullRequest(id, config.merge_method, sha, repo)
+        if (!merged.ok) {
+          error = `${repo}: ${merged.error}`
+          break
+        }
+        entry.merged = true
+        const commit = await board.mergeCommit(id, repo).catch(() => undefined)
+        if (commit) entry.verify = { sha: commit, since: new Date().toISOString() }
+        await run.save()
+        this.log(`task ${id}: merged the merge request of ${repo}`)
+      }
+    } finally {
+      await board.release(MERGE_LOCK)
+    }
+    if (error) return this.landFailed(run, error)
+    delete state.mergeError
+    return 'success'
+  }
+
+  private async landFailed(run: TaskRun, failure: string): Promise<'failure' | 'stop'> {
+    const { board } = this.options
+    const { id, config, state } = run
+    const error = publicText(failure, this.options.home)
     state.mergeError = error
     state.landAttempts = (state.landAttempts ?? 0) + 1
     const names = config.stages.map((stage) => stage.name)
@@ -817,6 +941,22 @@ export class Engine {
   private async verifyBase(run: TaskRun): Promise<boolean> {
     const { board } = this.options
     const { id, config, state } = run
+    if (state.repos && this.repoWorkspaces(config)) {
+      for (const [repo, entry] of Object.entries(state.repos)) {
+        if (!entry.verify) continue
+        const checks = await board.commitChecks(entry.verify.sha, repo).catch(() => 'pending' as const)
+        if (checks === 'pending' || (checks === 'none' && Date.now() - Date.parse(entry.verify.since) < CHECKS_GRACE)) {
+          state.parked = `merged; waits for the CI of ${repo} at ${entry.verify.sha.slice(0, 7)}`
+          state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
+          await run.save()
+          this.log(`task ${id}: ${state.parked}`)
+          return false
+        }
+        if (checks === 'failure') this.log(`task ${id}: the CI of ${repo} failed after the merge at ${entry.verify.sha.slice(0, 7)}; the fix task of the red base repairs it`)
+        delete entry.verify
+      }
+      return true
+    }
     const verify = state.verify
     if (!verify) return true
     this.verifying.set(verify.sha, id)
@@ -901,31 +1041,44 @@ export class Engine {
     return false
   }
 
-  private async guardBase() {
-    const { board } = this.options
-    const sha = await board.baseHead()
-    const checks = await board.commitChecks(sha)
-    if (checks !== 'failure') {
-      if (this.baseRed && checks === 'success') this.log('the base branch CI is green again; merges continue')
-      if (checks === 'success') this.baseRed = undefined
-      return
+  private async guardBase(config: Config) {
+    const repos = await this.repoWorkspaces(config)?.names().catch(() => undefined)
+    let pending = false
+    for (const repo of repos ?? [undefined]) {
+      const base = await this.guardRepo(repo)
+      if (base === 'red') return
+      if (base === 'pending') pending = true
     }
-    if (this.baseRed?.sha === sha && this.baseRed.fix && (this.baseRed.repairing ? this.verifying.has(sha) : await this.stillFixes(this.baseRed.fix))) return
-    const failed = (await board.failedChecks(sha).catch(() => [])).map((name) => name.replace(/[\r\n`]/g, ' ').slice(0, 100))
+    if (this.baseRed && !pending) {
+      this.log('the base branch CI is green again; merges continue')
+      this.baseRed = undefined
+    }
+  }
+
+  private async guardRepo(repo: string | undefined): Promise<'red' | 'pending' | 'green'> {
+    const { board } = this.options
+    const sha = await board.baseHead(repo)
+    const checks = await board.commitChecks(sha, repo)
+    if (checks === 'success') return 'green'
+    if (checks !== 'failure') return 'pending'
+    if (this.baseRed?.sha === sha && this.baseRed.fix && (this.baseRed.repairing ? this.verifying.has(sha) : await this.stillFixes(this.baseRed.fix))) return 'red'
+    const failed = (await board.failedChecks(sha, repo).catch(() => [])).map((name) => name.replace(/[\r\n`]/g, ' ').slice(0, 100))
     const owner = this.verifying.get(sha)
     let fix = await this.fixTask()
+    const where = repo ? `of ${repo} ` : ''
     if (!fix && owner) {
       this.baseRed = { sha, fix: owner, failed, repairing: true }
-      this.log(`the base branch CI fails at ${sha.slice(0, 7)} after the merge of task ${taskRef(owner)}; it repairs the base, and new tasks and merges wait until it is green`)
-      return
+      this.log(`the base branch CI ${where}fails at ${sha.slice(0, 7)} after the merge of task ${taskRef(owner)}; it repairs the base, and new tasks and merges wait until it is green`)
+      return 'red'
     }
     if (!fix && (await this.lock(FIX_LOCK, LOCK_TTL))) {
       try {
         fix = await this.fixTask()
         if (!fix) {
-          const base = await board.baseBranch()
-          const body = `The CI of the base branch \`${base}\` fails at commit \`${sha}\`${failed.length ? `: ${failed.join(', ')}` : ''}.\n\nFind the cause and fix it so that every check passes on the base branch again. If the latest base branch already fixes the failure in another way, keep the base version and drop this branch's own fix for it. Other tasks of the conveyor do not merge, and no new task starts, until this task is merged and the base branch is green.\n\n${BASE_FIX}`
-          const task = await board.createTask(`Fix the CI of the base branch ${base}`, body, { state: 'backlog', form: 'plan' })
+          const base = await board.baseBranch(repo)
+          const name = repo ? `${repo} ${base}` : base
+          const body = `The CI of the base branch \`${base}\`${repo ? ` of the repository \`${repo}\`` : ''} fails at commit \`${sha}\`${failed.length ? `: ${failed.join(', ')}` : ''}.\n\nFind the cause and fix it so that every check passes on the base branch again. If the latest base branch already fixes the failure in another way, keep the base version and drop this branch's own fix for it. Other tasks of the conveyor do not merge, and no new task starts, until this task is merged and the base branch is green.\n\n${BASE_FIX}`
+          const task = await board.createTask(`Fix the CI of the base branch ${name}`, body, { state: 'backlog', form: 'plan' })
           await board.setPriority(task.id, 1)
           await board.setFixing(task.id, true)
           fix = task.id
@@ -935,7 +1088,8 @@ export class Engine {
       }
     }
     this.baseRed = { sha, failed, ...(fix ? { fix } : {}) }
-    this.log(`the base branch CI fails at ${sha.slice(0, 7)}${failed.length ? ` (${failed.join(', ')})` : ''}; ${fix ? `task ${taskRef(fix)} fixes it` : 'a fix task is chosen'}, and new tasks and merges wait until it is green`)
+    this.log(`the base branch CI ${where}fails at ${sha.slice(0, 7)}${failed.length ? ` (${failed.join(', ')})` : ''}; ${fix ? `task ${taskRef(fix)} fixes it` : 'a fix task is chosen'}, and new tasks and merges wait until it is green`)
+    return 'red'
   }
 
   private checksMayStart(state: WorkpadState, sha: string) {
@@ -1027,7 +1181,63 @@ export class Engine {
     }
   }
 
+  private commandVerdict(human: { body: string }[], changesRequested: boolean, feedback: string[], pull: PullRequest | undefined, config: Config): Verdict | undefined {
+    if (human.some((comment) => isCommand(comment.body, 'rework'))) return { kind: 'rework', pull, approvers: [], feedback }
+    const fixFrom = human.map((comment) => comment.body.trim().match(FIX_FROM)).filter(Boolean).at(-1)
+    if (fixFrom) {
+      const allowed = config.stages.slice(0, config.stages.findIndex((stage) => stage.name === 'merge') + 1).map((stage) => stage.name)
+      const stage = fixFrom[1] ?? ''
+      if (!allowed.includes(stage)) {
+        return { kind: 'invalid', pull, approvers: [], feedback, error: `Unknown stage \`${stage}\` in /fix_from. Use one of: ${allowed.join(', ')}.` }
+      }
+      return { kind: 'fix', pull, approvers: [], feedback, from: stage }
+    }
+    if (human.some((comment) => isCommand(comment.body, 'fix')) || changesRequested) return { kind: 'fix', pull, approvers: [], feedback, from: 'plan' }
+    return undefined
+  }
+
+  private async reviewRepos(id: string, config: Config, comments: Comment[], pad: Workpad, repos: Record<string, RepoPull>): Promise<Verdict> {
+    const since = pad.state.waiting?.kind === 'review' || pad.state.waiting?.kind === 'error' ? pad.state.waiting.since : ''
+    const pulls: { repo: string; pull: PullRequest | undefined }[] = []
+    for (const repo of this.repoOrder(pad.state, Object.keys(repos))) pulls.push({ repo, pull: await this.trustedPull(id, repo) })
+    const open = pulls.filter(({ pull }) => pull?.state === 'open')
+    if (open.length === 0 && pulls.every(({ repo, pull }) => pull?.state === 'merged' || repos[repo]?.merged)) return { kind: 'merged', pull: undefined, approvers: [], feedback: [] }
+    const latest = ({ pull }: { pull: PullRequest | undefined }) => {
+      const reviews = new Map<string, PullRequest['reviews'][number]>()
+      for (const review of pull?.reviews ?? []) if (review.submittedAt >= since && review.state !== 'commented') reviews.set(review.author, review)
+      return [...reviews.values()]
+    }
+    const issue = comments.filter((comment) => !isAgentComment(comment) && comment.createdAt >= since)
+    const onPulls = pulls.flatMap(({ pull }) => (pull?.comments ?? []).filter((comment) => comment.createdAt >= since))
+    const human = [...issue, ...onPulls]
+    const reviews = pulls.flatMap(latest)
+    const feedback = [
+      ...reviews.filter((review) => review.state === 'changes_requested' && review.body.trim()).map((review) => review.body),
+      ...pulls.flatMap(({ repo, pull }) => (pull?.feedback ?? []).map((comment) => `${repo}: ${comment.body}`)),
+      ...human.map((comment) => stripCommand(comment.body)).filter((text): text is string => Boolean(text)),
+    ]
+    const command = this.commandVerdict(human, reviews.some((review) => review.state === 'changes_requested'), feedback, undefined, config)
+    if (command) return command
+    const stale = open.find(({ repo, pull }) => pull?.headSha !== repos[repo]?.headSha)
+    if (stale) return { kind: 'stale', pull: stale.pull, repo: stale.repo, approvers: [], feedback }
+    const approvers = open.map((entry) =>
+      [
+        ...new Set([
+          ...latest(entry).filter((review) => review.state === 'approved').map((review) => review.author),
+          ...(entry.pull?.comments ?? []).filter((comment) => comment.createdAt >= since && isCommand(comment.body, 'approve')).map((comment) => comment.author),
+        ]),
+      ].filter((author) => config.review.count_own_approvals || author !== this.me),
+    )
+    const approved = open.length > 0 && approvers.every((list) => list.length >= config.review.approvals)
+    return { kind: approved ? 'merge' : 'wait', pull: undefined, approvers: [...new Set(approvers.flat())], feedback }
+  }
+
   private async reviewSignal(id: string, config: Config): Promise<Verdict> {
+    if (config.repos) {
+      const { comments, pad } = await this.workpad(id)
+      const repos = pad?.state.repos
+      if (pad && repos && Object.keys(repos).length > 0) return this.reviewRepos(id, config, comments, pad, repos)
+    }
     const pull = await this.trustedPull(id)
     if (pull?.state === 'merged') return { kind: 'merged', pull, approvers: [], feedback: [] }
     const { comments, pad } = await this.workpad(id)
@@ -1044,19 +1254,8 @@ export class Engine {
       ...human.map((comment) => stripCommand(comment.body)).filter((text): text is string => Boolean(text)),
     ]
 
-    if (human.some((comment) => isCommand(comment.body, 'rework'))) return { kind: 'rework', pull, approvers: [], feedback }
-    const fixFrom = human.map((comment) => comment.body.trim().match(FIX_FROM)).filter(Boolean).at(-1)
-    if (fixFrom) {
-      const allowed = config.stages.slice(0, config.stages.findIndex((stage) => stage.name === 'merge') + 1).map((stage) => stage.name)
-      const stage = fixFrom[1] ?? ''
-      if (!allowed.includes(stage)) {
-        return { kind: 'invalid', pull, approvers: [], feedback, error: `Unknown stage \`${stage}\` in /fix_from. Use one of: ${allowed.join(', ')}.` }
-      }
-      return { kind: 'fix', pull, approvers: [], feedback, from: stage }
-    }
-    if (human.some((comment) => isCommand(comment.body, 'fix')) || reviews.some((review) => review.state === 'changes_requested')) {
-      return { kind: 'fix', pull, approvers: [], feedback, from: 'plan' }
-    }
+    const command = this.commandVerdict(human, reviews.some((review) => review.state === 'changes_requested'), feedback, pull, config)
+    if (command) return command
     if (pull?.state === 'open' && pull.headSha !== pad?.state.headSha) return { kind: 'stale', pull, approvers: [], feedback }
     const approvers = [
       ...new Set([
@@ -1080,13 +1279,15 @@ export class Engine {
     await this.options.board.setPart(run.id, state.parts ? `${(state.part ?? 0) + 1}/${state.parts.length}` : undefined)
   }
 
-  private async reviewAgain(id: string, sha: string) {
+  private async reviewAgain(id: string, sha: string, repo?: string) {
     const { board } = this.options
     const { pad } = await this.workpad(id)
     if (!pad) return
-    pad.state.headSha = sha
+    const entry = repo ? pad.state.repos?.[repo] : undefined
+    if (entry) entry.headSha = sha
+    else pad.state.headSha = sha
     pad.state.waiting = { kind: 'review', since: new Date(Date.now() + 1).toISOString() }
-    await board.addComment(id, agentComment('review', changedText(sha)))
+    await board.addComment(id, agentComment('review', changedText(sha, entry ? repo : undefined)))
     await board.updateComment(pad.id, renderWorkpad(pad.state, pad.text))
     this.log(`task ${id}: the branch changed during review, approval needed for ${sha.slice(0, 7)}`)
   }
@@ -1138,7 +1339,9 @@ export class Engine {
     } catch (error) {
       return { result: failed((error as Error).message), usage: NO_USAGE }
     }
+    const repos = await this.repoWorkspaces(config)?.names()
     const prompt = buildPrompt({
+      ...(repos ? { repos } : {}),
       task,
       stage: stage.name,
       instructions: instructions.text,
@@ -1283,10 +1486,19 @@ export class Engine {
     return this.trust.only(await this.options.board.listComments(id))
   }
 
-  private async trustedPull(id: string): Promise<PullRequest | undefined> {
-    const pull = await this.options.board.pullRequest(id)
+  private async trustedPull(id: string, repo?: string): Promise<PullRequest | undefined> {
+    const pull = await this.options.board.pullRequest(id, repo)
     if (!pull) return undefined
     return { ...pull, reviews: await this.trust.only(pull.reviews), comments: await this.trust.only(pull.comments), feedback: await this.trust.only(pull.feedback) }
+  }
+
+  private repoWorkspaces(config: Config) {
+    return config.repos ? (this.options.workspaces as RepoWorkspaces) : undefined
+  }
+
+  private repoOrder(state: WorkpadState, repos: string[]) {
+    const order = state.mergeOrder ?? []
+    return [...order.filter((repo) => repos.includes(repo)), ...repos.filter((repo) => !order.includes(repo)).sort()]
   }
 
   private async lock(name: string, ttl: number) {
@@ -1388,8 +1600,8 @@ function commandHelp(config: Config) {
   ].join('\n')
 }
 
-function changedText(sha: string) {
-  return `**The branch changed to \`${sha.slice(0, 7)}\` after the review request.** Earlier approvals and \`/approve\` no longer count. Review the new commits, then approve or write \`/approve\` again.`
+function changedText(sha: string, repo?: string) {
+  return `**The ${repo ? `branch of \`${repo}\`` : 'branch'} changed to \`${sha.slice(0, 7)}\` after the review request.** Earlier approvals and \`/approve\` ${repo ? 'on its merge request ' : ''}no longer count. Review the new commits, then approve or write \`/approve\` again.`
 }
 
 function withoutOwner(task: Task): Task {

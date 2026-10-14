@@ -6,7 +6,16 @@ import { GitWorkspaces, runHookScript, type Hooks, type Workspaces } from './wor
 
 const NO_HOOKS: Hooks = { timeout: 60_000 }
 
-export class MultiWorkspaces implements Workspaces {
+export interface RepoWorkspaces extends Workspaces {
+  names(): Promise<string[]>
+  changed(taskId: string): Promise<string[]>
+  repoHead(taskId: string, repo: string): Promise<string | undefined>
+  repoContains(taskId: string, repo: string, sha: string): Promise<boolean>
+  repoSync(taskId: string, repo: string): Promise<'current' | 'rebased' | 'conflict'>
+  repoPush(taskId: string, repo: string): Promise<string>
+}
+
+export class MultiWorkspaces implements RepoWorkspaces {
   private parts?: Promise<{ clone: RepoClone; workspaces: GitWorkspaces }[]>
 
   constructor(
@@ -65,12 +74,38 @@ export class MultiWorkspaces implements Workspaces {
     return total
   }
 
+  async names() {
+    return (await this.all()).map(({ clone }) => clone.name)
+  }
+
   async changed(taskId: string) {
     return (await this.changedParts(taskId)).map(({ clone }) => clone.name)
   }
 
   async head() {
     return undefined
+  }
+
+  async repoHead(taskId: string, repo: string) {
+    return (await this.part(repo)).head(taskId)
+  }
+
+  async repoContains(taskId: string, repo: string, sha: string) {
+    return (await this.part(repo)).contains(taskId, sha)
+  }
+
+  async repoSync(taskId: string, repo: string) {
+    return (await this.part(repo)).syncBase(taskId)
+  }
+
+  async repoPush(taskId: string, repo: string) {
+    return (await this.part(repo)).push(taskId)
+  }
+
+  private async part(repo: string) {
+    const found = (await this.all()).find(({ clone }) => clone.name === repo)
+    if (!found) throw new Error(`no repository ${repo} in the task workspace`)
+    return found.workspaces
   }
 
   async contains() {

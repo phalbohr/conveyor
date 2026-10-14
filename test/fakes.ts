@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path'
 import { FakeHarness, type Script } from '../src/harness/fake.js'
 import type { StageRun } from '../src/harness/harness.js'
 import type { Workspaces } from '../src/workspaces.js'
+import type { RepoWorkspaces } from '../src/multi-workspaces.js'
 import { tempDir } from './helpers.js'
 
 export class FakeWorkspaces implements Workspaces {
@@ -107,4 +108,36 @@ export function stageHarness(script: Script = () => ({ outcome: 'done', summary:
 
 export function stageRuns(harness: FakeHarness): StageRun[] {
   return harness.runs.filter((run) => run.stage !== 'triage')
+}
+
+export class FakeRepoWorkspaces extends FakeWorkspaces implements RepoWorkspaces {
+  repos = ['frontend', 'user-service']
+  changedRepos = ['frontend', 'user-service']
+  readonly repoSyncs = new Map<string, ('current' | 'rebased' | 'conflict')[]>()
+  readonly repoPushes: string[] = []
+
+  async names() {
+    return [...this.repos]
+  }
+
+  async changed() {
+    return [...this.changedRepos]
+  }
+
+  async repoHead(taskId: string) {
+    return taskId.padStart(40, '0')
+  }
+
+  async repoContains() {
+    return true
+  }
+
+  async repoSync(_taskId: string, repo: string) {
+    return this.repoSyncs.get(repo)?.shift() ?? 'current'
+  }
+
+  async repoPush(taskId: string, repo: string) {
+    this.repoPushes.push(`${repo}:${taskId}`)
+    return taskId.padStart(40, '0')
+  }
 }

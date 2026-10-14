@@ -310,12 +310,12 @@ describe('group boards and several repositories', () => {
     expect(config('board: {provider: gitlab, project: shop/frontend}\n').repos).toBeUndefined()
   })
 
-  it('accepts a group board for GitLab and says that several repositories are not available yet', () => {
+  it('accepts a group board and several repositories for GitLab', () => {
     expect(config(gitlab).board.group).toBe('shop')
     expect(errors('board: {provider: gitlab, project: other/frontend, group: shop}\n')).toContain('config.yaml: board.project: must be a project of board.group shop; new tasks are created there')
-    expect(errors(`${gitlab}repos: {include: [frontend, user-service], base: {frontend: develop}}\n`, 'repo_paths: {frontend: ../parent/frontend}\n')).toEqual([
-      'config.yaml: repos: several repositories per task come with conveyor 0.3.0 and are not available yet',
-    ])
+    const loaded = config(`${gitlab}repos: {include: [frontend, user-service], base: {frontend: develop}}\n`, 'repo_paths: {frontend: ../parent/frontend}\n')
+    expect(loaded.repos).toEqual({ group: 'shop', include: ['frontend', 'user-service'], exclude: [], base: { frontend: 'develop' } })
+    expect(loaded.repo_paths).toEqual({ frontend: '../parent/frontend' })
   })
 
   it('rejects them on GitHub and checks the repository names', () => {
