@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- GitLab: one feature in several repositories. `repos` (`group`, `include`, `exclude`, `base`) makes the workspace of a task a folder with a worktree of every repository of the group side by side; the plan returns the repositories in merge order (`repos` in the stage result), every changed repository gets one merge request that is approved on its own, and the feature merges as a whole, in that order, only when every merge request is approved and green. Base CI is checked and guarded per repository. `repo_paths` in `local.yaml` uses existing clones, for example submodules of an umbrella repository; the others are cloned into `~/.conveyor/repos/`.
 - GitLab group boards: `board.group` makes the board and its labels cover every project of the group. Tasks are named `project#number` (for example `frontend#12`) on the screen, in the log, and in commands such as `conveyor attach frontend#12`; issue work goes to the project of each issue, new tasks are created in `board.project`, and merge requests link the issue with its full reference.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
 

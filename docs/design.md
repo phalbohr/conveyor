@@ -443,12 +443,12 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 
 ## Group boards and several repositories
 
-GitLab only. Group boards work; several repositories per task are planned for 0.3.0. The single-repository setup stays the default: without the keys below, the conveyor works on `board.project` with one branch and one merge request per task.
+GitLab only. Without the keys below, the conveyor works as before on `board.project` with one branch and one merge request per task; monorepos need nothing else.
 
 ```yaml
 board:
   provider: gitlab
-  project: <group>/<project>   # main project: new tasks and fix tasks are created here; local files are named after it
+  project: <group>/<project>   # main project: new tasks and fix tasks are created here; locks live here; local files are named after it
   group: <group>               # the board and its labels cover every project of the group
 repos:                         # tasks can change several repositories
   group: <group>               # default: board.group
@@ -457,17 +457,19 @@ repos:                         # tasks can change several repositories
   base: {frontend: develop}    # default: the default branch of each project
 ```
 
-`local.yaml` names existing local clones: `repo_paths: {frontend: ../umbrella/frontend}`; other repositories are cloned under `~/.conveyor/repos/`.
+`local.yaml` names existing local clones, for example submodules of an umbrella repository: `repo_paths: {frontend: ../umbrella/frontend}`. Other repositories are cloned once into `~/.conveyor/repos/<group>/<name>`. A clone whose `origin` is another project is refused. The conveyor can be initialized in any repository; it only holds `.conveyor/`.
 
-- One feature is one issue, in any project of the group. A task is named by its full reference `project#number`.
-- The `plan` stage names the repositories the task changes and the order in which their merge requests merge; the conveyor labels the task `repo::<name>`.
-- The workspace of a task is one folder with a worktree of every repository of the set, side by side (`<task>/frontend`, `<task>/user-service`), so every stage sees the whole system; hooks run once in that folder (`after_create` sees all worktrees). Only repositories with commits get the branch `conveyor/<task>` pushed and one merge request that says `Part of <issue>`.
-- Clones: the conveyor lists the projects of `repos.group` (with subgroups, without archived ones), keeps `include` and drops `exclude`, and uses the clone from `repo_paths` or clones the project once into `~/.conveyor/repos/<group>/<name>`. A clone whose `origin` is another project is refused. Worktrees and the branches `conveyor/*` are created in these clones.
+**Group board.** The conveyor lists the open issues of every project of `board.group` (with subgroups), keeps its labels on the group, checks write access against the members of the group, and links the board of the group. A task is `<project path below the group>#<number>`, for example `frontend#12`, on the screen, in the log, and in commands (`conveyor attach frontend#12`). Issue work (labels, comments, owner, blockers, also across projects) goes to the project of each issue. Branches and locks use `frontend-12`, local folders `frontend-12` (a `/` becomes `+`). Merge requests link the issue with its full reference (`group/frontend#12`).
+
+**One feature, several repositories.**
+- The workspace of a task is one folder with a worktree of every repository of the set, side by side (`frontend-12/frontend`, `frontend-12/user-service`), so every stage sees the whole system; the prompt names them in a section `Repositories`. Hooks run once in that folder.
+- The `plan` stage returns in `repos` the repositories it changes in merge order (for example a service before the frontend that uses its new API). The repositories the task really changed get the branch `conveyor/<task>` and one merge request each, which says `Part of <issue>`; the others get none. The workpad lists the merge requests.
+- Review: every merge request is approved on its own, in its project: an Approve review or a comment `/approve` on that merge request, `review.approvals` each. `/approve` on the issue does not count; `/fix`, `/fix_from:`, and `/rework` work on the issue or on any merge request.
+- Landing: the feature merges as a whole. Every merge request must be approved, ready, and green, and its branch must be on top of its latest base; then the conveyor merges them one after another, in the planned order, under the merge lock. Failed checks in one repository merge nothing. When a later merge fails after an earlier one merged, the earlier one stays merged, the error names the repository, and the repair stages or a human take over.
+- Base CI: the conveyor checks the CI of each merge commit on its base and guards the base of every repository of the set. A red base of any repository creates the one fix task (`fix::ci`); the merged task does not repair it itself.
+- The order between features comes from triage (blocked-by links).
+- A linked merge request of a human is not offered for `/continue`: tasks with several repositories always start from the base branches.
 - Artifacts stored in the repository name the repository as the first folder of their path, for example `frontend/docs/plans`.
-- Every merge request is approved on its own. The feature lands as a whole: all its merge requests merge, in the planned order and under the merge lock, only when every one is approved and green. When a later one fails to merge after an earlier one merged, the task becomes the fixer (`fix::ci`).
-- Base CI checks and the fixer rule apply per repository. The order between features comes from triage (blocked-by links).
-- Group board: the conveyor lists the open issues of every project of `board.group` (with subgroups), keeps its labels on the group, checks write access against the members of the group, and links the board of the group. Issue work (labels, comments, owner, blockers) goes to the project of each issue; locks, branches, and merge requests stay in `board.project` until several repositories are available. A task is `<project path below the group>#<number>`, for example `frontend#12`; branches and locks use `frontend-12`, local folders `frontend-12` (a `/` becomes `+`). Pull request bodies use the full reference (`group/frontend#12`) so that GitLab links them across projects.
-- Until several repositories are ready, the conveyor refuses `repos` with a clear error.
 
 ## Triage
 
