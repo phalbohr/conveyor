@@ -1,4 +1,4 @@
-import type { Task } from '../board/board.js'
+import { taskRef, type Task } from '../board/board.js'
 
 export type GateMode = 'interactive' | 'autonomous' | 'smart'
 
@@ -46,7 +46,7 @@ When the task really needs one of these steps, return outcome \`questions\` and 
 
 export function buildPrompt(input: PromptInput): string {
   const sections = [
-    `You run the "${input.stage}" stage of the development conveyor for task #${input.task.id}: ${input.task.title}`,
+    `You run the "${input.stage}" stage of the development conveyor for task ${taskRef(input.task.id)}: ${input.task.title}`,
     `## Stage instructions\n\n${input.instructions.trim() || 'No extra instructions.'}`,
     BOUNDARIES,
   ]
@@ -113,7 +113,7 @@ export function buildTriagePrompt(input: { instructions: string; tasks: Task[]; 
         `priority: ${task.priority ?? 'none'}`,
         input.fresh.includes(task.id) ? 'NEW' : '',
       ].filter(Boolean)
-      return `### #${task.id} ${task.title} (${marks.join(', ')})\n\n${task.body.trim().slice(0, 1500) || '(empty)'}`
+      return `### ${taskRef(task.id)} ${task.title} (${marks.join(', ')})\n\n${task.body.trim().slice(0, 1500) || '(empty)'}`
     })
     .join('\n\n')
   return `${[

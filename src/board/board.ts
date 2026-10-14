@@ -48,9 +48,19 @@ export type LinkedPull = { number: string; url: string; branch: string; draft: b
 
 export type MergeMethod = 'merge' | 'squash' | 'rebase'
 
+export const taskSlug = (id: string) => id.replace('#', '-')
+
+export const taskFile = (id: string) => taskSlug(id).replaceAll('/', '+')
+
+export const taskOfFile = (name: string) => (/^\d+$/.test(name) ? name : name.replaceAll('+', '/').replace(/-(\d+)$/, '#$1'))
+
+export const taskRef = (id: string) => (id.includes('#') ? id : `#${id}`)
+
 export interface Board {
   user(): Promise<string>
   boardUrl(): Promise<string>
+  branchUrl(branch: string): Promise<string>
+  reference(id: string): string
   baseBranch(): Promise<string>
   inspect(): Promise<BoardInspection>
   syncMirror(tasks: Task[]): Promise<number>

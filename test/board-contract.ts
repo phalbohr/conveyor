@@ -65,8 +65,9 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
 
     it('sets and clears the owner', async () => {
       const t = await task({ form: 'plan' })
-      await board.setOwner(t.id, 'someone')
-      expect((await board.getTask(t.id))?.owner).toBe('someone')
+      const me = await board.user()
+      await board.setOwner(t.id, me)
+      expect((await board.getTask(t.id))?.owner).toBe(me)
       await board.setOwner(t.id, undefined)
       expect((await board.getTask(t.id))?.owner).toBeUndefined()
     })
@@ -112,7 +113,7 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
 
     it('reports the author of a task', async () => {
       const t = await task({ form: 'plan' })
-      expect((await board.getTask(t.id))?.url).toMatch(new RegExp(`${t.id}$`))
+      expect((await board.getTask(t.id))?.url).toMatch(new RegExp(`\\D${t.id.split('#').at(-1)}$`))
       expect((await board.getTask(t.id))?.author).toBe(await board.user())
     })
 

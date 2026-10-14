@@ -44,6 +44,18 @@ describe('GitWorkspaces', () => {
     expect(await manager.list()).toEqual(['7'])
   })
 
+  it('names the branch, lease, and folder of a group task after its reference and lists it by that reference', async () => {
+    const { project } = repository()
+    const manager = workspaces(project)
+    const created = await manager.prepare('shop/frontend#12')
+    expect(git(created.path, 'branch', '--show-current')).toBe('conveyor/shop/frontend-12')
+    expect(created.path.endsWith('shop+frontend-12')).toBe(true)
+    await manager.prepare('7')
+    expect((await manager.list()).sort()).toEqual(['7', 'shop/frontend#12'])
+    await manager.push('shop/frontend#12')
+    expect(git(project, 'ls-remote', '--heads', 'origin', 'conveyor/shop/frontend-12')).toContain('refs/heads/conveyor/shop/frontend-12')
+  })
+
   it('continues the remote task branch', async () => {
     const { project, seed } = repository()
     git(seed, 'switch', '-c', 'conveyor/9')

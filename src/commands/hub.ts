@@ -13,6 +13,7 @@ import { applyBoardUpdate } from './board.js'
 import { attachCommand, createTaskCommand, harnessCommand, helpSessionCommand, newCommand, writeCommand } from './live.js'
 import { modelsFile } from './models.js'
 import { releaseCommand } from './run.js'
+import { taskRef } from '../board/board.js'
 
 export async function hub(context: Context, setup: RunnerSetup, options: { start?: boolean } = {}): Promise<number> {
   const runner = new Runner(context, setup)
@@ -49,10 +50,10 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     async toggleIdea(id) {
       const task = await board.getTask(id)
       if (!task) throw new Error(`task ${id} not found`)
-      if (task.form && task.form !== 'idea') return `#${id} has form::${task.form}; change it on the board.`
+      if (task.form && task.form !== 'idea') return `${taskRef(id)} has form::${task.form}; change it on the board.`
       await board.setForm(id, task.form ? undefined : 'idea')
       if (!task.state) await board.setState(id, 'backlog')
-      return task.form ? `Removed form::idea from #${id}.` : `Set form::idea on #${id}: the conveyor may take it.`
+      return task.form ? `Removed form::idea from ${taskRef(id)}.` : `Set form::idea on ${taskRef(id)}: the conveyor may take it.`
     },
     async open(url) {
       const opened = await context.run(process.platform === 'darwin' ? 'open' : 'xdg-open', [url])

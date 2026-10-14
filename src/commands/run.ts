@@ -119,12 +119,12 @@ export function prepare(context: Context): Prepared | undefined {
 }
 
 export function boardAdapter(context: Context, config: Config): Board {
-  const { provider, project, github_project, base_branch } = config.board
+  const { provider, project, github_project, base_branch, group } = config.board
   const warn = (message: string) => context.stderr(`warning: ${message}\n`)
   return (
     context.boardFor?.(config) ??
     (provider === 'gitlab'
-      ? new GitLabBoard(project, context.run, base_branch ? { baseBranch: base_branch } : {})
+      ? new GitLabBoard(project, context.run, { ...(base_branch ? { baseBranch: base_branch } : {}), ...(group ? { group } : {}) })
       : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), ...(base_branch ? { baseBranch: base_branch } : {}), warn }))
   )
 }

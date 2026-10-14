@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { plain } from './engine/workpad.js'
+import { taskFile } from './board/board.js'
 
 const TEXT_LINES = 6
 const LINE_WIDTH = 240
@@ -8,7 +9,7 @@ const LINE_WIDTH = 240
 type Json = Record<string, unknown>
 
 export function sessionFile(home: string, project: string, id: string) {
-  return join(home, '.conveyor', 'sessions', project.replaceAll('/', '-'), `${id}.log`)
+  return join(home, '.conveyor', 'sessions', project.replaceAll('/', '-'), `${taskFile(id)}.log`)
 }
 
 export function readSession(file: string) {

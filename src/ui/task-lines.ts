@@ -1,4 +1,4 @@
-import type { Comment, PullRequest, Task } from '../board/board.js'
+import { taskRef, type Comment, type PullRequest, type Task } from '../board/board.js'
 import { dateTime } from './time.js'
 import type { Line } from './status-lines.js'
 
@@ -34,7 +34,7 @@ export function taskLines(detail: TaskDetail, target: Target): Line[] {
     .join(' · ')
   if (target === 'pull' && pull) {
     return [
-      { text: `#${task.id} ${task.title} · pull request ${pull.number}`, tone: 'title' },
+      { text: `${taskRef(task.id)} ${task.title} · pull request ${pull.number}`, tone: 'title' },
       { text: `${pull.state} · checks ${pull.checks} · mergeable ${pull.mergeable} · ${pull.url}`, tone: 'muted' },
       { text: '' },
       { text: `Reviews (${pull.reviews.length})`, tone: 'title' },
@@ -46,7 +46,7 @@ export function taskLines(detail: TaskDetail, target: Target): Line[] {
     ]
   }
   return [
-    { text: `#${task.id} ${task.title}`, tone: 'title' },
+    { text: `${taskRef(task.id)} ${task.title}`, tone: 'title' },
     { text: `${labels || 'no conveyor labels'} · ${task.url}`, tone: 'muted' },
     ...(pull ? [{ text: `pull request ${pull.number} · ${pull.state} · checks ${pull.checks} · [p] open it here`, tone: 'muted' as const }] : []),
     { text: '' },

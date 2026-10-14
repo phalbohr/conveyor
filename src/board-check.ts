@@ -1,4 +1,4 @@
-import { CONVEYOR_PREFIXES, TASK_STATES, boardLabels, type Board } from './board/board.js'
+import { CONVEYOR_PREFIXES, TASK_STATES, boardLabels, taskRef, type Board } from './board/board.js'
 import type { Config } from './config.js'
 import { projectGap, projectGapLine, type ProjectGap } from './project-setup.js'
 
@@ -38,7 +38,7 @@ export function boardCheckLines(check: BoardCheck): string[] {
   if (check.missing.length) lines.push(`Missing labels this version uses (conveyor board update adds them): ${check.missing.join(', ')}`)
   if (check.field === 'missing') lines.push('The GitHub project has no Conveyor field (conveyor board update adds it)')
   else if (check.field) lines.push(`The Conveyor field of the GitHub project lacks the options ${check.field.missingOptions.join(', ')} (conveyor board update adds them and keeps the existing options and card values)`)
-  for (const issue of check.outdated) lines.push(`#${issue.id} ${issue.title} has labels this version does not use: ${issue.labels.join(', ')}; relabel it by hand`)
+  for (const issue of check.outdated) lines.push(`${taskRef(issue.id)} ${issue.title} has labels this version does not use: ${issue.labels.join(', ')}; relabel it by hand`)
   if (check.unused.length) lines.push(`Labels this version does not use (left untouched; delete them by hand if no task needs them): ${check.unused.join(', ')}`)
   return lines
 }

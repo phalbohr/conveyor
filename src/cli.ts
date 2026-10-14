@@ -208,7 +208,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
   program
     .command('attach')
     .description('answer the questions of a waiting task in a live harness session')
-    .argument('<issue>', 'issue number on the board, for example 51')
+    .argument('<issue>', 'issue number on the board, for example 51 (frontend#12 on a group board)')
     .action(async (issue: string) => {
       exitCode = validIssue(context, issue) ? await attachCommand(context, issue) : 1
     })
@@ -216,7 +216,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
   program
     .command('release')
     .description('release the claim of a task')
-    .argument('<issue>', 'issue number on the board, for example 51')
+    .argument('<issue>', 'issue number on the board, for example 51 (frontend#12 on a group board)')
     .option('--force', 'release a task with private artifacts of another member')
     .action(async (issue: string, options: { force?: boolean }) => {
       exitCode = validIssue(context, issue) ? await releaseCommand(context, issue, options.force ?? false) : 1
@@ -225,7 +225,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
   program
     .command('watch')
     .description('show what the harness does in the stages of a task (needs session_logs: true)')
-    .argument('<issue>', 'issue number on the board, for example 51')
+    .argument('<issue>', 'issue number on the board, for example 51 (frontend#12 on a group board)')
     .option('-f, --follow', 'keep showing new lines until Ctrl+C')
     .action(async (issue: string, options: { follow?: boolean }) => {
       exitCode = validIssue(context, issue) ? await watchCommand(context, issue, options.follow ?? false) : 1
@@ -234,7 +234,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
   program
     .command('reset')
     .description('stop a task, close its pull request, delete its branch and workspace, clear its workpad, and return it to Backlog')
-    .argument('<issue>', 'issue number on the board, for example 51')
+    .argument('<issue>', 'issue number on the board, for example 51 (frontend#12 on a group board)')
     .addOption(new Option('--form <form>', 'form to start again with; default: the form the conveyor took it with').choices(['idea', 'story', 'plan', 'none']))
     .action(async (issue: string, options: { form?: 'idea' | 'story' | 'plan' | 'none' }) => {
       exitCode = validIssue(context, issue) ? await resetCommand(context, issue, options.form) : 1
@@ -320,8 +320,8 @@ function report(context: Context, result: InitResult, json: boolean): number {
 }
 
 function validIssue(context: Context, issue: string) {
-  if (/^\d+$/.test(issue)) return true
-  context.stderr(`${issue} is not an issue number; use the bare number, for example 51\n`)
+  if (/^\d+$/.test(issue) || /^\w[\w.-]*(\/\w[\w.-]*)*#\d+$/.test(issue)) return true
+  context.stderr(`${issue} is not an issue number; use the bare number, for example 51, or project#number on a group board, for example frontend#12\n`)
   return false
 }
 

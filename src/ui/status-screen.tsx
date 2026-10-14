@@ -7,6 +7,7 @@ import type { StatusSnapshot } from '../status.js'
 import { BACKLOG, CELL_WIDTH, STATUS_COLUMNS, boardLines, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
 import { clock } from './time.js'
 import { taskLines, type SessionView, type Target, type TaskControl, type TaskDetail } from './task-lines.js'
+import { taskRef, taskSlug } from '../board/board.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 const LOG_LINES = 30
@@ -284,7 +285,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       if (input?.kind === 'reset' && form && control) {
         const { id } = input
         setInput(undefined)
-        setMessage({ text: `Resetting #${id}: stopping its stage, closing its pull request, deleting its branch and workspace…` })
+        setMessage({ text: `Resetting ${taskRef(id)}: stopping its stage, closing its pull request, deleting its branch and workspace…` })
         void control
           .reset(id, form)
           .then((text) => {
@@ -387,13 +388,13 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       )}
       {input?.kind === 'reset' && (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="yellow">{`Reset #${input.id}: stop its stage, close its pull request, delete the branch conveyor/${input.id} and its workspace, clear the workpad, and return it to Backlog.`}</Text>
+          <Text color="yellow">{`Reset ${taskRef(input.id)}: stop its stage, close its pull request, delete the branch conveyor/${taskSlug(input.id)} and its workspace, clear the workpad, and return it to Backlog.`}</Text>
           <Text color="cyan">Start again as: [i] idea · [s] story · [p] plan · [d] draft without a form · [Esc] cancel</Text>
         </Box>
       )}
       {input?.kind === 'comment' && control && (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="cyan">{`Comment on #${input.id}${input.target === 'pull' ? ' (pull request)' : ''} · Enter posts · Esc cancels`}</Text>
+          <Text color="cyan">{`Comment on ${taskRef(input.id)}${input.target === 'pull' ? ' (pull request)' : ''} · Enter posts · Esc cancels`}</Text>
           <TextInput
             placeholder="your comment, for example /approve or an answer"
             onSubmit={(value) => {
@@ -403,7 +404,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
               control
                 .comment(input.id, input.target, body)
                 .then(() => {
-                  setMessage({ text: `Comment posted on #${input.id}.` })
+                  setMessage({ text: `Comment posted on ${taskRef(input.id)}.` })
                   refresh()
                   if (panel === 'task') openTask(input.id, input.target)
                 })
@@ -463,12 +464,12 @@ function viewport(lines: Line[], scroll: number, room: number, columns: number):
 
 function watchLines(id: string, session: SessionView, follow: boolean): Line[] {
   const file = session.file.replace(/^.*?\/\.conveyor\//, '~/.conveyor/')
-  const header: Line = { text: `Watch #${id} · ${follow ? 'follows the stage' : 'paused, ↓ at the end follows again'} · ${file}`, tone: 'title' }
+  const header: Line = { text: `Watch ${taskRef(id)} · ${follow ? 'follows the stage' : 'paused, ↓ at the end follows again'} · ${file}`, tone: 'title' }
   if (session.lines.length === 0) {
     return [
       header,
       session.enabled
-        ? { text: `  nothing recorded yet: the next stage of #${id} writes here`, tone: 'muted' }
+        ? { text: `  nothing recorded yet: the next stage of ${taskRef(id)} writes here`, tone: 'muted' }
         : { text: '  session logs are off: turn on "Session logs for watch" in [e] settings (Personal); stages that start after that are recorded', tone: 'muted' },
     ]
   }

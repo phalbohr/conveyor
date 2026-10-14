@@ -1,4 +1,4 @@
-import type { Board, Task } from './board/board.js'
+import { taskRef, type Board, type Task } from './board/board.js'
 import { harnessesInUse } from './commands/models.js'
 import { quotaFile, usageFile } from './commands/run.js'
 import type { Config } from './config.js'
@@ -112,7 +112,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     }
     mine.push(entry)
   }
-  for (const entry of mine) if (fixer && entry.id !== fixer && (entry.stage === 'merge' || entry.stage === 'land') && (entry.state === 'in-progress' || entry.state === 'queued' || entry.answered)) entry.held = `waits: task #${fixer} fixes the CI first`
+  for (const entry of mine) if (fixer && entry.id !== fixer && (entry.stage === 'merge' || entry.stage === 'land') && (entry.state === 'in-progress' || entry.state === 'queued' || entry.answered)) entry.held = `waits: task ${taskRef(fixer)} fixes the CI first`
   mine.sort((a, b) => Number(a.id) - Number(b.id))
   const backlog = tasks
     .filter((task) => !task.owner && task.state !== 'done' && (task.state !== undefined || task.form !== undefined))

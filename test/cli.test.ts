@@ -30,11 +30,14 @@ describe('conveyor CLI', () => {
 })
 
 describe('issue arguments', () => {
-  it('accepts only bare issue numbers', async () => {
-    for (const command of ['attach', 'release', 'reset']) {
-      const result = await runCli([command, '../12'])
-      expect(result.code).toBe(1)
-      expect(result.stderr).toContain('is not an issue number')
+  it('accepts only bare issue numbers or project#number references', async () => {
+    for (const command of ['attach', 'release', 'reset', 'watch']) {
+      for (const issue of ['../12', '../x#1', '#12', 'frontend#']) {
+        const result = await runCli([command, issue])
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('is not an issue number')
+      }
+      for (const issue of ['12', 'frontend#12', 'shop/user-service#3']) expect((await runCli([command, issue])).stderr).not.toContain('is not an issue number')
     }
   })
 })

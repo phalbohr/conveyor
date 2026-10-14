@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { labelsToTask } from '../src/board/board.js'
+import { labelsToTask, taskFile, taskOfFile, taskRef, taskSlug } from '../src/board/board.js'
 import { FakeBoard } from '../src/board/fake.js'
 import { GitHubBoard } from '../src/board/github.js'
 import { GitLabBoard } from '../src/board/gitlab.js'
@@ -91,3 +91,63 @@ if (gitlab) {
     },
   })
 }
+
+const group = process.env.CONVEYOR_GITLAB_GROUP
+const groupProject = process.env.CONVEYOR_GITLAB_GROUP_PROJECT
+if (group && groupProject) {
+  const glab = async (...args: string[]) => {
+    for (let attempt = 1; ; attempt++) {
+      const result = await createRun()('glab', ['api', ...args])
+      if (result.code === 0) return result.stdout.trim()
+      if (attempt >= 4 || !/dial tcp|i\/o timeout|connection reset|EOF/i.test(result.stderr)) throw new Error(result.stderr)
+      await new Promise((resolve) => setTimeout(resolve, 2_000))
+    }
+  }
+  const project = (path: string) => `projects/${encodeURIComponent(path)}`
+  const make = () => new GitLabBoard(groupProject, createRun(), { group })
+  boardContract('gitlab group', make, {
+    timeout: 180_000,
+    prepareBranch: async (id) => {
+      const branch = `conveyor/${taskSlug(id)}`
+      await glab('-X', 'POST', `${project(groupProject)}/repository/branches`, '-f', `branch=${branch}`, '-f', 'ref=develop')
+      await glab('-X', 'POST', `${project(groupProject)}/repository/files/${encodeURIComponent(`contract/${taskFile(id)}.txt`)}`, '-f', `branch=${branch}`, '-f', `content=task ${id}`, '-f', `commit_message=Contract test ${id}`)
+    },
+    removeBranch: async (id) => {
+      await glab('-X', 'DELETE', `${project(groupProject)}/repository/branches/${encodeURIComponent(`conveyor/${taskSlug(id)}`)}`).catch(() => undefined)
+    },
+  })
+
+  describe('gitlab group board across projects', { timeout: 180_000 }, () => {
+    it('lists, labels, comments, and blocks a task of another project of the group', async () => {
+      const board = make()
+      const other = (JSON.parse(await glab(`groups/${encodeURIComponent(group)}/projects?per_page=100`)) as { path_with_namespace: string }[]).map((item) => item.path_with_namespace).find((path) => path !== groupProject)
+      if (!other) throw new Error(`the group ${group} needs a second project`)
+      const created = JSON.parse(await glab('-X', 'POST', `${project(other)}/issues`, '-f', 'title=group contract task', '-f', 'description=body', '-f', 'labels=conveyor::backlog,form::plan')) as { iid: number }
+      const id = `${other.slice(group.length + 1)}#${created.iid}`
+      try {
+        expect((await board.listTasks()).map((task) => task.id)).toContain(id)
+        await board.setState(id, 'in-progress')
+        expect((await board.getTask(id))?.state).toBe('in-progress')
+        const comment = await board.addComment(id, 'first')
+        await board.updateComment(comment.id, 'second')
+        expect((await board.listComments(id)).map((item) => item.body)).toContain('second')
+        const blocker = await board.createTask('group contract blocker', 'body', { state: 'backlog', form: 'plan' })
+        await board.addBlocker(id, blocker.id)
+        expect((await board.getTask(id))?.openBlockers).toBe(1)
+        expect(board.reference(id)).toBe(`${other}#${created.iid}`)
+        await board.closeTask(blocker.id)
+      } finally {
+        await glab('-X', 'PUT', `${project(other)}/issues/${created.iid}`, '-f', 'state_event=close')
+      }
+    })
+  })
+}
+
+describe('task references', () => {
+  it('turns a reference into a branch name, a flat file name, and back', () => {
+    for (const id of ['12', 'frontend#12', 'shop/sub/user-service#7', 'svc-2#5']) expect(taskOfFile(taskFile(id))).toBe(id)
+    expect(taskSlug('shop/frontend#12')).toBe('shop/frontend-12')
+    expect(taskFile('shop/frontend#12')).toBe('shop+frontend-12')
+    expect([taskRef('12'), taskRef('frontend#12')]).toEqual(['#12', 'frontend#12'])
+  })
+})

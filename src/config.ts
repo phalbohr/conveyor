@@ -23,7 +23,7 @@ const model = z.string().regex(/^[\w.:/@+][\w.:/@+-]*$/, 'a model name: letters,
 const effort = z.string().regex(/^\w[\w-]*$/, 'an effort: letters, digits, and -')
 const count = z.int().positive()
 const branch = z.string().regex(/^[\w.][\w./-]*$/, 'a branch name: letters, digits, ".", "_", "-", "/"')
-const gitlabPath = z.string().regex(/^[\w.-]+(\/[\w.-]+)*$/, 'a GitLab path such as group/subgroup or group/project')
+const gitlabPath = z.string().regex(/^\w[\w.-]*(\/\w[\w.-]*)*$/, 'a GitLab path such as group/subgroup or group/project')
 const store = z.enum(['board', 'repo', 'path'])
 const write = z.enum(['replace', 'append'])
 const gateMode = z.enum(['interactive', 'autonomous', 'smart'])
@@ -238,9 +238,9 @@ export function loadConfig(settingsDir: string): LoadResult {
 function resolveRepos(team: Team, local: Local, errors: string[]): Repos | undefined {
   const gitlab = team.board.provider === 'gitlab'
   if (team.board.group && !gitlab) errors.push(`${CONFIG_FILE}: board.group: group boards need provider gitlab`)
+  if (team.board.group && !team.board.project.startsWith(`${team.board.group}/`)) errors.push(`${CONFIG_FILE}: board.project: must be a project of board.group ${team.board.group}; new tasks are created there`)
   if (!team.repos) {
     if (Object.keys(local.repo_paths).length > 0) errors.push(`${LOCAL_FILE}: repo_paths: the team configuration has no repos`)
-    if (team.board.group) errors.push(`${CONFIG_FILE}: board.group: group boards come with conveyor 0.3.0 and are not available yet`)
     return undefined
   }
   if (!gitlab) errors.push(`${CONFIG_FILE}: repos: several repositories need provider gitlab`)
