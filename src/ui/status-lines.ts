@@ -5,7 +5,7 @@ import { dateTime } from './time.js'
 import type { StatusSnapshot } from '../status.js'
 import { taskRef } from '../board/board.js'
 
-export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean; marked?: boolean }[]; cells?: [string, string]; cellWidth?: number; selected?: boolean }
+export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean; marked?: boolean; flash?: boolean }[]; cells?: [string, string]; cellWidth?: number; selected?: boolean }
 export const CELL_WIDTH = 28
 
 const row = (left: string, right: string): Line => ({ text: `  ${left.padEnd(CELL_WIDTH - 2)}${right}`, cells: [`  ${left}`, right] })
@@ -61,7 +61,15 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
     })
 }
 
-export function statusLines(status: StatusSnapshot, here?: string, view?: StatusView): Line[] {
+export function arrivedColumns(before: StatusSnapshot | undefined, after: StatusSnapshot): number[] {
+  if (!before) return []
+  return STATUS_COLUMNS.flatMap((_label, column) => {
+    const known = new Set(columnTasks(before, column).map((task) => task.id))
+    return columnTasks(after, column).some((task) => !known.has(task.id)) ? [column] : []
+  })
+}
+
+export function statusLines(status: StatusSnapshot, here?: string, view?: StatusView, flash: number[] = []): Line[] {
   const { limits } = status
   const runner = here ?? (status.runner.running ? `running (pid ${status.runner.pid})` : 'stopped')
   const lines: Line[] = [
@@ -80,7 +88,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   )
   lines.push({
     text: `my board: ${columns.join(' · ')}`,
-    segments: [{ text: 'my board: ' }, ...columns.flatMap((text, index) => [...(index ? [{ text: ' · ' }] : []), { text, selected: view?.column === index && view.focus === 'columns', marked: view?.column === index && view.focus === 'tasks' }])],
+    segments: [{ text: 'my board: ' }, ...columns.flatMap((text, index) => [...(index ? [{ text: ' · ' }] : []), { text, selected: view?.column === index && view.focus === 'columns', marked: view?.column === index && view.focus === 'tasks', flash: flash.includes(index) }])],
     tone: limits.awaitingMe.used >= limits.awaitingMe.limit || limits.awaitingReview.used >= limits.awaitingReview.limit ? 'warning' : 'muted',
   })
   if (!view) {

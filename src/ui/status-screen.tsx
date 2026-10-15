@@ -4,13 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Activity } from '../engine/engine.js'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
-import { BACKLOG, CELL_WIDTH, STATUS_COLUMNS, boardLines, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
+import { BACKLOG, CELL_WIDTH, arrivedColumns, STATUS_COLUMNS, boardLines, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
 import { clock } from './time.js'
 import { taskLines, type SessionView, type Target, type TaskControl, type TaskDetail } from './task-lines.js'
 import { taskRef, taskSlug } from '../board/board.js'
 
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 const LOG_LINES = 30
+const FLASH_MS = 250
 const WATCH_LINES = 2_000
 
 export type RunnerControl = {
@@ -67,6 +68,8 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const [tick, setTick] = useState(0)
   const [watched, setWatched] = useState<{ id: string; from: Panel; follow: boolean }>()
   const shown = useRef({ start: 0, last: 0 })
+  const seen = useRef<StatusSnapshot>(undefined)
+  const [flash, setFlash] = useState<{ columns: number[]; phase: number }>()
 
   const refresh = useCallback(
     (force?: boolean, done?: () => void) => {
@@ -101,6 +104,17 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
     const timer = setInterval(() => setTick((value) => value + 1), 1_000)
     return () => clearInterval(timer)
   }, [panel])
+  useEffect(() => {
+    if (!loaded) return
+    const arrived = arrivedColumns(seen.current, loaded)
+    seen.current = loaded
+    if (arrived.length) setFlash({ columns: arrived, phase: 0 })
+  }, [loaded])
+  useEffect(() => {
+    if (!flash) return
+    const timer = setTimeout(() => setFlash(flash.phase < 3 ? { ...flash, phase: flash.phase + 1 } : undefined), FLASH_MS)
+    return () => clearTimeout(timer)
+  }, [flash])
   const activity = runner?.activity?.() ?? {}
   const status = loaded && { ...loaded, runner: { ...loaded.runner, here: runner?.running ?? false }, mine: loaded.mine.map((task) => (activity[task.id] ? { ...task, activity: activity[task.id] } : task)) }
 
@@ -316,7 +330,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
               ? taskLines(opened.detail, opened.target)
               : [{ text: `Loading task #${opened?.id ?? ''}…`, tone: 'muted' as const }]
             : status
-              ? statusLines(status, runner?.running ? (runner.finishing ? 'finishing the running stages, then stops' : 'running here') : undefined, view)
+              ? statusLines(status, runner?.running ? (runner.finishing ? 'finishing the running stages, then stops' : 'running here') : undefined, view, flash && flash.phase % 2 === 0 ? flash.columns : [])
               : []
   const footer = keyBar(panel, view, runner, opened, updated)
   const room = Math.max(3, rows - 1 - heightOf(footer, columns) - heightOf(message?.text ?? '', columns) - (input ? 4 : 0) - (error ? 1 : 0) - 1)
@@ -346,7 +360,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
           <Text key={index} {...(line.tone ? { color: COLORS[line.tone] } : {})} bold={line.tone === 'title'}>
             {line.segments
               ? line.segments.map((segment, part) => (
-                  <Text key={part} inverse={segment.selected ?? false} bold={segment.marked ?? false} underline={segment.marked ?? false} {...(segment.marked ? { color: 'cyan' } : {})}>
+                  <Text key={part} inverse={(segment.selected ?? false) || (segment.flash ?? false)} bold={(segment.marked ?? false) || (segment.flash ?? false)} underline={segment.marked ?? false} {...(segment.flash ? { color: 'yellow' } : segment.marked ? { color: 'cyan' } : {})}>
                     {segment.text}
                   </Text>
                 ))

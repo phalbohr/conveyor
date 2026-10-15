@@ -2,7 +2,7 @@ import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import type { StatusSnapshot } from '../src/status.js'
-import { columnTasks, statusLines, usageLines } from '../src/ui/status-lines.js'
+import { arrivedColumns, columnTasks, statusLines, usageLines } from '../src/ui/status-lines.js'
 import { StatusScreen, type HubAction, type RunnerControl } from '../src/ui/status-screen.js'
 import type { TaskControl } from '../src/ui/task-lines.js'
 import { dateTime } from '../src/ui/time.js'
@@ -64,6 +64,16 @@ describe('statusLines', () => {
     const board = focused.find((line) => line.segments)?.segments ?? []
     expect(board.filter((segment) => segment.marked).map((segment) => segment.text)).toEqual([expect.stringMatching(/^backlog /)])
     expect(board.some((segment) => segment.selected)).toBe(false)
+  })
+
+  it('names the columns that got a new task and highlights their headers', () => {
+    const review = { ...snapshot, mine: [...snapshot.mine, { id: '5', title: 'Profile', url: 'https://example.test/issues/5', state: 'review' as const, stage: 'merge', attempt: 0 }] }
+    const moved = { ...snapshot, mine: snapshot.mine.filter((task) => task.id !== '3') }
+    expect(arrivedColumns(undefined, snapshot)).toEqual([])
+    expect(arrivedColumns(snapshot, review)).toEqual([4])
+    expect(arrivedColumns(snapshot, moved)).toEqual([])
+    const segments = statusLines(review, undefined, undefined, [4]).find((line) => line.segments)?.segments ?? []
+    expect(segments.filter((segment) => segment.flash).map((segment) => segment.text)).toEqual(['review 0/2'])
   })
 
   it('shows a usage line for every harness in use', () => {
