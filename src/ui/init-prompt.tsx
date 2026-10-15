@@ -107,7 +107,7 @@ export function InitPrompt({ askTarget, detected, check, onDone }: Props) {
           if (!project) return
           setChecking(true)
           setError(undefined)
-          void check(provider, project).then((found) => {
+          void check(provider, input).then((found) => {
             setChecking(false)
             if (found.kind === 'missing') setError(found.error)
             else if (found.kind === 'project') finish({ target: target(), board: { provider, project } })

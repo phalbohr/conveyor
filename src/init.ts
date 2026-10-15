@@ -21,8 +21,10 @@ const TEMPLATES = fileURLToPath(new URL('../templates/', import.meta.url))
 const BOARD_TOOLS: Record<Board['provider'], Check> = { github: ['gh', ['auth', 'status']], gitlab: ['glab', ['auth', 'status']] }
 const HARNESS_TOOLS: Record<string, Check> = { claude: ['claude', ['--version']], codex: ['codex', ['--version']] }
 
+const REMOTE = /^(?:[\w.-]+@([^:/]+):|https?:\/\/(?:[^@/]+@)?([^/]+)\/)(.+?)(?:\.git)?\/?$/
+
 export function parseRemote(url: string): Board | undefined {
-  const match = url.trim().match(/^(?:[\w.-]+@([^:/]+):|https?:\/\/(?:[^@/]+@)?([^/]+)\/)(.+?)(?:\.git)?\/?$/)
+  const match = url.trim().match(REMOTE)
   if (!match?.[3]) return undefined
   const host = match[1] ?? match[2] ?? ''
   const path = match[3].replace(/\/-\/.*$/, '').replace(/^groups\//, '')
@@ -36,7 +38,32 @@ export function boardPath(input: string) {
   return /^[\w.-]+@|:\/\//.test(trimmed) ? (parseRemote(trimmed)?.project ?? trimmed) : trimmed.replace(/\/+$/, '')
 }
 
-export async function boardTarget(context: Context, provider: Board['provider'], path: string): Promise<BoardTarget> {
+function urlHost(input: string) {
+  const match = input.trim().match(REMOTE)
+  return match ? (match[1] ?? match[2] ?? '').replace(/:\d+$/, '').toLowerCase() : undefined
+}
+
+async function toolHost(context: Context, provider: Board['provider']) {
+  if (provider === 'github') return (process.env.GH_HOST || 'github.com').toLowerCase()
+  const env = process.env.GITLAB_HOST || process.env.GL_HOST
+  if (env) return urlHost(env.includes('://') ? `${env}/x` : `https://${env}/x`) ?? env.toLowerCase()
+  const origin = await context.run('git', ['remote', 'get-url', 'origin'])
+  const remote = origin.code === 0 && parseRemote(origin.stdout)?.provider === 'gitlab' ? urlHost(origin.stdout) : undefined
+  if (remote) return remote
+  const config = await context.run('glab', ['config', 'get', 'host'])
+  return (config.code === 0 && config.stdout.trim().toLowerCase()) || 'gitlab.com'
+}
+
+export async function boardTarget(context: Context, provider: Board['provider'], input: string): Promise<BoardTarget> {
+  const path = boardPath(input)
+  const host = urlHost(input)
+  if (host) {
+    const tool = await toolHost(context, provider)
+    if (host !== tool) {
+      const cli = provider === 'github' ? 'gh' : 'glab'
+      return { kind: 'missing', error: `the URL points to ${host}, but ${cli} works with ${tool}; sign in to ${host} (${cli} auth login --hostname ${host}) and make it the host of ${cli}, or enter the path of a board on ${tool}` }
+    }
+  }
   if (provider === 'github') {
     const repo = await context.run('gh', ['api', `repos/${path}`, '--jq', '.full_name'])
     return repo.code === 0 ? { kind: 'project' } : { kind: 'missing', error: `GitHub repository ${path} was not found, or you have no access to it: ${repo.stderr.trim() || 'no answer from gh'}` }
@@ -54,13 +81,13 @@ export async function boardTarget(context: Context, provider: Board['provider'],
 async function checkBoardTarget(context: Context, input: Board): Promise<{ ok: true; board: Board } | { ok: false; errors: string[] }> {
   const board: Board = { ...input, project: boardPath(input.project), ...(input.group ? { group: boardPath(input.group) } : {}) }
   if (board.group && board.provider === 'gitlab') {
-    const group = await boardTarget(context, 'gitlab', board.group)
+    const group = await boardTarget(context, 'gitlab', input.group ?? board.group)
     if (group.kind === 'missing') return { ok: false, errors: [group.error] }
     if (group.kind !== 'group') return { ok: false, errors: [`${board.group} is a GitLab project, not a group`] }
     if (!group.projects.includes(board.project)) return { ok: false, errors: [`${board.project} is not a project of the group ${board.group}; choose one of: ${group.projects.join(', ') || 'none'}`] }
     return { ok: true, board }
   }
-  const target = await boardTarget(context, board.provider, board.project)
+  const target = await boardTarget(context, board.provider, input.project)
   if (target.kind === 'missing') return { ok: false, errors: [target.error] }
   if (target.kind === 'group') {
     return { ok: false, errors: [`${board.project} is a GitLab group. For a group board, name the project for new tasks: conveyor init --provider gitlab --group ${board.project} --project ${target.projects[0] ?? `${board.project}/<project>`}`] }
