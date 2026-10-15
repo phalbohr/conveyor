@@ -47,16 +47,16 @@ const snapshot: StatusSnapshot = {
 describe('statusLines', () => {
   it('shows the board columns, the tasks of an open column, and no usage', () => {
     const closed = statusLines(snapshot, undefined, { column: 0, open: false, focus: 'columns', task: 0 })
-    expect(closed.find((line) => line.text.startsWith('my board:'))?.text).toBe('my board: backlog 1|1|0|1 · in progress 1/3 · queued 0 · needs input 1/1 · review 0/2')
+    expect(closed.find((line) => line.text.startsWith('my board:'))?.text).toBe('my board: backlog 1|1|0|1 · needs input 1/1 · queued 0 · in progress 1/3 · review 0/2')
     expect(closed.some((line) => line.text.includes('tokens'))).toBe(false)
     const backlog = statusLines(snapshot, undefined, { column: 0, open: true, focus: 'columns', task: 0 }).map((line) => line.text)
     expect(backlog).toEqual(expect.arrayContaining(['  #7 Dark mode — no form', '  #8 Search — form::idea', '  #9 Export — form::plan']))
-    const open = statusLines(snapshot, undefined, { column: 3, open: true, focus: 'columns', task: 0 }).map((line) => line.text)
+    const open = statusLines(snapshot, undefined, { column: 1, open: true, focus: 'columns', task: 0 }).map((line) => line.text)
     expect(open[open.findIndex((text) => text.startsWith('my board:')) + 1]).toContain('#3 Store users — stage::plan · waits for your answer')
     expect(statusLines(snapshot, undefined, { column: 4, open: true, focus: 'columns', task: 0 }).map((line) => line.text)).toContain('  no tasks in review')
     const queued = { ...snapshot, mine: [...snapshot.mine, { id: '6', title: 'Answered', url: 'https://example.test/issues/6', state: 'queued' as const, stage: 'plan', attempt: 0 }] }
     expect(columnTasks(queued, 2).map((task) => task.id)).toEqual(['6'])
-    expect(columnTasks(queued, 3).map((task) => task.id)).toEqual(['3'])
+    expect(columnTasks(queued, 1).map((task) => task.id)).toEqual(['3'])
     const selected = statusLines(snapshot, undefined, { column: 4, open: false, focus: 'columns', task: 0 }).find((line) => line.segments)?.segments?.find((segment) => segment.selected)
     expect(selected?.text).toBe('review 0/2')
     const focused = statusLines(snapshot, undefined, { column: 0, open: true, focus: 'tasks', task: 1 })
@@ -369,10 +369,10 @@ describe('StatusScreen as a control panel', () => {
     const { value, calls } = control()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
-    await settle()
-    stdin.write(RIGHT)
-    await settle()
-    stdin.write(DOWN)
+    for (const key of [RIGHT, RIGHT, RIGHT, DOWN]) {
+      await settle()
+      stdin.write(key)
+    }
     await vi.waitFor(() => expect(lastFrame()).toContain('› #4 Login'), { timeout: 5_000 })
     expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[x] reset')
     await settle()
@@ -429,7 +429,7 @@ describe('StatusScreen as a control panel', () => {
     const review = { ...snapshot, mine: [...snapshot.mine, { id: '3', title: 'Store users', url: 'https://example.test/issues/3', state: 'review' as const, attempt: 0, pullRequest: 'https://example.test/pull/52' }] }
     const { lastFrame, stdin } = render(<StatusScreen load={async () => review} refreshMs={60_000} control={value} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
-    for (const key of [RIGHT, RIGHT, RIGHT, DOWN, '\r']) {
+    for (const key of [RIGHT, DOWN, '\r']) {
       await settle()
       stdin.write(key)
     }
@@ -489,10 +489,10 @@ describe('StatusScreen as the hub', () => {
   it('moves between status columns with the arrows and lists their tasks with Enter', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
-    await settle()
-    stdin.write('\u001B[C')
-    await settle()
-    stdin.write('\r')
+    for (const key of ['\u001B[C', '\u001B[C', '\u001B[C', '\r']) {
+      await settle()
+      stdin.write(key)
+    }
     await vi.waitFor(() => expect(lastFrame()).toContain('#4 Login — stage::implement'), { timeout: 5_000 })
     stdin.write('\r')
     await vi.waitFor(() => expect(lastFrame()).not.toContain('#4 Login — stage::implement'), { timeout: 5_000 })
@@ -660,7 +660,7 @@ describe('conveyor without arguments', () => {
 
 describe('liveness of tasks in progress', () => {
   const at = (iso: string) => vi.setSystemTime(new Date(iso))
-  const login = (status: StatusSnapshot) => columnTasks(status, 1).find((task) => task.id === '4')
+  const login = (status: StatusSnapshot) => columnTasks(status, 3).find((task) => task.id === '4')
 
   it('shows a stage running here with its last output', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -703,9 +703,9 @@ describe('liveness of tasks in progress', () => {
       ],
     }
     expect(statusLines(frozen).map((line) => line.text).join('\n')).toContain(`CI freeze: #9 Fix the CI of the base branch main fixes the CI (@alice, waits for an answer since ${dateTime('2026-10-13T09:12:00.000Z')}, private artifact) · new tasks and merges wait · stuck? \`conveyor release 9 --force\` hands it to another workstation`)
-    expect(columnTasks(frozen, 1)[0]?.detail).toContain(`○ ${held}`)
+    expect(columnTasks(frozen, 3)[0]?.detail).toContain(`○ ${held}`)
     expect(columnTasks(frozen, 2)[0]?.detail).toBe(held)
-    expect(columnTasks(frozen, 3)[0]?.detail).toBe(`answered, ${held}`)
+    expect(columnTasks(frozen, 1)[0]?.detail).toBe(`answered, ${held}`)
   })
 
   it('shows why a parked task waits instead of the next attempt', () => {
