@@ -165,6 +165,15 @@ describe('conveyor init checks the board first', () => {
     expect(existsSync(join(result.context.cwd, '.conveyor'))).toBe(false)
   })
 
+  it('reads a group URL with the groups prefix as the group path', async () => {
+    const result = await runCli(['init', '--provider', 'gitlab', '--project', 'https://gitlab.com/groups/acme/shop'], { responses: { 'glab api projects/acme%2Fshop': missing, [groupList]: shopProjects } })
+    expect(result.code).toBe(1)
+    expect(result.calls).toContain('glab api projects/acme%2Fshop')
+    expect(result.stderr).toContain('acme/shop is a GitLab group')
+    expect(result.stderr).toContain('--group acme/shop --project acme/shop/backend')
+    expect(existsSync(join(result.context.cwd, '.conveyor'))).toBe(false)
+  })
+
   it('creates a group board with the project for new tasks', async () => {
     const result = await runCli(['init', '--provider', 'gitlab', '--group', 'https://gitlab.com/groups/acme/shop/-/boards', '--project', 'acme/shop/frontend'], {
       responses: { 'glab api projects/acme%2Fshop': missing, [groupList]: shopProjects },
