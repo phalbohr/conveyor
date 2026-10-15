@@ -11,7 +11,7 @@ import { SETTINGS_DIR, findSettings, linkSettings } from './settings.js'
 export type Board = Config['board']
 export type Target = { kind: 'here' } | { kind: 'path'; path: string } | { kind: 'use'; path: string }
 export type BoardTarget = { kind: 'project' } | { kind: 'group'; projects: string[] } | { kind: 'missing'; error: string }
-export type InitResult = { ok: true; settings: string; warnings: string[]; board: string[] } | { ok: false; errors: string[] }
+export type InitResult = { ok: true; settings: string; warnings: string[]; board: string[]; next: string } | { ok: false; errors: string[] }
 
 type Check = [command: string, args: string[]]
 
@@ -140,16 +140,25 @@ async function finish(context: Context, settings: string, config: Config): Promi
     if (reloaded.ok) current = reloaded.config
   }
   if (project.message && !project.number) warnings.push(project.message)
-  await boardAdapter(context, current)
+  const labeled = await boardAdapter(context, current)
     .prepare(current.stages.map((stage) => stage.name))
-    .catch((error: unknown) => warnings.push(`the board labels were not created: ${(error as Error).message}`))
-  return { ok: true, settings, warnings, board: [...(project.number && project.message ? [project.message] : []), ...boardSteps(current)] }
+    .then(() => true)
+    .catch((error: unknown) => {
+      warnings.push(`the board labels were not created: ${(error as Error).message}`)
+      return false
+    })
+  const where = current.board.group ? `group ${current.board.group}` : `project ${current.board.project}`
+  const next = labeled
+    ? `Initialization is done, and the conveyor exits now. Next: set up the board columns as described above, then start the conveyor again with: conveyor`
+    : `Initialization is done, but the labels are missing in ${where}, and the conveyor exits now. Next: fix the cause in the warning above, run conveyor board update to create the labels, set up the board columns as described above, then start the conveyor with: conveyor`
+  return { ok: true, settings, warnings, board: [...(project.number && project.message ? [project.message] : []), ...boardSteps(current, labeled)], next }
 }
 
-function boardSteps(config: Config): string[] {
-  const labels = `Labels: ${TASK_STATES.map((state) => STATE_LABEL + state).join(', ')}; ${TASK_FORMS.map((form) => FORM_LABEL + form).join(', ')}; stage:: for every stage.`
+function boardSteps(config: Config, labeled: boolean): string[] {
+  const where = config.board.group ? `group ${config.board.group}` : `project ${config.board.project}`
+  const labels = `${labeled ? `Created the labels in ${where}` : 'Labels'}: ${TASK_STATES.map((state) => STATE_LABEL + state).join(', ')}; ${TASK_FORMS.map((form) => FORM_LABEL + form).join(', ')}; stage:: for every stage.`
   const columns = COLUMNS.map((state) => STATE_LABEL + state).join(', ')
-  if (config.board.provider === 'gitlab') return [labels, `Board: open Issues → Boards and add one list per label, in this order: ${columns}.`]
+  if (config.board.provider === 'gitlab') return [labels, `Board: in the ${where}, open Plan → Issue boards and add one list per label, in this order: ${columns}.`]
   if (config.board.github_project) {
     return [labels, `Board: in project ${config.board.github_project}, open a Board view and choose the field Conveyor under "Column by".`]
   }

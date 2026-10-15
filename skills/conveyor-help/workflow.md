@@ -65,7 +65,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 3. Each member: `conveyor settings` → Personal (limits, chat language), then `conveyor skill install` for help in a harness session.
 4. Board columns: Backlog, Needs input, Queued, In progress, Review, Done. `init` creates the `conveyor::*`, `form::*`, and `stage::*` labels.
    - GitHub: the board is a GitHub project. `init` uses the project linked to the repository, or creates and links one, adds the `Conveyor` field, and writes `board.github_project`. With several linked projects, choose one with `conveyor config set board.github_project <number>`, then run `conveyor board update` (or `k`, Enter on the control screen) to add the field. Once, in the project, choose the Board layout and "Column by: Conveyor" (GitHub has no API for views). GitHub moves no cards by labels; the conveyor sets the `Conveyor` value from the `conveyor::` label every cycle and on `conveyor board update`.
-   - GitLab: Issues → Boards, one list per label: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
+   - GitLab: Plan → Issue boards (in the group for a group board), one list per label: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
    - Later: every start and the control screen report what a newer version or a new stage needs. `conveyor board update` (or `k`, Enter) adds missing labels, the `Conveyor` field, and its missing options with your consent and never changes or deletes existing labels, options, or card values. Closed tasks are not checked.
 
 ## Team settings

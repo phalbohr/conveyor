@@ -46,7 +46,9 @@ describe('conveyor init', () => {
 
   it('explains the GitLab board lists', async () => {
     const result = await runCli(['init', '--provider', 'gitlab', '--project', 'group/app'], { board: new FakeBoard('me') })
-    expect(result.stdout).toContain('add one list per label, in this order: conveyor::backlog, conveyor::needs-input, conveyor::queued, conveyor::in-progress, conveyor::review, conveyor::done')
+    expect(result.stdout).toContain('Created the labels in project group/app')
+    expect(result.stdout).toContain('in the project group/app, open Plan → Issue boards and add one list per label, in this order: conveyor::backlog, conveyor::needs-input, conveyor::queued, conveyor::in-progress, conveyor::review, conveyor::done')
+    expect(result.stdout.trim().split('\n').at(-1)).toBe('Initialization is done, and the conveyor exits now. Next: set up the board columns as described above, then start the conveyor again with: conveyor')
   })
 
   it('reports a board that cannot be prepared as a warning', async () => {
@@ -57,6 +59,9 @@ describe('conveyor init', () => {
     const result = await runCli(['init', ...BOARD_FLAGS], { board })
     expect(result.code).toBe(0)
     expect(result.stderr).toContain('the board labels were not created: HTTP 403')
+    expect(result.stdout).toContain('the labels are missing in project owner/repo')
+    expect(result.stdout).toContain('run conveyor board update to create the labels')
+    expect(result.stdout).not.toContain('Created the labels')
   })
 
   it('detects the board from the git remote', async () => {

@@ -215,7 +215,7 @@ The conveyor takes an open task that has a `form::` label allowed by `pickup_fro
 Set up the board once:
 
 - **GitHub:** the board with columns is a GitHub project; labels alone give no board there. `conveyor init` (or later `conveyor board update`, or `k` and Enter) uses the project linked to the repository or creates and links one, adds the `Conveyor` field, and writes `board.github_project`. GitHub does not move cards by labels itself; the conveyor does it: every cycle of `conveyor run`, `conveyor board update`, and `k` add open issues with a `conveyor::` label to the project and set their `Conveyor` value from the label. Once, in the project, choose the Board layout and "Column by: Conveyor" (GitHub has no API for views). Without `board.github_project` the start log, the control screen, and `conveyor board check` report that the board has no columns.
-- **GitLab:** open Issues → Boards and add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
+- **GitLab:** open Plan → Issue boards (in the group for a group board) and add one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
 
 A large story can merge in **parts**: the `plan` stage returns their order in `parts`, and each part becomes one pull request. The conveyor runs the stages after `plan` for part 1, reviews and merges it, then moves the task back to In progress for part 2 on a fresh branch from the updated base branch, and so on. The card shows `part::2/3`, the pull request title names the part, and the story is done after the last part merges.
 

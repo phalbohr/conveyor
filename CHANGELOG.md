@@ -7,6 +7,7 @@
 - `conveyor init` checks the board before it writes anything and creates nothing when a check or the new settings fail. It accepts a URL for the project, recognizes a GitLab group and asks for the project for new tasks (`--group` without a terminal), and `board.project` must be a path, not a URL. A URL of another host than the one `gh` or `glab` works with is refused. A GitLab project or group that does not exist gives a readable error instead of `Cannot read properties of null`.
 - A `gh`, `glab`, or `git` command that hangs (for example after the network drops) is stopped after 10 minutes, and the next cycle runs. Before, one hung call stopped the conveyor for good while the control screen still said `resumes next cycle`.
 - The control screen flashes the header of a status column twice in yellow when a new task arrives in it.
+- `conveyor init` ends with what happened and what to do next: it names where it created the labels, points to Plan → Issue boards on GitLab (before: Issues → Boards), and says that the conveyor exits now and starts again with `conveyor` after the board columns are set up; when the labels failed, it says to fix the cause and run `conveyor board update`.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
 
 ## 0.2.2 — 2026-10-14

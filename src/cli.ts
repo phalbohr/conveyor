@@ -308,7 +308,7 @@ async function resolveBoard(context: Context, options: InitOptions): Promise<Boa
 
 function report(context: Context, result: InitResult, json: boolean): number {
   if (json) {
-    context.stdout(`${JSON.stringify(result.ok ? { settings: result.settings, warnings: result.warnings, board: result.board } : { errors: result.errors })}\n`)
+    context.stdout(`${JSON.stringify(result.ok ? { settings: result.settings, warnings: result.warnings, board: result.board, next: result.next } : { errors: result.errors })}\n`)
     return result.ok ? 0 : 1
   }
   if (!result.ok) {
@@ -317,6 +317,7 @@ function report(context: Context, result: InitResult, json: boolean): number {
   }
   context.stdout(`Settings: ${result.settings}\n${result.board.join('\n')}\n`)
   for (const warning of result.warnings) context.stderr(`warning: ${warning}\n`)
+  context.stdout(`\n${result.next}\n`)
   return 0
 }
 
