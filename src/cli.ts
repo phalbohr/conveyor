@@ -10,7 +10,7 @@ import { skillInstall } from './commands/skill.js'
 import { prepare, releaseCommand, resetCommand, runCommand } from './commands/run.js'
 import { watchCommand } from './commands/watch.js'
 import { loadConfig, type Config } from './config.js'
-import { detectBoard, initProject, type Board, type InitResult, type Target } from './init.js'
+import { boardTarget, detectBoard, initProject, type Board, type InitResult, type Target } from './init.js'
 import { findSettings } from './settings.js'
 import { collectStatus, type StatusSnapshot } from './status.js'
 import { statusLines } from './ui/status-lines.js'
@@ -33,7 +33,7 @@ export type Context = {
   boardFor?: (config: Config) => BoardPort
 }
 
-type InitOptions = { path?: string; use?: string; provider?: Board['provider']; project?: string }
+type InitOptions = { path?: string; use?: string; provider?: Board['provider']; project?: string; group?: string }
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
 
@@ -63,7 +63,8 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .addOption(new Option('--path <dir>', 'create the settings in this directory').conflicts('use'))
     .option('--use <dir>', 'link existing settings')
     .addOption(new Option('--provider <provider>', 'board provider').choices(['github', 'gitlab']))
-    .option('--project <project>', 'board project, for example owner/repo')
+    .option('--project <project>', 'board project, for example owner/repo; with --group, the project for new tasks')
+    .option('--group <group>', 'GitLab group whose issues form the board')
     .action(async (options: InitOptions) => {
       const target: Target = options.use
         ? { kind: 'use', path: options.use }
@@ -256,7 +257,7 @@ async function status(context: Context, json: boolean): Promise<number> {
       context.stderr(`No conveyor settings found in ${context.cwd}. Run \`conveyor init\`.\n`)
       return 1
     }
-    const answers = await promptInit({ askTarget: true, detected: await detectBoard(context) })
+    const answers = await promptInit({ askTarget: true, detected: await detectBoard(context), check: (provider, path) => boardTarget(context, provider, path) })
     if (!answers) {
       context.stdout('Initialization cancelled; nothing was created.\n')
       return 0
@@ -300,9 +301,9 @@ async function resolveBoard(context: Context, options: InitOptions): Promise<Boa
   const detected = options.provider && options.project ? {} : await detectBoard(context)
   const provider = options.provider ?? detected.provider
   const project = options.project ?? detected.project
-  if (provider && project) return { provider, project }
+  if (provider && project) return { provider, project, ...(options.group ? { group: options.group } : {}) }
   if (!context.interactive) return undefined
-  return (await promptInit({ askTarget: false, detected: { provider, project } }))?.board
+  return (await promptInit({ askTarget: false, detected: { provider, project }, check: (provider, path) => boardTarget(context, provider, path) }))?.board
 }
 
 function report(context: Context, result: InitResult, json: boolean): number {

@@ -73,7 +73,7 @@ const BUILT_IN_HARNESSES = ['claude', 'codex']
 const teamSchema = z.strictObject({
   board: z.strictObject({
     provider: z.enum(['github', 'gitlab']),
-    project: name,
+    project: z.string().regex(/^\w[\w.-]*(\/\w[\w.-]*)+$/, 'a project path such as owner/repo or group/subgroup/project, not a URL'),
     github_project: count.optional(),
     base_branch: branch.optional(),
     group: gitlabPath.optional(),

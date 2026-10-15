@@ -284,10 +284,17 @@ artifacts:
 
   it('collects all errors', () => {
     expect(
-      errors(`board: {provider: jira, project: x}
+      errors(`board: {provider: jira, project: owner/repo}
 pickup_from: anywhere
 `),
     ).toHaveLength(2)
+  })
+})
+
+describe('board project', () => {
+  it('takes a path, not a URL', () => {
+    expect(errors('board: {provider: gitlab, project: "https://gitlab.com/acme/app"}\n').join()).toContain('not a URL')
+    expect(errors('board: {provider: github, project: app}\n').join()).toContain('a project path such as owner/repo')
   })
 })
 

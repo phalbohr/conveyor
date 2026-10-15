@@ -61,7 +61,7 @@ A task is an issue on the board, and the conveyor names it by the issue number: 
 ## Setup
 
 1. Install: `npm install -g @phalbohr/conveyor`; sign in `gh` or `glab`; install the harness CLIs your stages use.
-2. In the repository: `conveyor init` (reads the board from `git remote origin`). Commit `.conveyor/` except `local.yaml`.
+2. In the repository: `conveyor init` (reads the board from `git remote origin`; otherwise asks for the project, a path or a URL). For a GitLab group board: `conveyor init --provider gitlab --group <group> --project <group>/<project>`, or enter the group in the terminal and choose the project for new tasks. `init` checks the board first and creates nothing when the check fails. Commit `.conveyor/` except `local.yaml`.
 3. Each member: `conveyor settings` → Personal (limits, chat language), then `conveyor skill install` for help in a harness session.
 4. Board columns: Backlog, Needs input, Queued, In progress, Review, Done. `init` creates the `conveyor::*`, `form::*`, and `stage::*` labels.
    - GitHub: the board is a GitHub project. `init` uses the project linked to the repository, or creates and links one, adds the `Conveyor` field, and writes `board.github_project`. With several linked projects, choose one with `conveyor config set board.github_project <number>`, then run `conveyor board update` (or `k`, Enter on the control screen) to add the field. Once, in the project, choose the Board layout and "Column by: Conveyor" (GitHub has no API for views). GitHub moves no cards by labels; the conveyor sets the `Conveyor` value from the `conveyor::` label every cycle and on `conveyor board update`.

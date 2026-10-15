@@ -1,5 +1,6 @@
 import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
+import type { BoardTarget } from '../src/init.js'
 import { InitPrompt } from '../src/ui/init-prompt.js'
 
 const ENTER = '\r'
@@ -8,6 +9,8 @@ const DOWN = '\u001B[B'
 const until = (assertion: () => void) => vi.waitFor(assertion, { timeout: 5_000 })
 
 type Rendered = { stdin: { write: (data: string) => void }; lastFrame: () => string | undefined }
+
+const project = async (): Promise<BoardTarget> => ({ kind: 'project' })
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -23,7 +26,7 @@ async function press({ stdin, lastFrame }: Rendered, ...keys: string[]) {
 describe('InitPrompt', () => {
   it('initializes in the current directory with the detected board', async () => {
     const onDone = vi.fn()
-    const rendered = render(<InitPrompt askTarget detected={{ provider: 'gitlab', project: 'acme/widgets' }} onDone={onDone} />)
+    const rendered = render(<InitPrompt askTarget detected={{ provider: 'gitlab', project: 'acme/widgets' }} check={project} onDone={onDone} />)
     await until(() => expect(rendered.lastFrame()).toContain('Use existing settings'))
 
     await press(rendered, ENTER, ENTER, ENTER)
@@ -35,7 +38,7 @@ describe('InitPrompt', () => {
 
   it('links existing settings by path', async () => {
     const onDone = vi.fn()
-    const rendered = render(<InitPrompt askTarget detected={{}} onDone={onDone} />)
+    const rendered = render(<InitPrompt askTarget detected={{}} check={project} onDone={onDone} />)
     await until(() => expect(rendered.lastFrame()).toContain('Use existing settings'))
 
     await press(rendered, DOWN, DOWN, ENTER, '/settings', ENTER)
@@ -45,7 +48,7 @@ describe('InitPrompt', () => {
 
   it('cancels with the Cancel option and creates nothing', async () => {
     const onDone = vi.fn()
-    const rendered = render(<InitPrompt askTarget detected={{}} onDone={onDone} />)
+    const rendered = render(<InitPrompt askTarget detected={{}} check={project} onDone={onDone} />)
     await until(() => expect(rendered.lastFrame()).toContain('Cancel'))
     await press(rendered, DOWN, DOWN, DOWN, ENTER)
     await settle()
@@ -54,7 +57,7 @@ describe('InitPrompt', () => {
 
   it('cancels with Esc on a later step', async () => {
     const onDone = vi.fn()
-    const rendered = render(<InitPrompt askTarget detected={{}} onDone={onDone} />)
+    const rendered = render(<InitPrompt askTarget detected={{}} check={project} onDone={onDone} />)
     await until(() => expect(rendered.lastFrame()).toContain('Esc cancels'))
     await press(rendered, ENTER, '\u001B')
     await settle()
@@ -63,7 +66,7 @@ describe('InitPrompt', () => {
 
   it('asks only for the board when the target is known', async () => {
     const onDone = vi.fn()
-    const rendered = render(<InitPrompt askTarget={false} detected={{}} onDone={onDone} />)
+    const rendered = render(<InitPrompt askTarget={false} detected={{}} check={project} onDone={onDone} />)
     await until(() => expect(rendered.lastFrame()).toContain('Board provider'))
 
     await press(rendered, ENTER, 'acme/tools', ENTER)
@@ -71,5 +74,27 @@ describe('InitPrompt', () => {
     await until(() =>
       expect(onDone).toHaveBeenCalledWith({ target: { kind: 'here' }, board: { provider: 'github', project: 'acme/tools' } }),
     )
+  })
+
+  it('takes a URL, shows a board it cannot find, and lets the user choose the project of a group', async () => {
+    const onDone = vi.fn()
+    const check = vi.fn(async (_provider: string, path: string): Promise<BoardTarget> =>
+      path === 'acme/shop' ? { kind: 'group', projects: ['acme/shop/frontend', 'acme/shop/backend'] } : { kind: 'missing', error: `GitLab project or group ${path} was not found` },
+    )
+    const rendered = render(<InitPrompt askTarget={false} detected={{ provider: 'gitlab' }} check={check} onDone={onDone} />)
+    await until(() => expect(rendered.lastFrame()).toContain('Board provider'))
+
+    await press(rendered, ENTER, 'acme/shp', ENTER)
+    await until(() => expect(rendered.lastFrame()).toContain('acme/shp was not found'))
+    expect(onDone).not.toHaveBeenCalled()
+
+    await press(rendered, '\b\b\b\b\b\b\b\bhttps://gitlab.com/groups/acme/shop/-/boards', ENTER)
+    await until(() => expect(rendered.lastFrame()).toContain('Project for new tasks'))
+    await press(rendered, DOWN, ENTER)
+
+    await until(() =>
+      expect(onDone).toHaveBeenCalledWith({ target: { kind: 'here' }, board: { provider: 'gitlab', project: 'acme/shop/backend', group: 'acme/shop' } }),
+    )
+    expect(check).toHaveBeenLastCalledWith('gitlab', 'acme/shop')
   })
 })
