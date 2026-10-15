@@ -8,6 +8,7 @@
 - A `gh`, `glab`, or `git` command that hangs (for example after the network drops) is stopped after 10 minutes, and the next cycle runs. Before, one hung call stopped the conveyor for good while the control screen still said `resumes next cycle`.
 - The control screen flashes the header of a status column twice in yellow when a new task arrives in it.
 - `conveyor init` ends with what happened and what to do next: it names where it created the labels, points to Plan → Issue boards on GitLab (before: Issues → Boards), and says that the conveyor exits now and starts again with `conveyor` after the board columns are set up; when the labels failed, it says to fix the cause and run `conveyor board update`.
+- The control screen scrolls a page at a time with PgUp and PgDn, or Shift+↑↓ (on a Mac keyboard without these keys, and in Terminal.app, where Fn+↑↓ scrolls the terminal), in the opened task, watch, help, usage, log, and board check.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
 
 ## 0.2.2 — 2026-10-14

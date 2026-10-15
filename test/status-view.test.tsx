@@ -129,9 +129,9 @@ describe('StatusScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('h')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
-    expect(lastFrame()).toContain('↑↓ scroll')
+    expect(lastFrame()).toContain('↑↓ PgUp PgDn scroll')
     const frame = lastFrame()?.split('\n') ?? []
-    const more = frame.findIndex((line) => line.includes('↑↓ scroll') && line.startsWith('lines'))
+    const more = frame.findIndex((line) => line.includes('↑↓ PgUp PgDn scroll') && line.startsWith('lines'))
     expect(frame[more - 1]?.trim()).toBe('')
     expect(frame[more + 1]?.trim()).toBe('')
     expect(frame[more + 2]).toContain('[Esc] back')
@@ -146,6 +146,26 @@ describe('StatusScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 100))
     stdin.write('h')
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+  })
+
+  it('scrolls a page with PgDn and PgUp, and with Shift and the arrows', async () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 100))
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    stdin.write('h')
+    await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
+    const first = () => Number(lastFrame()?.match(/lines (\d+)–/)?.[1])
+    expect(first()).toBe(1)
+    await settle()
+    stdin.write('\u001B[6~')
+    await vi.waitFor(() => expect(first()).toBeGreaterThan(5), { timeout: 5_000 })
+    await settle()
+    stdin.write('\u001B[5~')
+    await vi.waitFor(() => expect(first()).toBe(1), { timeout: 5_000 })
+    await settle()
+    stdin.write('\u001B[1;2B')
+    await vi.waitFor(() => expect(first()).toBeGreaterThan(5), { timeout: 5_000 })
   })
 
   it('shows a board error', async () => {
@@ -413,7 +433,7 @@ describe('StatusScreen as a control panel', () => {
       await settle()
       stdin.write(key)
     }
-    await vi.waitFor(() => expect(lastFrame()).toContain('[p] pull request'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[p] pull request'), { timeout: 5_000 })
     await settle()
     stdin.write('p')
     await vi.waitFor(() => expect(lastFrame()).toContain('Looks fine'), { timeout: 5_000 })

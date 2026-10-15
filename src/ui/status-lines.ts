@@ -205,7 +205,7 @@ export function helpLines(): Line[] {
     row('live sessions', 'n, a, h, and a in help use live.harness and live.model from local.yaml (settings: Personal)'),
     row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h harness · w watch its stage (session_logs) · x reset · i form::idea on/off (backlog) · Esc back'),
     row('part::2/3', 'the plan split the story into parts, one pull request each; the story is done after the last part merges'),
-    row('an opened task', 'p switches between the issue and its pull request · c comments where you are · ↑↓ scroll'),
+    row('an opened task', 'p switches between the issue and its pull request · c comments where you are · ↑↓ scroll · PgUp PgDn or Shift+↑↓ scroll a page'),
     { text: '' },
     { text: 'Your actions', tone: 'title' },
     row('answer a question', 'reply in the issue, or `conveyor attach <number>` for a live session'),

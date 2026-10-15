@@ -67,7 +67,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const [opened, setOpened] = useState<Opened>()
   const [tick, setTick] = useState(0)
   const [watched, setWatched] = useState<{ id: string; from: Panel; follow: boolean }>()
-  const shown = useRef({ start: 0, last: 0 })
+  const shown = useRef({ start: 0, last: 0, next: 0, previous: 0 })
   const seen = useRef<StatusSnapshot>(undefined)
   const [flash, setFlash] = useState<{ columns: number[]; phase: number }>()
 
@@ -155,6 +155,21 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         setPanel(watched.from)
         setScroll(0)
         setWatched(undefined)
+        return
+      }
+      const paging = special.pageUp || (special.shift && special.upArrow) ? -1 : special.pageDown || (special.shift && special.downArrow) ? 1 : 0
+      if (panel === 'watch' && watched && paging) {
+        if (paging < 0) {
+          setScroll(shown.current.previous)
+          setWatched({ ...watched, follow: false })
+        } else if (!watched.follow) {
+          if (shown.current.next >= shown.current.last) setWatched({ ...watched, follow: true })
+          else setScroll(shown.current.next)
+        }
+        return
+      }
+      if (panel !== 'status' && paging) {
+        setScroll(paging < 0 ? shown.current.previous : Math.min(shown.current.next, shown.current.last))
         return
       }
       if (panel === 'watch' && watched) {
@@ -338,7 +353,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const pinned = panel === 'watch' ? lines.slice(0, 1) : []
   const body = viewport(lines.slice(pinned.length), focusLine >= 0 ? Math.max(0, focusLine - room + 4) : panel === 'watch' && watched?.follow ? Number.MAX_SAFE_INTEGER : scroll, room - pinned.length, columns)
   const page = { ...body, lines: [...pinned, ...body.lines] }
-  shown.current = { start: body.start, last: body.last }
+  shown.current = { start: body.start, last: body.last, next: body.start + Math.max(1, body.lines.length - 1), previous: pageBefore(lines.slice(pinned.length), body.start, room - pinned.length, columns) }
   return (
     <Box flexDirection="column">
       {panel === 'status' && !status && !error && <Text color="gray">Loading the board…</Text>}
@@ -436,13 +451,13 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
 
 function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefined, opened: Opened | undefined, updated: Date | undefined) {
   const time = updated ? ` · updated ${clock(updated)}` : ''
-  if (panel === 'watch') return `[↑↓] scroll (↓ at the end follows again) · [w] or [Esc] back · [q] quit`
+  if (panel === 'watch') return `[↑↓ PgUp PgDn] scroll (↓ at the end follows again) · [w] or [Esc] back · [q] quit`
   if (panel === 'task') {
-    return `[↑↓] scroll · [c] comment · [b] browser · [h] harness · [w] watch · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
+    return `[↑↓ PgUp PgDn] scroll · [c] comment · [b] browser · [h] harness · [w] watch · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
   }
-  if (panel === 'board') return `[Enter] add what is missing · [↑↓] scroll · [Esc] back · [q] quit`
-  if (panel === 'help') return `[a] ask the conveyor-help skill in a live session · [↑↓] scroll · [Esc] back · [q] quit`
-  if (panel !== 'status') return `[↑↓] scroll · [Esc] back · [q] quit`
+  if (panel === 'board') return `[Enter] add what is missing · [↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
+  if (panel === 'help') return `[a] ask the conveyor-help skill in a live session · [↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
+  if (panel !== 'status') return `[↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
   if (view.focus === 'tasks') {
     return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness · [w] watch${view.column === BACKLOG ? ' · [i] form::idea on/off' : ' · [x] reset'} · [Esc] columns · [?] help · [q] quit${time}`
   }
@@ -456,6 +471,13 @@ function heightOf(text: string, columns: number) {
 
 function lineHeight(line: Line, columns: number) {
   return line.cells ? heightOf(line.cells[1] || ' ', columns - (line.cellWidth ?? CELL_WIDTH)) : heightOf(line.text || ' ', columns)
+}
+
+function pageBefore(lines: Line[], start: number, room: number, columns: number) {
+  let previous = start
+  let used = 0
+  while (previous > 0 && used + lineHeight(lines[previous - 1] as Line, columns) <= room - 2) used += lineHeight(lines[--previous] as Line, columns)
+  return previous
 }
 
 function viewport(lines: Line[], scroll: number, room: number, columns: number): { lines: Line[]; more?: string; start: number; last: number } {
@@ -473,7 +495,7 @@ function viewport(lines: Line[], scroll: number, room: number, columns: number):
     shown.push(line)
     used += height
   }
-  return { lines: shown, more: `lines ${start + 1}–${start + shown.length} of ${lines.length} · ↑↓ scroll`, start, last }
+  return { lines: shown, more: `lines ${start + 1}–${start + shown.length} of ${lines.length} · ↑↓ PgUp PgDn scroll`, start, last }
 }
 
 function watchLines(id: string, session: SessionView, follow: boolean): Line[] {
