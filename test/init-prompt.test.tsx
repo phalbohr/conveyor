@@ -79,7 +79,7 @@ describe('InitPrompt', () => {
   it('takes a URL, shows a board it cannot find, and lets the user choose the project of a group', async () => {
     const onDone = vi.fn()
     const check = vi.fn(async (_provider: string, path: string): Promise<BoardTarget> =>
-      path === 'acme/shop' ? { kind: 'group', projects: ['acme/shop/frontend', 'acme/shop/backend'] } : { kind: 'missing', error: `GitLab project or group ${path} was not found` },
+      path.includes('acme/shop/') ? { kind: 'group', projects: ['acme/shop/frontend', 'acme/shop/backend'] } : { kind: 'missing', error: `GitLab project or group ${path} was not found` },
     )
     const rendered = render(<InitPrompt askTarget={false} detected={{ provider: 'gitlab' }} check={check} onDone={onDone} />)
     await until(() => expect(rendered.lastFrame()).toContain('Board provider'))
@@ -95,6 +95,6 @@ describe('InitPrompt', () => {
     await until(() =>
       expect(onDone).toHaveBeenCalledWith({ target: { kind: 'here' }, board: { provider: 'gitlab', project: 'acme/shop/backend', group: 'acme/shop' } }),
     )
-    expect(check).toHaveBeenLastCalledWith('gitlab', 'acme/shop')
+    expect(check).toHaveBeenLastCalledWith('gitlab', 'https://gitlab.com/groups/acme/shop/-/boards')
   })
 })

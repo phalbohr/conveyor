@@ -197,6 +197,25 @@ describe('conveyor init checks the board first', () => {
     expect(loaded.config.board.project).toBe('acme/app')
   })
 
+  it('refuses a URL of another host than the one glab works with', async () => {
+    const other = await runCli(['init', '--provider', 'gitlab', '--project', 'https://gitlab.example.com/acme/app'])
+    expect(other.code).toBe(1)
+    expect(other.stderr).toContain('the URL points to gitlab.example.com, but glab works with gitlab.com')
+    expect(other.calls).not.toContain('glab api projects/acme%2Fapp')
+    expect(existsSync(join(other.context.cwd, '.conveyor'))).toBe(false)
+
+    const own = await runCli(['init', '--provider', 'gitlab', '--project', 'git@gitlab.example.com:acme/app.git'], { responses: { 'glab config get host': { code: 0, stdout: 'gitlab.example.com\n' } } })
+    expect(own.code).toBe(0)
+
+    const remote = await runCli(['init', '--provider', 'gitlab', '--project', 'https://gitlab.com/acme/app'], {
+      responses: { 'git remote get-url origin': { code: 0, stdout: 'git@gitlab.example.com:acme/tools.git\n' } },
+    })
+    expect(remote.stderr).toContain('but glab works with gitlab.example.com')
+
+    const github = await runCli(['init', '--provider', 'github', '--project', 'https://github.com/acme/app'])
+    expect(github.code).toBe(0)
+  })
+
   it('removes what it created when the new settings are invalid', async () => {
     const here = await runCli(['init', ...BOARD_FLAGS, '--group', 'acme'])
     expect(here.code).toBe(1)
