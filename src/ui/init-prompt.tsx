@@ -1,7 +1,7 @@
 import { Select, TextInput } from '@inkjs/ui'
 import { Box, Text, render, useApp, useInput } from 'ink'
 import { useState } from 'react'
-import type { Board, Target } from '../init.js'
+import { boardPath, type Board, type BoardTarget, type Target } from '../init.js'
 import { clearOnShrink } from './terminal.js'
 
 export type InitAnswers = { target: Target; board?: Board }
@@ -9,6 +9,7 @@ export type InitAnswers = { target: Target; board?: Board }
 type Props = {
   askTarget: boolean
   detected: Partial<Board>
+  check: (provider: Board['provider'], path: string) => Promise<BoardTarget>
   onDone: (answers: InitAnswers) => void
 }
 
@@ -24,11 +25,14 @@ const PROVIDERS = [
   { label: 'GitLab', value: 'gitlab' },
 ]
 
-export function InitPrompt({ askTarget, detected, onDone }: Props) {
+export function InitPrompt({ askTarget, detected, check, onDone }: Props) {
   const { exit } = useApp()
   const [kind, setKind] = useState<Target['kind'] | undefined>(askTarget ? undefined : 'here')
   const [path, setPath] = useState<string>()
   const [provider, setProvider] = useState<Board['provider']>()
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState<string>()
+  const [group, setGroup] = useState<{ path: string; projects: string[] }>()
 
   const finish = (answers: InitAnswers) => {
     onDone(answers)
@@ -76,18 +80,44 @@ export function InitPrompt({ askTarget, detected, onDone }: Props) {
     )
   }
 
+  const target = (): Target => (kind === 'path' && path ? { kind, path } : { kind: 'here' })
+
+  if (group) {
+    return (
+      <Box flexDirection="column">
+        <Text>{group.path} is a GitLab group: the board shows the issues of all its projects.</Text>
+        <Text>Project for new tasks:</Text>
+        <Select
+          options={group.projects.map((project) => ({ label: project, value: project }))}
+          onChange={(project) => finish({ target: target(), board: { provider, project, group: group.path } })}
+        />
+      </Box>
+    )
+  }
+
   return (
     <Box flexDirection="column">
-      <Text>Board project (owner/repo):</Text>
+      <Text>{provider === 'gitlab' ? 'Board project or group (path or URL):' : 'Board repository (owner/repo or URL):'}</Text>
       <TextInput
         defaultValue={detected.project}
-        placeholder="owner/repo"
-        onSubmit={(project) => {
-          if (!project.trim()) return
-          const target: Target = kind === 'path' && path ? { kind, path } : { kind: 'here' }
-          finish({ target, board: { provider, project: project.trim() } })
+        placeholder={provider === 'gitlab' ? 'group/project' : 'owner/repo'}
+        isDisabled={checking}
+        onSubmit={(input) => {
+          const project = boardPath(input)
+          if (!project) return
+          setChecking(true)
+          setError(undefined)
+          void check(provider, project).then((found) => {
+            setChecking(false)
+            if (found.kind === 'missing') setError(found.error)
+            else if (found.kind === 'project') finish({ target: target(), board: { provider, project } })
+            else if (found.projects.length === 0) setError(`the group ${project} has no projects; create one for new tasks first`)
+            else setGroup({ path: project, projects: found.projects })
+          })
         }}
       />
+      {checking && <Text color="gray">Checking the board…</Text>}
+      {error && <Text color="red">{error}</Text>}
     </Box>
   )
 }

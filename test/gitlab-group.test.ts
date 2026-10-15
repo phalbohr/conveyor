@@ -125,4 +125,11 @@ describe('GitLabBoard on a group board', () => {
     await board.commitChecks('abc', 'user-service').catch(() => undefined)
     expect(calls).toContain(`GET projects/${encodeURIComponent('shop/user-service')}/repository/commits/abc`)
   })
+
+  it('names the group when GitLab does not find it', async () => {
+    const run: Run = async () => ({ code: 0, stdout: JSON.stringify({ data: { scope: null } }), stderr: '' })
+    const board = new GitLabBoard('acme/shop/frontend', run, { retryDelay: 0, group: 'acme/shop' })
+    await expect(board.listTasks()).rejects.toThrow('GitLab group acme/shop was not found, or you have no access to it; check board.group in config.yaml')
+    await expect(new GitLabBoard('acme/app', run, { retryDelay: 0 }).listTasks()).rejects.toThrow('GitLab project acme/app was not found')
+  })
 })

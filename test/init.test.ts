@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
@@ -132,6 +132,77 @@ describe('conveyor init', () => {
     const output = JSON.parse(result.stdout)
     expect(output.settings).toBe(join(result.context.cwd, '.conveyor'))
     expect(output.warnings).toContainEqual(expect.stringContaining('gh auth status'))
+  })
+})
+
+describe('conveyor init checks the board first', () => {
+  const missing = { code: 1 }
+  const shopProjects = { code: 0, stdout: JSON.stringify([{ path_with_namespace: 'acme/shop/backend' }, { path_with_namespace: 'acme/shop/frontend' }]) }
+  const groupList = 'glab api groups/acme%2Fshop/projects?include_subgroups=true&archived=false&per_page=100&order_by=path&sort=asc'
+
+  it('creates nothing when the GitLab project or group does not exist', async () => {
+    const result = await runCli(['init', '--provider', 'gitlab', '--project', 'acme/nothing'], {
+      responses: { 'glab api projects/acme%2Fnothing': missing, 'glab api groups/acme%2Fnothing/projects?include_subgroups=true&archived=false&per_page=100&order_by=path&sort=asc': missing },
+    })
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('GitLab project or group acme/nothing was not found')
+    expect(result.stderr).toContain('Nothing was created.')
+    expect(existsSync(join(result.context.cwd, '.conveyor'))).toBe(false)
+  })
+
+  it('creates nothing when the GitHub repository does not exist', async () => {
+    const result = await runCli(['init', ...BOARD_FLAGS], { responses: { 'gh api repos/owner/repo --jq .full_name': missing } })
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('GitHub repository owner/repo was not found')
+    expect(existsSync(join(result.context.cwd, '.conveyor'))).toBe(false)
+  })
+
+  it('names the options for a group board when the path is a group', async () => {
+    const result = await runCli(['init', '--provider', 'gitlab', '--project', 'acme/shop'], { responses: { 'glab api projects/acme%2Fshop': missing, [groupList]: shopProjects } })
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('acme/shop is a GitLab group')
+    expect(result.stderr).toContain('conveyor init --provider gitlab --group acme/shop --project acme/shop/backend')
+    expect(existsSync(join(result.context.cwd, '.conveyor'))).toBe(false)
+  })
+
+  it('creates a group board with the project for new tasks', async () => {
+    const result = await runCli(['init', '--provider', 'gitlab', '--group', 'https://gitlab.com/groups/acme/shop/-/boards', '--project', 'acme/shop/frontend'], {
+      responses: { 'glab api projects/acme%2Fshop': missing, [groupList]: shopProjects },
+    })
+    expect(result.code).toBe(0)
+    const loaded = loadConfig(join(result.context.cwd, '.conveyor'))
+    if (!loaded.ok) throw new Error(loaded.errors.join('\n'))
+    expect(loaded.config.board).toEqual({ provider: 'gitlab', project: 'acme/shop/frontend', group: 'acme/shop' })
+
+    const other = await runCli(['init', '--provider', 'gitlab', '--group', 'acme/shop', '--project', 'acme/other'], { responses: { 'glab api projects/acme%2Fshop': missing, [groupList]: shopProjects } })
+    expect(other.code).toBe(1)
+    expect(other.stderr).toContain('acme/other is not a project of the group acme/shop; choose one of: acme/shop/backend, acme/shop/frontend')
+  })
+
+  it('takes the project path from a URL', async () => {
+    const result = await runCli(['init', '--provider', 'gitlab', '--project', 'https://gitlab.com/acme/app/'])
+    expect(result.code).toBe(0)
+    expect(result.calls).toContain('glab api projects/acme%2Fapp')
+    const loaded = loadConfig(join(result.context.cwd, '.conveyor'))
+    if (!loaded.ok) throw new Error(loaded.errors.join('\n'))
+    expect(loaded.config.board.project).toBe('acme/app')
+  })
+
+  it('removes what it created when the new settings are invalid', async () => {
+    const here = await runCli(['init', ...BOARD_FLAGS, '--group', 'acme'])
+    expect(here.code).toBe(1)
+    expect(here.stderr).toContain('group boards need provider gitlab')
+    expect(here.stderr).toContain('Nothing was created.')
+    expect(existsSync(join(here.context.cwd, '.conveyor'))).toBe(false)
+
+    const outside = join(tempDir(), 'settings')
+    mkdirSync(outside)
+    writeFileSync(join(outside, 'notes.md'), 'keep\n')
+    const result = await runCli(['init', '--path', outside, ...BOARD_FLAGS, '--group', 'acme'])
+    expect(result.code).toBe(1)
+    expect(readdirSync(outside)).toEqual(['notes.md'])
+    const status = await runCli([], { cwd: result.context.cwd, home: result.context.home })
+    expect(status.stderr).toContain('No conveyor settings found')
   })
 })
 

@@ -167,11 +167,11 @@ export class GitLabBoard implements Board {
     do {
       const cursor: string = after ? `, after: ${JSON.stringify(after)}` : ''
       const scope = this.options.group ? `group(fullPath: ${JSON.stringify(this.options.group)})` : `project(fullPath: ${JSON.stringify(this.project)})`
-      const page: { nodes: GraphIssue[]; pageInfo: { hasNextPage: boolean; endCursor: string } } = (
-        await this.graphql<{ scope: { issues: { nodes: GraphIssue[]; pageInfo: { hasNextPage: boolean; endCursor: string } } } }>(
-          `query { scope: ${scope} { issues(state: opened, ${this.options.group ? 'includeSubgroups: true, ' : ''}first: 100${cursor}) { nodes { ${ISSUE_FIELDS} } pageInfo { hasNextPage endCursor } } } }`,
-        )
-      ).scope.issues
+      const found = await this.graphql<{ scope: { issues: { nodes: GraphIssue[]; pageInfo: { hasNextPage: boolean; endCursor: string } } } | null }>(
+        `query { scope: ${scope} { issues(state: opened, ${this.options.group ? 'includeSubgroups: true, ' : ''}first: 100${cursor}) { nodes { ${ISSUE_FIELDS} } pageInfo { hasNextPage endCursor } } } }`,
+      )
+      if (!found.scope) throw new Error(`GitLab ${this.options.group ? `group ${this.options.group}` : `project ${this.project}`} was not found, or you have no access to it; check board.${this.options.group ? 'group' : 'project'} in config.yaml`)
+      const page = found.scope.issues
       issues.push(...page.nodes)
       after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null
     } while (after)

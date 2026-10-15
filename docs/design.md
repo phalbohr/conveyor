@@ -33,7 +33,7 @@ Commands:
 | Command | Action |
 |---|---|
 | `conveyor` | control screen: start and stop the conveyor, log, board panel, tasks, usage, help |
-| `conveyor init` | create settings (`--path`), or link existing ones (`--use`); `--provider` and `--project` when `origin` is not detected |
+| `conveyor init` | check the board, then create settings (`--path`), or link existing ones (`--use`); `--provider` and `--project` (a path or a URL) when `origin` is not detected, `--group` for a GitLab group board; creates nothing when a check fails |
 | `conveyor run` | work loop: poll the board, claim tasks within limits; in a terminal it opens the control screen; `--once` runs one cycle |
 | `conveyor settings` | settings editor for team, stage, and personal settings |
 | `conveyor config list\|get\|set` | read and change settings from scripts; `set` validates before it saves |
