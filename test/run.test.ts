@@ -101,4 +101,10 @@ describe('external commands', () => {
     expect(result.stderr).toBe('')
     expect(result.stdout.trim()).toBe('bad model')
   })
+  it('stops a command that hangs, so the next cycle can run', async () => {
+    const { createRun } = await import('../src/run.js')
+    const result = await createRun(undefined, 300)(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'])
+    expect(result.code).toBe(127)
+    expect(result.stderr).toContain('did not finish in 0 s and was stopped')
+  })
 })
