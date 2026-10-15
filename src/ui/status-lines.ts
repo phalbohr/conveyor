@@ -22,7 +22,7 @@ const percent = (value: number) => `${Math.round(value * 100)}%`
 export type StatusView = { column: number; open: boolean; focus: 'columns' | 'tasks'; task: number }
 export type ColumnTask = { id: string; title: string; url: string; detail: string; tone?: Line['tone']; form?: string; released?: boolean }
 
-export const STATUS_COLUMNS = ['backlog', 'in progress', 'queued', 'needs input', 'review'] as const
+export const STATUS_COLUMNS = ['backlog', 'needs input', 'queued', 'in progress', 'review'] as const
 export const BACKLOG = 0
 
 export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[] {
@@ -33,7 +33,7 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
         : { id: task.id, title: task.title, url: task.url, detail: task.form ? `form::${task.form}` : 'no form', ...(task.form ? { form: task.form } : {}) },
     )
   }
-  const states = [['in-progress'], ['queued'], ['needs-input'], ['review']][column - 1] ?? []
+  const states = [['needs-input'], ['queued'], ['in-progress'], ['review']][column - 1] ?? []
   return status.mine
     .filter((task) => states.includes(task.state))
     .map((task) => {
@@ -82,7 +82,7 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   const released = status.backlog.length - waiting.length
   const forms = [waiting.filter((task) => !task.form), ...(['idea', 'story', 'plan'] as const).map((form) => waiting.filter((task) => task.form === form))]
   const queued = status.mine.filter((task) => task.state === 'queued').length
-  const counts = [`${limits.running.used}/${limits.running.limit}`, `${queued}`, `${limits.awaitingMe.used}/${limits.awaitingMe.limit}`, `${limits.awaitingReview.used}/${limits.awaitingReview.limit}`]
+  const counts = [`${limits.awaitingMe.used}/${limits.awaitingMe.limit}`, `${queued}`, `${limits.running.used}/${limits.running.limit}`, `${limits.awaitingReview.used}/${limits.awaitingReview.limit}`]
   const columns = STATUS_COLUMNS.map((label, index) =>
     index === BACKLOG ? `${label} ${forms.map((group) => group.length).join('|')}${released ? ` +${released} released` : ''}` : `${label} ${counts[index - 1]}`,
   )

@@ -78,7 +78,7 @@ The task is not taken? Check that the issue has a `form::` label that `pickup_fr
 
 `conveyor` opens the control screen; `conveyor run` in a terminal opens it with the conveyor already running. It uses the whole terminal window and restores it on exit.
 
-The panel `my board: backlog 8|4|6|2 · in progress 1/3 · queued 0 · needs input 0/5 · review 2/2` shows:
+The panel `my board: backlog 8|4|6|2 · needs input 0/5 · queued 0 · in progress 1/3 · review 2/2` shows:
 
 - backlog: tasks of the whole board without a form | with `form::idea` | `form::story` | `form::plan`, plus `+N released`: started tasks that nobody owns after `release`. They are listed first, and the conveyor resumes them at their stage before new tasks.
 - the other columns: my tasks against my limits. A full limit turns the line yellow; a yellow `no new tasks: … reached · [u] usage` line names a token or subscription limit that stops new tasks.
