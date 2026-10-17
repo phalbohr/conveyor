@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import { loadConfig } from '../src/config.js'
+import { renderWorkpad } from '../src/engine/workpad.js'
 import { Engine } from '../src/engine/engine.js'
 import { UsageLedger } from '../src/usage.js'
 import type { Script } from '../src/harness/fake.js'
@@ -288,6 +289,31 @@ describe('Engine scheduling', () => {
     await vi.waitFor(() => expect(runs().slice(2)).toEqual(['1:implement']))
     expect((await board.getTask('2'))?.state).toBe('queued')
     expect((await board.getTask('3'))?.form).toBe('plan')
+    gate.resolve(done())
+    await engine.idle()
+  })
+
+  it('moves my task in progress to queued while it waits for a slot, but keeps a parked one', async () => {
+    const gate = deferred<StageResult>()
+    const { board, engine, runs } = setup({
+      local: 'limits: {running: 1, awaiting_me: 5}\n',
+      script: (run) => (run.taskId === '1' ? gate.promise : done()),
+    })
+    await board.createTask('Running', 'p', { form: 'plan' })
+    await engine.tick()
+    await vi.waitFor(() => expect(runs()).toEqual(['1:implement']))
+    const me = await board.user()
+    for (const [title, state] of [['Waiting', { attempt: 0, stage: 'implement' }], ['Parked', { attempt: 0, stage: 'merge', parked: 'merge waits: checks are pending', retryAt: new Date(0).toISOString() }]] as const) {
+      const task = await board.createTask(title, 'p', { form: 'plan' })
+      await board.setOwner(task.id, me)
+      await board.setState(task.id, 'in-progress')
+      await board.addComment(task.id, renderWorkpad(state, ''))
+    }
+
+    await engine.tick()
+
+    expect((await board.getTask('2'))?.state).toBe('queued')
+    expect((await board.getTask('3'))?.state).toBe('in-progress')
     gate.resolve(done())
     await engine.idle()
   })

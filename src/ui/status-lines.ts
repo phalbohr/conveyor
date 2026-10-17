@@ -50,7 +50,7 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
         else if (status.runner.here) details.push(`○ waits for its next attempt${heartbeat}`)
         else details.push(`runs in conveyor pid ${status.runner.pid ?? '?'}${heartbeat}`)
       }
-      if (task.state === 'queued') details.push(task.held ?? 'answered, waits for a free slot')
+      if (task.state === 'queued') details.push(task.held ?? 'waits for a free slot')
       if (task.attempt > 0 && !task.activity) details.push(`attempt ${task.attempt + 1}`)
       if (task.retryAt && !task.activity) details.push(Date.parse(task.retryAt) > now ? `retry ${time(task.retryAt)}` : status.runner.running ? 'resumes next cycle' : 'resumes on start')
       if (task.state === 'needs-input') details.push(task.answered ? (task.held ? `answered, ${task.held}` : 'answered, resumes next cycle') : `waits for your answer since ${task.waitingSince ? time(task.waitingSince) : '?'}`)
