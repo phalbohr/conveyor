@@ -173,6 +173,7 @@ export class Engine {
     let awaitingMe = 0
     let awaitingReview = 0
     let backingOff = 0
+    const parked = new Set<string>()
     let labeled: string | undefined
     const now = Date.now()
 
@@ -224,6 +225,7 @@ export class Engine {
             const { pad } = await this.workpad(task.id)
             if (!pad?.state.retryAt || Date.parse(pad.state.retryAt) <= now) resumable.push(task)
             else if (task.state === 'in-progress' && !pad.state.parked) backingOff++
+            if (pad?.state.parked) parked.add(task.id)
           }
           break
         }
@@ -252,7 +254,7 @@ export class Engine {
         continue
       }
       waiting++
-      if (task.state === 'needs-input') await board.setState(task.id, 'queued')
+      if (task.state === 'needs-input' || (task.state === 'in-progress' && !parked.has(task.id))) await board.setState(task.id, 'queued')
     }
 
     const overBudget =

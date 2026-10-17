@@ -265,7 +265,7 @@ A comment without the marker after a conveyor question is the answer. The task g
 | `conveyor::backlog` | waits for humans or for the conveyor; only tasks with a `form::` label are taken |
 | `form::idea`, `form::story`, `form::plan` | the task is ready in this form; the conveyor removes it when it takes the task |
 | `conveyor::needs-input` | waiting for a human answer |
-| `conveyor::queued` | answer received, waiting for a free slot |
+| `conveyor::queued` | answer received, or a started task between stages, waiting for a free slot |
 | `conveyor::in-progress` | a stage is running; `stage::<name>` shows which one |
 | `conveyor::review` | waiting for code review |
 | `conveyor::rework` | a human signal: the task restarts after `plan` |
