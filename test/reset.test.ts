@@ -55,6 +55,30 @@ describe('resetTask', () => {
     expect((await board.getTask(draft))?.form).toBeUndefined()
   })
 
+  it('keeps the parts of the plan when the task starts again from its plan', async () => {
+    const board = new FakeBoard('me')
+    const pad = async (id: string, part: number) => {
+      const comment = findWorkpad(await board.listComments(id))
+      if (comment) await board.updateComment(comment.id, renderWorkpad({ attempt: 0, stage: 'implement', parts: ['api', 'ui', 'docs'], part }, ''))
+    }
+    const together = await started(board)
+    await pad(together, 2)
+    const summary = await resetTask(board, new FakeWorkspaces(), together, 'plan', undefined, 'together')
+    expect(findWorkpad(await board.listComments(together))?.state).toEqual({ attempt: 0, parts: ['api', 'ui', 'docs'], part: 0 })
+    expect(board.labelsOf(together)).toContain('part::1/3')
+    expect(summary).toContain('The 3 parts of the plan stay; the work starts again at part 1.')
+    expect(summary).not.toContain('stay merged')
+
+    const separate = await started(board)
+    await pad(separate, 1)
+    expect(await resetTask(board, new FakeWorkspaces(), separate, 'plan')).toContain('Parts 1–1 stay merged in the base branch. The 3 parts of the plan stay; the work starts again at part 2.')
+    expect(findWorkpad(await board.listComments(separate))?.state.part).toBe(1)
+
+    const story = await started(board)
+    await resetTask(board, new FakeWorkspaces(), story, 'story')
+    expect(findWorkpad(await board.listComments(story))?.state).toEqual({ attempt: 0 })
+  })
+
   it('leaves a task of another member alone', async () => {
     const board = new FakeBoard('me')
     const id = await started(board)

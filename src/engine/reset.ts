@@ -10,7 +10,7 @@ export async function recordedForm(board: Board, id: string): Promise<TaskForm |
   return findWorkpad(await board.listComments(id))?.state.form
 }
 
-export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remove' | 'deleteBranch'>, id: string, form?: ResetForm, session?: string): Promise<string> {
+export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remove' | 'deleteBranch'>, id: string, form?: ResetForm, session?: string, parts: 'separate' | 'together' = 'separate'): Promise<string> {
   const task = await board.getTask(id)
   if (!task) throw new Error(`task ${id} not found`)
   const me = await board.user()
@@ -24,14 +24,16 @@ export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remo
   await workspaces.deleteBranch(id)
   if (session) removeSession(session)
   if (task.fixing) await board.setFixing(id, false)
-  if (pad) await board.updateComment(pad.id, renderWorkpad({ attempt: 0 }, ''))
+  const kept = chosen === 'plan' && pad?.state.parts ? { parts: pad.state.parts, part: parts === 'together' ? 0 : (pad.state.part ?? 0) } : undefined
+  if (pad) await board.updateComment(pad.id, renderWorkpad({ attempt: 0, ...kept }, ''))
   await board.setStage(id, undefined)
-  if (pad?.state.parts) await board.setPart(id, undefined)
+  if (pad?.state.parts) await board.setPart(id, kept ? `${kept.part + 1}/${kept.parts.length}` : undefined)
   await board.setForm(id, chosen)
   await board.setState(id, 'backlog')
-  const merged = pad?.state.parts && pad.state.part ? ` Parts 1–${pad.state.part} stay merged in the base branch.` : ''
+  const merged = pad?.state.parts && pad.state.part && parts === 'separate' ? ` Parts 1–${pad.state.part} stay merged in the base branch.` : ''
+  const resumes = kept ? ` The ${kept.parts.length} parts of the plan stay; the work starts again at part ${kept.part + 1}.` : ''
   const closed = pull?.state === 'open' ? `, closed pull request ${pull.number}` : ''
-  const summary = `Reset by @${me}: stopped the work${closed}, deleted the branch conveyor/${taskSlug(id)} and the workspace, cleared the workpad; back in Backlog ${chosen ? `with form::${chosen}` : 'without a form'}.${merged}`
+  const summary = `Reset by @${me}: stopped the work${closed}, deleted the branch conveyor/${taskSlug(id)} and the workspace, cleared the workpad; back in Backlog ${chosen ? `with form::${chosen}` : 'without a form'}.${merged}${resumes}`
   if (task.owner) await releaseClaim(board, id, summary)
   else await board.release(id)
   return summary

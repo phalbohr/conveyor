@@ -228,7 +228,7 @@ export class Runner {
     const { settings, config, board } = this.setup
     const pid = this.loop ? undefined : runningPid(this.context.home, config.board.project)
     if (pid) throw new Error(`the conveyor runs in another terminal (pid ${pid}); stop it there first, then reset ${taskRef(id)}`)
-    const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form, sessionFile(this.context.home, config.board.project, id))
+    const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form, sessionFile(this.context.home, config.board.project, id), config.parts)
     const summary = await (this.loop && this.engine ? this.engine.hold(id, work) : work())
     this.emit('info', `task ${id}: ${summary}`)
     return summary

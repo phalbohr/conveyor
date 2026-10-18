@@ -651,6 +651,7 @@ export class Engine {
     for (const [index, stage] of stages.entries()) {
       if (signal.aborted) return { status: 'stopped', summary }
       if (stage.name === 'merge' && this.collectsParts(state, config)) break
+      if (stage.name === 'review' && this.collectsParts(state, config)) continue
       const waiter = index > 0 ? await this.higherWaiter(id) : undefined
       if (waiter) {
         state.stage = stage.name

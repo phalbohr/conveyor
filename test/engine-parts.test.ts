@@ -9,9 +9,9 @@ import { UsageLedger } from '../src/usage.js'
 import { FakeWorkspaces, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
-function setup(script: (board: FakeBoard) => Script, merge = 'ai', extra = '') {
+function setup(script: (board: FakeBoard) => Script, merge = 'ai', extra = '', stages = '  implement: {}\n  merge: {}') {
   const settings = tempDir('conveyor-settings-')
-  writeFileSync(join(settings, 'config.yaml'), `board: {provider: github, project: acme/app}\npickup_from: story\ntransitions: {story_to_plan: autonomous, merge: ${merge}}\nstages:\n  implement: {}\n  merge: {}\n${extra}`)
+  writeFileSync(join(settings, 'config.yaml'), `board: {provider: github, project: acme/app}\npickup_from: story\ntransitions: {story_to_plan: autonomous, merge: ${merge}}\nstages:\n${stages}\n${extra}`)
   writeFileSync(join(settings, 'local.yaml'), 'limits: {awaiting_review: 10}\n')
   mkdirSync(join(settings, 'stages'))
   const board = new FakeBoard('me')
@@ -127,6 +127,20 @@ describe('a plan in parts', () => {
     await cycle()
     expect(board.merges).toHaveLength(1)
     expect((await board.getTask('1'))?.state).toBe('done')
+  })
+
+  it('runs the review stage once, on the last part, over all parts with parts: together', async () => {
+    const { board, harness, cycle } = setup(
+      () => (run) => (run.stage === 'plan' ? { outcome: 'done', summary: 'planned', parts: ['A', 'B'] } : { outcome: 'done', summary: 'ok' }),
+      'human',
+      'parts: together\n',
+      '  implement: {}\n  review: {}\n  merge: {}',
+    )
+    await board.createTask('Story', 'text', { form: 'story' })
+    await cycle()
+    await cycle()
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['plan', 'implement', 'implement', 'review', 'merge'])
+    expect(stageRuns(harness).find((run) => run.stage === 'review')?.prompt).toContain('review all parts together')
   })
 
   it('starts again from the first part on /rework with parts: together', async () => {

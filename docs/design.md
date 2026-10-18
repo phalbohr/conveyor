@@ -299,7 +299,9 @@ The stage result has `parts`: the plan stage returns the ordered titles of the p
 - After the first part with changes the conveyor opens a draft pull request (on GitLab `Draft: <task title>`; on GitHub `--draft`, or a `Draft:` title where the repository has no drafts), one per changed repository, and comments its links. Its body lists the parts with check marks.
 - The prompt marks earlier parts as done in the task branch, not as merged.
 - The last part runs `merge` as usual. Then the conveyor marks every pull request ready with the plain task title and the full list of parts, and the merge mode decides as for any task: with `human`, one review and approval per repository for the whole task.
+- The parts before the last skip the `review` stage too; the review of the last part covers all parts, every change of the task branch against the base branch.
 - `/rework` closes the pull requests, resets the branch, and starts again from part 1.
+- A reset to `form::plan` keeps the parts of the plan and starts again at part 1 (with `separate`: at the current part, because the earlier ones are merged).
 
 ## Task claim
 

@@ -91,7 +91,7 @@ export async function resetCommand(context: Context, id: string, form: ResetForm
     return 1
   }
   try {
-    context.stdout(`${await resetTask(prepared.board, taskWorkspaces(context, prepared.settings, prepared.config, prepared.board), id, form, sessionFile(context.home, prepared.config.board.project, id))}\n`)
+    context.stdout(`${await resetTask(prepared.board, taskWorkspaces(context, prepared.settings, prepared.config, prepared.board), id, form, sessionFile(context.home, prepared.config.board.project, id), prepared.config.parts)}\n`)
     return 0
   } catch (error) {
     context.stderr(`${(error as Error).message}\n`)

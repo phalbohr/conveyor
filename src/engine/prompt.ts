@@ -88,7 +88,9 @@ export function buildPrompt(input: PromptInput): string {
     sections.push(
       input.stage === 'plan'
         ? `## Parts\n\nThe work is split into ${split}:\n\n${items}\n\n${together ? 'The parts marked done are in the task branch.' : 'The parts marked merged are in the base branch.'} Plan only the remaining work and return its parts in \`parts\`.`
-        : `## Parts\n\nThe work is split into ${list.length} ${split}, ${together ? 'done' : 'merged'} in this order:\n\n${items}\n\nWork only on part ${current + 1}: ${list[current] ?? ''}. ${together ? 'The earlier parts are done in the task branch; the pull request is reviewed and merged after the last part.' : 'The earlier parts are merged into the base branch.'}`,
+        : together && input.stage === 'review'
+          ? `## Parts\n\nThe work is split into ${list.length} ${split}:\n\n${items}\n\nThis is the only review of the task: review all parts together, that is every change of the task branch against the base branch, not only part ${current + 1}.`
+          : `## Parts\n\nThe work is split into ${list.length} ${split}, ${together ? 'done' : 'merged'} in this order:\n\n${items}\n\nWork only on part ${current + 1}: ${list[current] ?? ''}. ${together ? 'The earlier parts are done in the task branch; the pull request is reviewed and merged after the last part.' : 'The earlier parts are merged into the base branch.'}`,
     )
   }
   if (input.merge) sections.push(`## Merge\n\n${input.merge}`)
