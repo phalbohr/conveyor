@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import type { Config } from './config.js'
 import { childEnv } from './harness/harness.js'
@@ -159,7 +159,13 @@ export class GitWorkspaces implements Workspaces {
     const path = this.path(taskId)
     if (!existsSync(path)) return
     await this.hook('before_remove', path).catch(() => undefined)
-    await this.git(this.options.repo, 'worktree', 'remove', '--force', path)
+    try {
+      await this.git(this.options.repo, 'worktree', 'remove', '--force', path)
+    } catch (error) {
+      if (!(error as Error).message.includes('is not a working tree')) throw error
+      rmSync(path, { recursive: true, force: true })
+      await this.git(this.options.repo, 'worktree', 'prune')
+    }
   }
 
   async list() {

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MultiWorkspaces } from '../src/multi-workspaces.js'
@@ -104,6 +104,14 @@ describe('MultiWorkspaces', () => {
     await workspaces.commitFile('frontend#12', 'frontend/docs/plan.md', 'plan\n', 'plan')
     expect(await workspaces.changed('frontend#12')).toEqual(['frontend', 'user-service'])
     await expect(workspaces.commitFile('frontend#12', 'docs/plan.md', 'plan\n', 'plan')).rejects.toThrow('starts with the name of one of the repositories')
+  })
+
+  it('removes a task folder left by another setup whose repository folders are no worktrees', async () => {
+    const { workspaces, root } = await setup()
+    mkdirSync(join(root, 'frontend-12', 'frontend'), { recursive: true })
+    writeFileSync(join(root, 'frontend-12', 'frontend', 'README.md'), 'old\n')
+    await workspaces.remove('frontend#12')
+    expect(existsSync(join(root, 'frontend-12'))).toBe(false)
   })
 
   it('removes every worktree and the folder of the task', async () => {
