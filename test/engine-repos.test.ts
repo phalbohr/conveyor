@@ -13,7 +13,7 @@ import { tempDir } from './helpers.js'
 const done: StageResult = { outcome: 'done', summary: 'ok' }
 const planned: Script = (run) => (run.stage === 'plan' ? { ...done, repos: ['user-service', 'frontend'] } : done)
 
-function setup(options: { mode?: 'human' | 'ai'; script?: Script } = {}) {
+function setup(options: { mode?: 'human' | 'ai'; script?: Script; extra?: string } = {}) {
   const settings = tempDir('conveyor-settings-')
   writeFileSync(
     join(settings, 'config.yaml'),
@@ -23,6 +23,7 @@ function setup(options: { mode?: 'human' | 'ai'; script?: Script } = {}) {
       'pickup_from: story',
       `transitions: {merge: ${options.mode ?? 'ai'}, story_to_plan: autonomous}`,
       'stages:\n  plan: {}\n  implement: {}\n  merge: {}',
+      options.extra ?? '',
     ].join('\n'),
   )
   mkdirSync(join(settings, 'stages'))
@@ -52,6 +53,29 @@ describe('a feature in several repositories', () => {
     expect(board.merges.map((merge) => merge.repo)).toEqual(['user-service', 'frontend'])
     expect(board.pullBodies.every((body) => body.startsWith('Part of #1'))).toBe(true)
     expect((await board.getTask('1'))?.state).toBe('done')
+  })
+
+  it('collects the parts in one draft merge request per repository and asks for review of all after the last part', async () => {
+    const { board, workspaces, cycle } = setup({
+      mode: 'human',
+      extra: 'parts: together',
+      script: (run) => (run.stage === 'plan' ? { ...done, repos: ['user-service', 'frontend'], parts: ['API', 'Screen'] } : done),
+    })
+    workspaces.changedRepos = ['user-service']
+    await board.createTask('Checkout', 'story', { form: 'story' })
+
+    await cycle()
+    expect(await board.pullRequest('1', 'user-service')).toMatchObject({ state: 'open', draft: true })
+    expect(await board.pullRequest('1', 'frontend')).toBeUndefined()
+    expect((await board.listComments('1')).some((comment) => comment.body.includes('**Draft merge requests for all parts of this task:**'))).toBe(true)
+
+    workspaces.changedRepos = ['frontend', 'user-service']
+    await cycle()
+    expect(board.readied.map((entry) => entry.repo)).toEqual(['user-service', 'frontend'])
+    expect(await board.pullRequest('1', 'frontend')).toMatchObject({ state: 'open' })
+    expect((await board.pullRequest('1', 'frontend'))?.draft).toBeUndefined()
+    expect((await board.getTask('1'))?.state).toBe('review')
+    expect(board.merges).toEqual([])
   })
 
   it('opens merge requests only for the repositories the task changed', async () => {

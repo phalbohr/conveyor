@@ -86,7 +86,8 @@ export interface Board {
   claim(id: string): Promise<boolean>
   release(id: string): Promise<void>
   setPriority(id: string, priority: number): Promise<void>
-  openPullRequest(id: string, title: string, body: string, repo?: string): Promise<PullRequest>
+  openPullRequest(id: string, title: string, body: string, repo?: string, draft?: boolean): Promise<PullRequest>
+  readyPullRequest(id: string, title: string, body: string, repo?: string): Promise<void>
   pullRequest(id: string, repo?: string): Promise<PullRequest | undefined>
   mergePullRequest(id: string, method: MergeMethod, sha: string, repo?: string): Promise<{ ok: true } | { ok: false; error: string }>
   closePullRequest(id: string, repo?: string): Promise<void>

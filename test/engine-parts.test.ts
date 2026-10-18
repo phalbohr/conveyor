@@ -91,6 +91,89 @@ describe('a plan in parts', () => {
     expect((await board.getTask('1'))?.state).toBe('done')
   })
 
+  it('collects all parts in one draft pull request with parts: together and asks for review after the last part', async () => {
+    const { board, harness, workspaces, cycle } = setup(
+      () => (run) => (run.stage === 'plan' ? { outcome: 'done', summary: 'planned', parts: ['A', 'B', 'C'] } : { outcome: 'done', summary: `${run.stage} ok` }),
+      'human',
+      'parts: together\n',
+    )
+    await board.createTask('Big story', 'text', { form: 'story' })
+
+    await cycle()
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['plan', 'implement'])
+    expect(board.pullTitles).toEqual(['Big story'])
+    expect(await board.pullRequest('1')).toMatchObject({ state: 'open', draft: true })
+    expect(board.pullBodies[0]).toContain('- [x] 1. A\n- [ ] 2. B\n- [ ] 3. C')
+    expect(board.labelsOf('1')).toContain('part::2/3')
+    expect((await board.getTask('1'))?.state).toBe('in-progress')
+    expect((await board.listComments('1')).some((comment) => comment.body.includes('Draft pull request for all parts of this task'))).toBe(true)
+
+    await cycle()
+    expect(board.pullTitles).toHaveLength(1)
+    expect(board.labelsOf('1')).toContain('part::3/3')
+
+    await cycle()
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['plan', 'implement', 'implement', 'implement', 'merge'])
+    expect(stageRuns(harness).filter((run) => run.stage === 'implement')[2]?.prompt).toContain('Work only on part 3: C')
+    expect(stageRuns(harness).filter((run) => run.stage === 'implement')[2]?.prompt).toContain('1. A (done)\n2. B (done)\n3. C (this part)')
+    expect(stageRuns(harness).filter((run) => run.stage === 'implement')[2]?.prompt).toContain('The earlier parts are done in the task branch')
+    expect(board.readied).toEqual([{ id: '1', title: 'Big story', body: expect.stringContaining('- [x] 3. C') }])
+    expect((await board.pullRequest('1'))?.draft).toBeUndefined()
+    expect((await board.getTask('1'))?.state).toBe('review')
+    expect(board.merges).toEqual([])
+    expect(workspaces.resets).toEqual([])
+
+    await board.addComment('1', '/approve')
+    await cycle()
+    expect(board.merges).toHaveLength(1)
+    expect((await board.getTask('1'))?.state).toBe('done')
+  })
+
+  it('starts again from the first part on /rework with parts: together', async () => {
+    const { board, harness, cycle } = setup(
+      () => (run) => (run.stage === 'plan' ? { outcome: 'done', summary: 'planned', parts: ['A', 'B'] } : { outcome: 'done', summary: 'ok' }),
+      'human',
+      'parts: together\n',
+    )
+    await board.createTask('Story', 'text', { form: 'story' })
+    await cycle()
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('review')
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await board.addComment('1', '/rework')
+    await cycle()
+    const implement = stageRuns(harness).filter((run) => run.stage === 'implement')
+    expect(implement.at(-1)?.prompt).toContain('Work only on part 1: A')
+    expect(board.labelsOf('1')).toContain('part::2/2')
+    expect(board.pullTitles).toEqual(['Story', 'Story'])
+    expect(await board.pullRequest('1')).toMatchObject({ state: 'open', draft: true })
+  })
+
+  it('retries only the draft pull request after it failed to open with parts: together', async () => {
+    const { board, harness, cycle } = setup(
+      () => (run) => (run.stage === 'plan' ? { outcome: 'done', summary: 'planned', parts: ['A', 'B'] } : { outcome: 'done', summary: 'ok' }),
+      'human',
+      'parts: together\n',
+    )
+    const open = board.openPullRequest.bind(board)
+    board.openPullRequest = async () => {
+      throw new Error('source_branch does not exist')
+    }
+    await board.createTask('Story', 'text', { form: 'story' })
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+    board.openPullRequest = open
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await board.addComment('1', 'fixed, retry')
+    await cycle()
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['plan', 'implement'])
+    expect(board.pullTitles).toEqual(['Story'])
+    expect(board.labelsOf('1')).toContain('part::2/2')
+    await cycle()
+    expect(stageRuns(harness).map((run) => run.stage)).toEqual(['plan', 'implement', 'implement', 'merge'])
+    expect((await board.getTask('1'))?.state).toBe('review')
+  })
+
   it('works as one pull request when the plan has no parts', async () => {
     const { board, cycle } = setup(() => () => ({ outcome: 'done', summary: 'ok' }))
     await board.createTask('Small story', 'text', { form: 'story' })

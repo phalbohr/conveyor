@@ -20,7 +20,7 @@ export type PromptInput = {
   base?: string
   repos?: string[]
   mergeCriteria?: string
-  parts?: { list: string[]; current: number }
+  parts?: { list: string[]; current: number; together?: boolean }
 }
 
 const MODES: Record<GateMode, string> = {
@@ -81,12 +81,14 @@ export function buildPrompt(input: PromptInput): string {
     sections.push(`## Review feedback\n\n${intro} Address every point:\n\n${feedback}`)
   }
   if (input.parts) {
-    const { list, current } = input.parts
-    const items = list.map((title, index) => `${index + 1}. ${title}${index < current ? ' (merged)' : index === current ? ' (this part)' : ''}`).join('\n')
+    const { list, current, together } = input.parts
+    const earlier = together ? 'done' : 'merged'
+    const items = list.map((title, index) => `${index + 1}. ${title}${index < current ? ` (${earlier})` : index === current ? ' (this part)' : ''}`).join('\n')
+    const split = together ? 'parts that collect in one pull request per repository' : 'parts, one pull request each'
     sections.push(
       input.stage === 'plan'
-        ? `## Parts\n\nThe work is split into parts, one pull request each:\n\n${items}\n\nThe parts marked merged are in the base branch. Plan only the remaining work and return its parts in \`parts\`.`
-        : `## Parts\n\nThe work is split into ${list.length} parts, one pull request each, merged in this order:\n\n${items}\n\nWork only on part ${current + 1}: ${list[current] ?? ''}. The earlier parts are merged into the base branch.`,
+        ? `## Parts\n\nThe work is split into ${split}:\n\n${items}\n\n${together ? 'The parts marked done are in the task branch.' : 'The parts marked merged are in the base branch.'} Plan only the remaining work and return its parts in \`parts\`.`
+        : `## Parts\n\nThe work is split into ${list.length} ${split}, ${together ? 'done' : 'merged'} in this order:\n\n${items}\n\nWork only on part ${current + 1}: ${list[current] ?? ''}. ${together ? 'The earlier parts are done in the task branch; the pull request is reviewed and merged after the last part.' : 'The earlier parts are merged into the base branch.'}`,
     )
   }
   if (input.merge) sections.push(`## Merge\n\n${input.merge}`)

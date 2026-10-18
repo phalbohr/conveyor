@@ -147,8 +147,12 @@ export class RedactingBoard implements Board {
     return this.board.setPriority(id, priority)
   }
 
-  openPullRequest(id: string, title: string, body: string, repo?: string) {
-    return this.board.openPullRequest(id, this.clean(title), this.clean(body), repo)
+  openPullRequest(id: string, title: string, body: string, repo?: string, draft?: boolean) {
+    return this.board.openPullRequest(id, this.clean(title), this.clean(body), repo, draft)
+  }
+
+  readyPullRequest(id: string, title: string, body: string, repo?: string) {
+    return this.board.readyPullRequest(id, this.clean(title), this.clean(body), repo)
   }
 
   pullRequest(id: string, repo?: string) {

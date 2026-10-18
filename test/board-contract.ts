@@ -174,6 +174,15 @@ export function boardContract(name: string, makeBoard: () => Board, options: Con
       expect((await board.getTask(t.id))?.closed).toBe(false)
     })
 
+    it('opens a draft pull request and marks it ready', async () => {
+      const t = await task({ state: 'in-progress' })
+      await branch(t.id)
+      await board.openPullRequest(t.id, `Task ${t.id}`, 'Part of the contract test, part 1.', undefined, true)
+      await board.readyPullRequest(t.id, `Task ${t.id}`, 'Part of the contract test, all parts.')
+      expect((await board.pullRequest(t.id))?.draft).toBeFalsy()
+      await board.closePullRequest(t.id)
+    })
+
     it('closes a pull request', async () => {
       const t = await task({ state: 'review' })
       await branch(t.id)

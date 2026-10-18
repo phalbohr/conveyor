@@ -16,6 +16,7 @@
 - `repos.projects` lists the repositories of a feature by their full paths, from any groups, instead of `repos.group`; their names are the last part of the path. Clones without `repo_paths` go to `~/.conveyor/repos/<full project path>`.
 - Reset and cleanup remove a task folder whose repository folders are no worktrees (for example one left from before `repos` was set) instead of failing with `is not a working tree`.
 - The triage sets the priority of new tasks only, so priorities set by hand stay. A priority it returns for an older task is logged as a suggestion (`triage: suggests priority 1 for #12 … (now 3); not applied`); before, it was applied silently.
+- `parts: together` collects the parts of a plan in one draft pull request per repository instead of merging every part on its own: after the last part the `merge` stage rebases the branch, the conveyor marks the pull requests ready, and the whole task is reviewed and merged at once. The default `separate` keeps one pull request per part. The settings screen lists it under Team.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
 
 ## 0.2.2 — 2026-10-14

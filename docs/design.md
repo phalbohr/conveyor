@@ -293,6 +293,14 @@ The stage result has `parts`: the plan stage returns the ordered titles of the p
 - A rerun of `plan` (for example `/fix_from: plan`) keeps the merged parts and replaces the remaining ones with the parts it returns.
 - After the last part the task is done and the `part::` label is removed.
 
+`parts: together` (team setting, default `separate`) collects the parts for one review instead:
+
+- The parts before the last run the stages after `plan` up to, but not including, `merge`. The task branch keeps their commits; nothing is reset or merged between parts.
+- After the first part with changes the conveyor opens a draft pull request (on GitLab `Draft: <task title>`; on GitHub `--draft`, or a `Draft:` title where the repository has no drafts), one per changed repository, and comments its links. Its body lists the parts with check marks.
+- The prompt marks earlier parts as done in the task branch, not as merged.
+- The last part runs `merge` as usual. Then the conveyor marks every pull request ready with the plain task title and the full list of parts, and the merge mode decides as for any task: with `human`, one review and approval per repository for the whole task.
+- `/rework` closes the pull requests, resets the branch, and starts again from part 1.
+
 ## Task claim
 
 1. The CLI pushes a new lock branch `conveyor-lock/<issue>`. The server rejects the push if the branch exists. This operation is atomic.

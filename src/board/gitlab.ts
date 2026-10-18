@@ -284,14 +284,20 @@ export class GitLabBoard implements Board {
     if (result.code !== 0 && result.status !== 404) this.fail(result, 'release')
   }
 
-  async openPullRequest(id: string, title: string, body: string, repo?: string) {
+  async openPullRequest(id: string, title: string, body: string, repo?: string, draft = false) {
     const api = this.repoApi(repo)
     const existing = await this.pullRequest(id, repo)
     if (existing?.state === 'open') return existing
-    await this.json(['-X', 'POST', `${api}/merge_requests`, '-f', `source_branch=conveyor/${taskSlug(id)}`, '-f', `target_branch=${await this.baseBranch(repo)}`, '-f', `title=${title}`, '-f', `description=${body}`, '-f', `assignee_id=${await this.userId(await this.user())}`])
+    await this.json(['-X', 'POST', `${api}/merge_requests`, '-f', `source_branch=conveyor/${taskSlug(id)}`, '-f', `target_branch=${await this.baseBranch(repo)}`, '-f', `title=${draft ? `Draft: ${title}` : title}`, '-f', `description=${body}`, '-f', `assignee_id=${await this.userId(await this.user())}`])
     const opened = await this.pullRequest(id, repo)
     if (!opened) throw new Error(`merge request for task ${id} not found after creation`)
     return opened
+  }
+
+  async readyPullRequest(id: string, title: string, body: string, repo?: string) {
+    const pull = await this.pullRequest(id, repo)
+    if (!pull || pull.state !== 'open') throw new Error(`no open merge request for task ${id}${repo ? ` in ${repo}` : ''}`)
+    await this.json(['-X', 'PUT', `${this.repoApi(repo)}/merge_requests/${pull.number}`, '-f', `title=${title}`, '-f', `description=${body}`])
   }
 
   async pullRequest(id: string, repo?: string): Promise<PullRequest | undefined> {

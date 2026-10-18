@@ -49,6 +49,7 @@ export class FakeBoard implements Board {
     if (pull) delete pull.draft
   }
   readonly merges: { id: string; method: MergeMethod; repo?: string }[] = []
+  readonly readied: { id: string; title: string; body: string; repo?: string }[] = []
   readonly outsiders = new Set<string>()
   readonly pullTitles: string[] = []
   readonly pullBodies: string[] = []
@@ -249,7 +250,7 @@ export class FakeBoard implements Board {
     this.replaceLabel(id, PRIORITY_LABEL, PRIORITY_LABEL + priority)
   }
 
-  async openPullRequest(id: string, title: string, body = '', repo?: string) {
+  async openPullRequest(id: string, title: string, body = '', repo?: string, draft = false) {
     const existing = this.pulls.get(pullKey(id, repo))
     if (existing?.state === 'open') return { ...existing }
     const pull: PullRequest = {
@@ -258,7 +259,7 @@ export class FakeBoard implements Board {
       headSha: `${repo ? `${repo}-` : ''}${id}`.padStart(40, '0'),
       state: 'open',
       checks: this.checks,
-      ...(this.draft ? { draft: true } : {}),
+      ...(this.draft || draft ? { draft: true } : {}),
       mergeable: 'yes',
       feedback: [],
       reviews: [],
@@ -294,6 +295,13 @@ export class FakeBoard implements Board {
   async closePullRequest(id: string, repo?: string) {
     const pull = this.pulls.get(pullKey(id, repo))
     if (pull) pull.state = 'closed'
+  }
+
+  async readyPullRequest(id: string, title: string, body: string, repo?: string) {
+    const pull = this.pulls.get(pullKey(id, repo))
+    if (!pull || pull.state !== 'open') throw new Error(`no open pull request for task ${id}`)
+    delete pull.draft
+    this.readied.push({ id, title, body, ...(repo ? { repo } : {}) })
   }
 
   updatePullRequest(id: string, patch: Partial<PullRequest>, repo?: string) {

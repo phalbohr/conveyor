@@ -268,14 +268,27 @@ export class GitHubBoard implements Board {
     await this.replaceLabel(id, PRIORITY_LABEL, PRIORITY_LABEL + priority)
   }
 
-  async openPullRequest(id: string, title: string, body: string) {
+  async openPullRequest(id: string, title: string, body: string, _repo?: string, draft = false) {
     const existing = await this.pullRequest(id)
     if (existing?.state === 'open') return existing
     const base = await this.baseBranch()
-    await this.gh(['pr', 'create', '-R', this.project, '--head', `conveyor/${id}`, '--base', base, '--title', title, '--body', body, '--assignee', await this.user()])
+    const assignee = await this.user()
+    const create = (text: string, flags: string[]) => this.gh(['pr', 'create', '-R', this.project, '--head', `conveyor/${id}`, '--base', base, '--title', text, '--body', body, '--assignee', assignee, ...flags])
+    if (!draft) await create(title, [])
+    else await create(title, ['--draft']).catch((error: unknown) => {
+      if (!/draft/i.test((error as Error).message)) throw error
+      return create(`Draft: ${title}`, [])
+    })
     const opened = await this.pullRequest(id)
     if (!opened) throw new Error(`pull request for task ${id} not found after creation`)
     return opened
+  }
+
+  async readyPullRequest(id: string, title: string, body: string) {
+    const pull = await this.pullRequest(id)
+    if (!pull || pull.state !== 'open') throw new Error(`no open pull request for task ${id}`)
+    if (pull.draft) await this.gh(['pr', 'ready', pull.number, '-R', this.project])
+    await this.gh(['pr', 'edit', pull.number, '-R', this.project, '--title', title, '--body', body])
   }
 
   async pullRequest(id: string) {

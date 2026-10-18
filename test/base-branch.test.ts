@@ -60,6 +60,46 @@ describe('GitHub blockers', () => {
   })
 })
 
+describe('draft pull requests', () => {
+  it('opens a draft on GitHub, falls back to a Draft title where drafts are not available, and marks it ready', async () => {
+    const pull = { number: 4, url: 'https://example.test/pull/4', headRefOid: 'a'.repeat(40), state: 'OPEN', mergeable: 'MERGEABLE', isCrossRepository: false, isDraft: true, statusCheckRollup: [], reviews: [], comments: [] }
+    let created = false
+    const calls: string[][] = []
+    const run: Run = async (_command, args) => {
+      calls.push(args)
+      if (args[1] === 'create' && args.includes('--draft')) return { code: 1, stdout: '', stderr: 'Draft pull requests are not supported in this repository.' }
+      if (args[1] === 'create') created = true
+      const stdout = args[0] === 'pr' && args[1] === 'list' ? JSON.stringify(created ? [pull] : []) : args.includes('user') ? '{"login":"me"}' : args[0] === 'api' ? '[[]]' : '{}'
+      return { code: 0, stdout, stderr: '' }
+    }
+    const board = new GitHubBoard('acme/app', run, { baseBranch: 'develop' })
+    await board.openPullRequest('5', 'Task', 'body', undefined, true)
+    const creates = calls.filter((args) => args[1] === 'create')
+    expect(creates.map((args) => [args[args.indexOf('--title') + 1], args.includes('--draft')])).toEqual([
+      ['Task', true],
+      ['Draft: Task', false],
+    ])
+    await board.readyPullRequest('5', 'Task', 'all parts')
+    expect(calls).toContainEqual(['pr', 'ready', '4', '-R', 'acme/app'])
+    expect(calls).toContainEqual(['pr', 'edit', '4', '-R', 'acme/app', '--title', 'Task', '--body', 'all parts'])
+  })
+
+  it('opens a draft merge request on GitLab with the Draft title and marks it ready with the plain title', async () => {
+    const request = { iid: 8, web_url: 'https://example.test/mr/8', sha: 'b'.repeat(40), state: 'opened', draft: true, source_project_id: 1, target_project_id: 1 }
+    let created = false
+    const { run, calls } = recorder((args) =>
+      args.includes('POST') ? ((created = true), '{}') : args.some((arg) => arg.startsWith('users?')) ? '[{"id":7}]' : args.includes('user') ? '{"username":"me"}' : args.some((arg) => arg.includes('/merge_requests?')) ? JSON.stringify(created ? [request] : []) : '[]',
+    )
+    const board = new GitLabBoard('acme/app', run, { baseBranch: 'develop', retryDelay: 0 })
+    await board.openPullRequest('5', 'Task', 'body', undefined, true).catch(() => undefined)
+    expect(calls.flat()).toContain('title=Draft: Task')
+    board.pullRequest = async () => ({ number: '8', url: request.web_url, headSha: request.sha, state: 'open', checks: 'none', mergeable: 'yes', draft: true, feedback: [], reviews: [], comments: [] })
+    await board.readyPullRequest('5', 'Task', 'all parts')
+    const put = calls.find((args) => args.includes('PUT')) ?? []
+    expect(put).toEqual(expect.arrayContaining([`projects/${encodeURIComponent('acme/app')}/merge_requests/8`, 'title=Task', 'description=all parts']))
+  })
+})
+
 describe('pull requests from forks', () => {
   it('ignores a fork pull request with the task branch name on GitHub', async () => {
     const pull = (number: number, cross: boolean) => ({ number, url: `https://example.test/pull/${number}`, headRefOid: 'a'.repeat(40), state: 'OPEN', mergeable: 'MERGEABLE', isCrossRepository: cross, statusCheckRollup: [], reviews: [], comments: [] })

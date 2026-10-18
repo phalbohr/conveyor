@@ -457,10 +457,15 @@ export class Engine {
         if (pull?.state === 'open') await board.closePullRequest(id)
         for (const repo of Object.keys(state.repos ?? {})) if (!state.repos?.[repo]?.merged) await board.closePullRequest(id, repo)
         delete state.repos
+        delete state.pull
         await workspaces.reset(id)
         run.text = ''
         state.reviewMode = 'rework'
         state.stage = names[names.indexOf('plan') + 1] ?? 'merge'
+        if (config.parts === 'together' && state.parts) {
+          state.part = 0
+          await board.setPart(id, `1/${state.parts.length}`)
+        }
       } else {
         state.reviewMode = 'fix'
         state.stage = verdict?.from ?? 'plan'
@@ -489,6 +494,10 @@ export class Engine {
       if (chain.status !== 'done') return
       delete state.review
       delete state.reviewMode
+      if (this.collectsParts(state, config)) {
+        await this.nextCollectedPart(run, initial)
+        return
+      }
       pendingPull = chain
       if ((await workspaces.ahead(id).catch(() => 1)) === 0) {
         await board.addComment(id, agentComment('note', 'Nothing to merge: the task branch has no changes against the base branch, so the conveyor opens no pull request.'))
@@ -501,9 +510,10 @@ export class Engine {
     if (!state.landing && state.stage !== LAND && pendingPull) {
       const chain = pendingPull
       const task = (await board.getTask(id)) ?? initial
-      const part = state.parts ? { index: (state.part ?? 0) + 1, total: state.parts.length, title: state.parts[state.part ?? 0] ?? '' } : undefined
+      const together = config.parts === 'together' && state.parts !== undefined
+      const part = state.parts && !together ? { index: (state.part ?? 0) + 1, total: state.parts.length, title: state.parts[state.part ?? 0] ?? '' } : undefined
       const title = part ? `${task.title} (part ${part.index}/${part.total}: ${part.title})` : task.title
-      const body = `Part of ${board.reference(id)}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`
+      const body = together ? `${this.partsText(id, state, state.parts?.length ?? 0)}\n\n${chain.summary}` : `Part of ${board.reference(id)}${part ? `, part ${part.index} of ${part.total}: ${part.title}` : ''}.\n\n${chain.summary}`
       const multi = this.repoWorkspaces(config)
       const needed = `${config.review.approvals} ${config.review.approvals === 1 ? 'approval' : 'approvals'}`
       let request: string
@@ -515,11 +525,13 @@ export class Engine {
             const opened = await board.openPullRequest(id, title, body, repo)
             state.repos[repo] = { number: opened.number, url: opened.url, headSha: opened.headSha }
           }
+          if (together) for (const repo of Object.keys(state.repos)) await board.readyPullRequest(id, title, body, repo)
           const listed = this.repoOrder(state, Object.keys(state.repos)).map((repo) => `- \`${repo}\`: ${state.repos?.[repo]?.url}`).join('\n')
           request = `**The merge requests are ready for review**, one per repository, in merge order:\n\n${listed}\n\nApprove each merge request in its project with an Approve review or a comment \`/approve\` on it (${needed} each). The feature merges as a whole when every merge request is approved and green. A plain comment is a note for the team and does not change the task.`
         } else {
           const opened = await board.openPullRequest(id, title, body)
           state.pull = { number: opened.number, url: opened.url }
+          if (together) await board.readyPullRequest(id, title, body)
           request = `**The pull request is ready for review:** ${opened.url}\n\nApprove it with an Approve review or a comment \`/approve\` (${needed} needed). A plain comment is a note for the team and does not change the task.`
         }
       } catch (error) {
@@ -636,6 +648,7 @@ export class Engine {
 
     for (const [index, stage] of stages.entries()) {
       if (signal.aborted) return { status: 'stopped', summary }
+      if (stage.name === 'merge' && this.collectsParts(state, config)) break
       const waiter = index > 0 ? await this.higherWaiter(id) : undefined
       if (waiter) {
         state.stage = stage.name
@@ -690,7 +703,7 @@ export class Engine {
           review: state.review,
           reviewMode: state.reviewMode,
           merge: options.merge,
-          parts: state.parts && (config.stages.findIndex((entry) => entry.name === stage.name) > config.stages.findIndex((entry) => entry.name === 'plan') || (stage.name === 'plan' && (state.part ?? 0) > 0)) ? { list: state.parts, current: state.part ?? 0 } : undefined,
+          parts: state.parts && (config.stages.findIndex((entry) => entry.name === stage.name) > config.stages.findIndex((entry) => entry.name === 'plan') || (stage.name === 'plan' && (state.part ?? 0) > 0)) ? { list: state.parts, current: state.part ?? 0, ...(config.parts === 'together' ? { together: true } : {}) } : undefined,
         })
       } finally {
         clearInterval(heartbeat)
@@ -1471,6 +1484,55 @@ export class Engine {
       context.signal.removeEventListener('abort', stop)
       if (!context.signal.aborted) await this.options.workspaces.runHook('after_run', context.workspace)
     }
+  }
+
+  private collectsParts(state: WorkpadState, config: Config) {
+    return config.parts === 'together' && state.parts !== undefined && (state.part ?? 0) < state.parts.length - 1
+  }
+
+  private partsText(id: string, state: WorkpadState, done: number) {
+    const parts = (state.parts ?? []).map((part, index) => `- [${index < done ? 'x' : ' '}] ${index + 1}. ${part}`).join('\n')
+    return `Part of ${this.options.board.reference(id)}. The parts of the plan collect here; the conveyor asks for review after the last one.\n\n${parts}`
+  }
+
+  private async nextCollectedPart(run: TaskRun, initial: Task) {
+    const { board, workspaces } = this.options
+    const { id, config, state } = run
+    const parts = state.parts ?? []
+    const done = (state.part ?? 0) + 1
+    const task = (await board.getTask(id)) ?? initial
+    const body = this.partsText(id, state, done)
+    const opened: string[] = []
+    const multi = this.repoWorkspaces(config)
+    try {
+      if (multi) {
+        state.repos ??= {}
+        for (const repo of this.repoOrder(state, await multi.changed(id))) {
+          if (state.repos[repo]) continue
+          const pull = await board.openPullRequest(id, task.title, body, repo, true)
+          state.repos[repo] = { number: pull.number, url: pull.url, headSha: pull.headSha }
+          opened.push(`- \`${repo}\`: ${pull.url}`)
+        }
+      } else if (!state.pull && (await workspaces.ahead(id).catch(() => 1)) > 0) {
+        const pull = await board.openPullRequest(id, task.title, body, undefined, true)
+        state.pull = { number: pull.number, url: pull.url }
+        opened.push(`- ${pull.url}`)
+      }
+    } catch (error) {
+      state.stage = 'merge'
+      await this.stopWithError(run, 'merge', `**The draft ${multi ? 'merge request' : 'pull request'} was not opened.**\n\n${publicText((error as Error).message, this.options.home)}`)
+      return
+    }
+    if (opened.length > 0) {
+      await board.addComment(id, agentComment('note', `**Draft ${multi ? 'merge requests' : 'pull request'} for all parts of this task:**\n\n${opened.join('\n')}\n\nEvery part adds its commits there. After the last part the conveyor rebases the branch, waits for the checks, and marks it ready for review.`))
+    }
+    for (const key of ['landing', 'mergeError', 'landAttempts', 'lastError'] as const) delete state[key]
+    state.attempt = 0
+    state.part = done
+    state.stage = config.stages[config.stages.findIndex((stage) => stage.name === 'plan') + 1]?.name ?? 'merge'
+    await board.setPart(id, `${done + 1}/${parts.length}`)
+    await run.save()
+    this.log(`task ${id}: part ${done} of ${parts.length} done; the parts collect in one ${multi ? 'merge request per repository' : 'pull request'}, part ${done + 1} starts`)
   }
 
   private async stopWithError(run: TaskRun, stage: string, text: string) {

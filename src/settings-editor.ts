@@ -65,6 +65,17 @@ const TEAM: Spec[] = [
       smart: 'the merge stage decides by smart/merge.md: merge or ask a human',
     },
   },
+  {
+    key: 'parts',
+    label: 'Parts of a plan',
+    kind: 'select',
+    options: ['separate', 'together'],
+    help: 'how a plan with several parts reaches the base branch',
+    optionHelp: {
+      separate: 'every part gets its own pull request and merges before the next part starts',
+      together: 'the parts collect in one draft pull request per repository; it is reviewed and merged after the last part',
+    },
+  },
   { key: 'merge_method', label: 'Merge method', kind: 'select', options: ['merge', 'squash', 'rebase'], help: 'how the pull request is merged' },
   {
     key: 'close_on_done',
