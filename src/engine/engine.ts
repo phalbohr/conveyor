@@ -1199,13 +1199,16 @@ export class Engine {
         this.log(`triage failed: ${output.result.outcome === 'done' ? 'invalid triage result' : output.result.summary}`)
         return
       }
-      const known = new Set(tasks.map((task) => task.id))
+      const known = new Map(tasks.map((task) => [task.id, task]))
       const prioritized = new Set<string>()
       for (const entry of result.data.tasks) {
-        if (!known.has(entry.id)) continue
-        if (entry.priority !== undefined) {
+        const task = known.get(entry.id)
+        if (!task) continue
+        if (entry.priority !== undefined && fresh.includes(entry.id)) {
           await board.setPriority(entry.id, entry.priority)
           prioritized.add(entry.id)
+        } else if (entry.priority !== undefined && entry.priority !== task.priority) {
+          this.log(`triage: suggests priority ${entry.priority} for ${taskRef(entry.id)} ${task.title} (now ${task.priority ?? 'none'}); not applied, change priority:: on the board to accept it`)
         }
         for (const blocker of entry.blocked_by) {
           if (blocker === entry.id || !known.has(blocker)) continue

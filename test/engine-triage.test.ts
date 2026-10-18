@@ -28,8 +28,10 @@ function setup(script: Script) {
   const board = new FakeBoard('me')
   const harness = new FakeHarness(script)
   const repo = tempDir('conveyor-repo-')
+  const logs: string[] = []
   const engine = new Engine({
     board,
+    log: (message) => logs.push(message),
     harnesses: { claude: harness },
     workspaces: new FakeWorkspaces(),
     settingsDir: settings,
@@ -43,7 +45,7 @@ function setup(script: Script) {
     await engine.idle()
   }
   const runs = () => harness.runs.map((run) => `${run.taskId ?? '-'}:${run.stage}`)
-  return { board, harness, engine, cycle, runs, repo }
+  return { board, harness, engine, cycle, runs, repo, logs }
 }
 
 const stageDone: StageResult = { outcome: 'done', summary: 'ok' }
@@ -74,6 +76,30 @@ describe('Engine triage', () => {
     expect(existsSync(harness.runs[0]?.cwd ?? '')).toBe(false)
     expect(harness.runs[0]?.prompt).toContain('Order the tasks by value.')
     expect(harness.runs[0]?.prompt).toContain('Feature on top')
+  })
+
+  it('sets priorities of new tasks only and logs a suggested change for the others', async () => {
+    const { board, cycle, logs } = setup((run) =>
+      run.stage === 'triage'
+        ? triage([
+            { id: '1', priority: 1, blocked_by: [] },
+            { id: '2', priority: 2, blocked_by: [] },
+            { id: '3', priority: 4, blocked_by: [] },
+          ])
+        : stageDone,
+    )
+    await board.createTask('Set by hand', 'p', { form: 'plan' })
+    await board.setPriority('1', 3)
+    await board.createTask('Also by hand', 'p', { form: 'plan' })
+    await board.setPriority('2', 2)
+    await board.createTask('New', 'p', { form: 'plan' })
+
+    await cycle()
+
+    expect((await board.getTask('1'))?.priority).toBe(3)
+    expect((await board.getTask('3'))?.priority).toBe(4)
+    expect(logs).toContain('triage: suggests priority 1 for #1 Set by hand (now 3); not applied, change priority:: on the board to accept it')
+    expect(logs.filter((line) => line.includes('suggests'))).toHaveLength(1)
   })
 
   it('does not run when every new task has a priority', async () => {

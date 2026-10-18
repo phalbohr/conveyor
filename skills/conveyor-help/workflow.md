@@ -9,7 +9,7 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 | # | Step | Who | Board label |
 |---|---|---|---|
 | 1 | Write an idea, story, or story with plan as an issue, or shape it in `conveyor new`. Without a form it is a draft; with a form the conveyor may take it | human | `conveyor::backlog` + `form::idea` / `story` / `plan` |
-| 2 | Triage: priorities 1–4 and "blocked by" links for new tasks | harness (triage settings) | `priority::N` |
+| 2 | Triage: priorities 1–4 and "blocked by" links for new tasks; it never changes the priority of an older task, it only suggests one in the log (`triage: suggests priority …; not applied`), so priorities set by hand stay | harness (triage settings) | `priority::N` |
 | 3 | Claim: the first workstation with free limits locks the task (branch `conveyor-lock/<number>`) and removes the form | conveyor | `claimed-by::<user>`, `conveyor::in-progress` |
 | 4 | `story` stage (for `form::idea`): idea → user story in `formats/story.md` | harness | in-progress + `stage::story` |
 | 5 | Gate idea → story: questions or approval in issue comments, depending on `transitions.idea_to_story` | human or harness | `conveyor::needs-input` while waiting, then `queued` or in-progress |

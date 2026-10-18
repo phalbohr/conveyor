@@ -485,6 +485,7 @@ repos:
 - One workstation at a time: lock `conveyor-lock/triage`.
 - The triage harness gets all open conveyor tasks (title, state, priority, the start of the body) with new tasks marked. It returns JSON: a priority 1–4 per new task and `blocked_by` lists. The CLI sets `priority::<n>` labels and native "blocked by" links.
 - New tasks the triage left out get priority 3, so the triage does not repeat every cycle.
+- The triage sets priorities of new tasks only. The team owns the others and may set them by hand; a priority the triage returns for an older task is a suggestion in the log (`triage: suggests priority 1 for #12 … (now 3); not applied`).
 - A failed triage waits `retry.max_backoff` before the next attempt. No triage runs over the daily token limit.
 
 ## Rework
