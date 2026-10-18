@@ -151,7 +151,7 @@ const STAGE_HELP: Record<string, string> = {
   when: 'after merge: run on success, failure, or always',
   permission_mode: 'claude tool permissions',
   sandbox: 'codex sandbox: workspace-write cannot write .git or run tools the sandbox blocks; full-access runs without a sandbox',
-  network: 'codex workspace-write: network access',
+  network: "codex in workspace-write: lets the stage's commands use the network (package installs, gh/glab reads, docs); the model connection works without it",
 }
 
 const PERMISSION_HELP: Record<string, string> = {
