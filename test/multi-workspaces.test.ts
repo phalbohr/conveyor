@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MultiWorkspaces } from '../src/multi-workspaces.js'
-import { repoClones, type GroupProject } from '../src/repos.js'
+import { repoClones, repoProjects, type GroupProject } from '../src/repos.js'
 import { tempDir } from './helpers.js'
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
@@ -22,9 +22,9 @@ function origin(name: string, branch: string) {
 
 function group() {
   const projects: GroupProject[] = [
-    { name: 'frontend', sshUrl: origin('frontend', 'develop'), defaultBranch: 'develop' },
-    { name: 'user-service', sshUrl: origin('user-service', 'develop'), defaultBranch: 'develop' },
-    { name: 'docs', sshUrl: origin('docs', 'main'), defaultBranch: 'main' },
+    { name: 'frontend', path: 'shop/frontend', sshUrl: origin('frontend', 'develop'), defaultBranch: 'develop' },
+    { name: 'user-service', path: 'shop/user-service', sshUrl: origin('user-service', 'develop'), defaultBranch: 'develop' },
+    { name: 'docs', path: 'shop/docs', sshUrl: origin('docs', 'main'), defaultBranch: 'main' },
   ]
   return { projects, home: tempDir('conveyor-home-'), cwd: tempDir('conveyor-settings-repo-') }
 }
@@ -42,6 +42,24 @@ describe('repoClones', () => {
     ])
     expect(existsSync(join(home, '.conveyor', 'repos', 'shop', 'user-service', 'README.md'))).toBe(true)
     expect(await repoClones({ repos, projects, paths: { frontend: 'parent/frontend' }, home, cwd })).toEqual(clones)
+  })
+
+  it('takes listed projects from several groups and clones each under its full path', async () => {
+    const urls: Record<string, string> = { 'shop/frontend': origin('frontend', 'develop'), 'tools/handbook': origin('handbook', 'main') }
+    const run = async (_command: string, args: string[]) => {
+      const path = decodeURIComponent(args[1]?.replace(/^projects\//, '') ?? '')
+      return urls[path] ? { code: 0, stdout: JSON.stringify({ ssh_url_to_repo: urls[path], default_branch: path === 'shop/frontend' ? 'develop' : 'main' }), stderr: '' } : { code: 1, stdout: '', stderr: '404 Project Not Found' }
+    }
+    const repos = { projects: { frontend: 'shop/frontend', 'handbook': 'tools/handbook' }, exclude: [], base: {} }
+    const projects = await repoProjects(run, repos)
+    expect(projects.map((project) => [project.name, project.path, project.defaultBranch])).toEqual([
+      ['frontend', 'shop/frontend', 'develop'],
+      ['handbook', 'tools/handbook', 'main'],
+    ])
+    const home = tempDir('conveyor-home-')
+    const clones = await repoClones({ repos, projects, paths: {}, home, cwd: tempDir() })
+    expect(clones.map((clone) => clone.path)).toEqual([join(home, '.conveyor', 'repos', 'shop', 'frontend'), join(home, '.conveyor', 'repos', 'tools', 'handbook')])
+    await expect(repoProjects(run, { projects: { gone: 'old/gone' }, exclude: [], base: {} })).rejects.toThrow('repos.projects: old/gone: glab api failed: 404 Project Not Found')
   })
 
   it('names unknown repositories and clones of another repository', async () => {

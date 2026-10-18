@@ -81,6 +81,7 @@ const teamSchema = z.strictObject({
   repos: z
     .strictObject({
       group: gitlabPath.optional(),
+      projects: z.array(z.string().regex(/^\w[\w.-]*(\/\w[\w.-]*)+$/, 'a full project path such as group/subgroup/project')).min(1).optional(),
       include: z.array(gitlabPath).min(1).optional(),
       exclude: z.array(gitlabPath).default([]),
       base: z.record(gitlabPath, branch).default({}),
@@ -185,7 +186,7 @@ export type HarnessDefinition = {
   interactive?: string[]
 }
 
-export type Repos = { group: string; include?: string[]; exclude: string[]; base: Record<string, string> }
+export type Repos = { group?: string; projects?: Record<string, string>; include?: string[]; exclude: string[]; base: Record<string, string> }
 
 export type Config = Omit<Team, 'artifacts' | 'defaults' | 'triage' | 'stages' | 'language' | 'harnesses' | 'repos'> &
   Omit<Local, 'artifacts' | 'language' | 'harnesses' | 'live'> & {
@@ -244,9 +245,21 @@ function resolveRepos(team: Team, local: Local, errors: string[]): Repos | undef
     return undefined
   }
   if (!gitlab) errors.push(`${CONFIG_FILE}: repos: several repositories need provider gitlab`)
-  const group = team.repos.group ?? team.board.group
-  if (!group) errors.push(`${CONFIG_FILE}: repos.group: name the group of the repositories, or set board.group`)
   const { include, exclude, base } = team.repos
+  if (team.repos.projects) {
+    if (team.repos.group || include || exclude.length > 0) errors.push(`${CONFIG_FILE}: repos.projects lists the repositories; leave out group, include, and exclude`)
+    const projects: Record<string, string> = {}
+    for (const path of team.repos.projects) {
+      const name = path.split('/').at(-1) ?? path
+      if (projects[name]) errors.push(`${CONFIG_FILE}: repos.projects: ${projects[name]} and ${path} have the same name ${name}`)
+      projects[name] = path
+    }
+    for (const repo of Object.keys(base).filter((name) => !projects[name])) errors.push(`${CONFIG_FILE}: repos.base.${repo}: not one of the repositories (${Object.keys(projects).join(', ')})`)
+    for (const repo of Object.keys(local.repo_paths).filter((name) => !projects[name])) errors.push(`${LOCAL_FILE}: repo_paths.${repo}: not one of the repositories (${Object.keys(projects).join(', ')})`)
+    return { projects, exclude, base }
+  }
+  const group = team.repos.group ?? team.board.group
+  if (!group) errors.push(`${CONFIG_FILE}: repos: name the repositories in repos.projects or their group in repos.group, or set board.group`)
   for (const repo of exclude.filter((name) => include?.includes(name))) errors.push(`${CONFIG_FILE}: repos: ${repo} is both included and excluded`)
   const known = (repo: string) => !exclude.includes(repo) && (!include || include.includes(repo))
   for (const repo of Object.keys(base).filter((name) => !known(name))) errors.push(`${CONFIG_FILE}: repos.base.${repo}: not one of the repositories`)

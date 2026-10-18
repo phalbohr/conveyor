@@ -13,6 +13,7 @@
 - A started task that waits for a free `running` slot between stages (for example before the next part of a plan) moves to `conveyor::queued` and shows `waits for a free slot`; before, it stayed in progress with `waits for its next attempt`. Tasks that wait for merge checks or the base CI stay in progress.
 - Higher priorities finish first: between two stages, a running task gives its slot to a waiting started task with a higher priority (for example one that just got its answer), moves to `conveyor::queued`, and continues at its next stage later. The next cycle starts at once. Before, the higher priority waited until the lower one finished its whole part.
 - A pull or merge request that cannot be opened stops the task in `conveyor::needs-input` with the error; before, the conveyor ran the `merge` stage again in every cycle. On a group board without `repos`, the conveyor takes no issue of a project other than the one of its own clone (the log says why) and stops a started one with the hint to set `repos`; before, it pushed the branch to its own clone and failed to open the merge request in the project of the issue.
+- `repos.projects` lists the repositories of a feature by their full paths, from any groups, instead of `repos.group`; their names are the last part of the path. Clones without `repo_paths` go to `~/.conveyor/repos/<full project path>`.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
 
 ## 0.2.2 — 2026-10-14

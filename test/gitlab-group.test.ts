@@ -126,6 +126,16 @@ describe('GitLabBoard on a group board', () => {
     expect(calls).toContain(`GET projects/${encodeURIComponent('shop/user-service')}/repository/commits/abc`)
   })
 
+  it('sends the calls of a repository from another group to its full path', async () => {
+    const calls: string[][] = []
+    const board = new GitLabBoard('shop/frontend', async (_command, args) => {
+      calls.push(args)
+      return { code: 0, stdout: JSON.stringify({ default_branch: 'main' }), stderr: '' }
+    }, { retryDelay: 0, group: GROUP, repos: { paths: { 'handbook': 'tools/handbook' }, base: {} } })
+    expect(await board.baseBranch('handbook')).toBe('main')
+    expect(calls).toContainEqual(['api', `projects/${encodeURIComponent('tools/handbook')}`])
+  })
+
   it('names the group when GitLab does not find it', async () => {
     const run: Run = async () => ({ code: 0, stdout: JSON.stringify({ data: { scope: null } }), stderr: '' })
     const board = new GitLabBoard('acme/shop/frontend', run, { retryDelay: 0, group: 'acme/shop' })

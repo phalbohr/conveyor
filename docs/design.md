@@ -457,7 +457,15 @@ repos:                         # tasks can change several repositories
   base: {frontend: develop}    # default: the default branch of each project
 ```
 
-`local.yaml` names existing local clones, for example submodules of a parent repository: `repo_paths: {frontend: ../parent/frontend}`. Other repositories are cloned once into `~/.conveyor/repos/<group>/<name>`. A clone whose `origin` is another project is refused. The conveyor can be initialized in any repository; it only holds `.conveyor/`.
+Repositories from several groups are listed by their full paths instead of `group`, `include`, and `exclude`. The last part of each path is the name of the repository in `base`, `repo_paths`, the merge order, and the task folders, so the names must differ:
+
+```yaml
+repos:
+  projects: [shop/frontend, tools/handbook]
+  base: {handbook: main}
+```
+
+`local.yaml` names existing local clones, for example submodules of a parent repository: `repo_paths: {frontend: ../parent/frontend}`. A path is absolute, starts with `~`, or is relative to the project folder (the folder the conveyor runs in, which holds or is linked to the settings). Other repositories are cloned once into `~/.conveyor/repos/<full project path>`. A clone whose `origin` is another project is refused. The conveyor can be initialized in any repository; it only holds `.conveyor/`.
 
 **Group board.** The conveyor lists the open issues of every project of `board.group` (with subgroups), keeps its labels on the group, checks write access against the members of the group, and links the board of the group. A task is `<project path below the group>#<number>`, for example `frontend#12`, on the screen, in the log, and in commands (`conveyor attach frontend#12`). Issue work (labels, comments, owner, blockers, also across projects) goes to the project of each issue. Branches and locks use `frontend-12`, local folders `frontend-12` (a `/` becomes `+`). Merge requests link the issue with its full reference (`group/frontend#12`).
 

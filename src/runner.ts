@@ -21,7 +21,7 @@ import { redactSecrets } from './engine/redact.js'
 import { QuotaStore, UsageLedger } from './usage.js'
 import { GitWorkspaces, type Workspaces } from './workspaces.js'
 import { MultiWorkspaces } from './multi-workspaces.js'
-import { groupProjects, repoClones } from './repos.js'
+import { repoClones, repoProjects } from './repos.js'
 
 export type RunnerEvent = { time: string; level: 'info' | 'warning' | 'error'; text: string }
 export type RunnerSetup = { settings: string; config: Config; board: Board; secrets: () => string[] }
@@ -43,7 +43,7 @@ export function taskWorkspaces(context: Context, settings: string, config: Confi
   }
   const repos = config.repos
   if (repos) {
-    const clones = async () => repoClones({ repos, projects: await groupProjects(context.run, repos.group), paths: config.repo_paths, home: context.home, cwd: context.cwd })
+    const clones = async () => repoClones({ repos, projects: await repoProjects(context.run, repos), paths: config.repo_paths, home: context.home, cwd: context.cwd })
     return new MultiWorkspaces({ root, clones, hooks: currentHooks })
   }
   return new GitWorkspaces({ repo: context.cwd, root, base: () => board.baseBranch(), hooks: currentHooks })

@@ -325,9 +325,20 @@ describe('group boards and several repositories', () => {
     expect(loaded.repo_paths).toEqual({ frontend: '../parent/frontend' })
   })
 
+  it('accepts repositories from several groups by their full paths', () => {
+    const loaded = config(`${gitlab}repos: {projects: [shop/frontend, tools/handbook], base: {handbook: main}}\n`, 'repo_paths: {handbook: ~/clones/docs}\n')
+    expect(loaded.repos).toEqual({ projects: { frontend: 'shop/frontend', 'handbook': 'tools/handbook' }, exclude: [], base: { 'handbook': 'main' } })
+    const listed = errors(`${gitlab}repos: {group: shop, projects: [shop/frontend, other/frontend], base: {cart: main}}\n`, 'repo_paths: {docs: ../docs}\n')
+    expect(listed).toContain('config.yaml: repos.projects lists the repositories; leave out group, include, and exclude')
+    expect(listed).toContain('config.yaml: repos.projects: shop/frontend and other/frontend have the same name frontend')
+    expect(listed).toContain('config.yaml: repos.base.cart: not one of the repositories (frontend)')
+    expect(listed).toContain('local.yaml: repo_paths.docs: not one of the repositories (frontend)')
+    expect(errors(`${gitlab}repos: {projects: [frontend]}\n`).join('\n')).toContain('repos.projects.0: a full project path')
+  })
+
   it('rejects them on GitHub and checks the repository names', () => {
     expect(errors('board: {provider: github, project: acme/app, group: acme}\n')).toContain('config.yaml: board.group: group boards need provider gitlab')
-    expect(errors('board: {provider: gitlab, project: shop/frontend}\nrepos: {}\n')).toContain('config.yaml: repos.group: name the group of the repositories, or set board.group')
+    expect(errors('board: {provider: gitlab, project: shop/frontend}\nrepos: {}\n')).toContain('config.yaml: repos: name the repositories in repos.projects or their group in repos.group, or set board.group')
     const listed = errors(`${gitlab}repos: {include: [frontend], exclude: [frontend], base: {cart: main}}\n`, 'repo_paths: {docs: ../docs}\n')
     expect(listed).toContain('config.yaml: repos: frontend is both included and excluded')
     expect(listed).toContain('config.yaml: repos.base.cart: not one of the repositories')

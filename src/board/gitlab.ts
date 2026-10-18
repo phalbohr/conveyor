@@ -75,7 +75,7 @@ export class GitLabBoard implements Board {
   constructor(
     private readonly project: string,
     private readonly run: Run,
-    private readonly options: { retryDelay?: number; baseBranch?: string; group?: string; repos?: { group: string; base: Record<string, string> } } = {},
+    private readonly options: { retryDelay?: number; baseBranch?: string; group?: string; repos?: { group?: string; paths?: Record<string, string>; base: Record<string, string> } } = {},
   ) {
     this.api = `projects/${encodeURIComponent(project)}`
     this.scope = options.group ? `groups/${encodeURIComponent(options.group)}` : this.api
@@ -449,7 +449,7 @@ export class GitLabBoard implements Board {
   private repoApi(repo?: string) {
     if (!repo) return this.api
     if (!this.options.repos) throw new Error(`task repositories need repos in the settings (${repo})`)
-    return `projects/${encodeURIComponent(`${this.options.repos.group}/${repo}`)}`
+    return `projects/${encodeURIComponent(this.options.repos.paths?.[repo] ?? `${this.options.repos.group}/${repo}`)}`
   }
 
   private async pages<T>(path: string): Promise<T[]> {
