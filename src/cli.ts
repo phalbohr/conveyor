@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import { Argument, Command, CommanderError, Option } from 'commander'
 import type { Board as BoardPort } from './board/board.js'
 import { configEdit, configGet, configList } from './commands/config.js'
@@ -137,7 +139,7 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .action((name: string, options: { afterMerge?: boolean; when: 'success' | 'failure' | 'always' }) => {
       exitCode = configEdit(context, (doc) => {
         doc.addStage(name, options.afterMerge ? 'after-merge' : 'before-merge', options.afterMerge ? options.when : undefined)
-        return `Added stage ${name}. Write its instructions in stages/${name}.md.`
+        return existsSync(join(doc.dir, 'stages', `${name}.md`)) ? `Added stage ${name}. Its instructions are in stages/${name}.md.` : `Added stage ${name}. Write its instructions in stages/${name}.md.`
       })
     })
   stage

@@ -47,7 +47,9 @@ describe('conveyor config', () => {
   it('adds, moves, and removes stages', async () => {
     const { cli, file } = await project()
     expect((await cli('config', 'stage', 'add', 'polish')).code).toBe(0)
-    expect((await cli('config', 'stage', 'add', 'fix-ci', '--after-merge', '--when', 'failure')).code).toBe(0)
+    const added = await cli('config', 'stage', 'add', 'fix-ci', '--after-merge', '--when', 'failure')
+    expect(added.code).toBe(0)
+    expect(added.stdout).toContain('Added stage fix-ci. Its instructions are in stages/fix-ci.md.')
     expect((await cli('config', 'stage', 'move', 'polish', 'up')).stdout).toContain('story → plan → implement → polish → review → merge → fix-ci')
     expect(file('config.yaml')).toContain('fix-ci: {when: failure}')
     expect((await cli('config', 'stage', 'remove', 'plan')).stderr).toContain('reserved')

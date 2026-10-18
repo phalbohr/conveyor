@@ -171,7 +171,7 @@ export class SettingsDocument {
   private catalogs: Record<string, Catalog>
 
   constructor(
-    private readonly dir: string,
+    readonly dir: string,
     options: { catalogs?: Record<string, Catalog> } = {},
   ) {
     this.catalogs = options.catalogs ?? {}
