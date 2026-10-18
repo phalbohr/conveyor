@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,12 +14,12 @@ import { tempDir } from './helpers.js'
 
 const done: StageResult = { outcome: 'done', summary: 'ok' }
 
-function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; stages?: string; config?: string; limits?: string; script?: Script } = {}) {
+function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; stages?: string; config?: string; limits?: string; script?: Script; board?: string; repo?: string } = {}) {
   const settings = tempDir('conveyor-settings-')
   writeFileSync(
     join(settings, 'config.yaml'),
     [
-      'board: {provider: github, project: acme/app}',
+      options.board ?? 'board: {provider: github, project: acme/app}',
       `transitions: {merge: ${options.mode ?? 'human'}${options.plan ? `, story_to_plan: ${options.plan}` : ''}}`,
       'stages:',
       options.stages ?? '  implement: {}\n  merge: {}',
@@ -37,7 +38,7 @@ function setup(options: { mode?: 'human' | 'ai' | 'smart'; plan?: 'autonomous'; 
     harnesses: { claude: harness },
     workspaces,
     settingsDir: settings,
-    repo: tempDir(),
+    repo: options.repo ?? tempDir(),
     home: tempDir(),
     usage: new UsageLedger(),
     loadConfig: () => loadConfig(settings),
@@ -66,6 +67,45 @@ describe('merge mode human', () => {
     expect(await board.pullRequest('1')).toMatchObject({ state: 'open' })
     expect((await board.getTask('1'))?.state).toBe('review')
     expect(board.merges).toEqual([])
+  })
+
+  it('stops with an error when the pull request cannot be opened, instead of running the merge stage again', async () => {
+    const { board, cycle, runs } = setup()
+    board.openPullRequest = async () => {
+      throw new Error('glab api POST merge_requests failed: source_branch does not exist')
+    }
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    await cycle()
+
+    expect(runs()).toEqual(['1:implement', '1:merge'])
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+    const error = (await board.listComments('1')).find((comment) => comment.body.includes('conveyor:error'))?.body ?? ''
+    expect(error).toContain('The pull request was not opened.')
+    expect(error).toContain('source_branch does not exist')
+  })
+
+  it('takes no issue of another project of a group board without repos, and stops a started one', async () => {
+    const repo = tempDir()
+    execFileSync('git', ['init', '-q', repo])
+    execFileSync('git', ['-C', repo, 'remote', 'add', 'origin', 'git@gitlab.example:shop/frontend.git'])
+    const { board, cycle, runs, logs } = setup({ board: 'board: {provider: gitlab, project: shop/frontend, group: shop}', repo })
+    const projects: Record<string, string> = { '1': 'shop/frontend', '2': 'shop/backend', '3': 'shop/backend' }
+    board.reference = (id) => `${projects[id]}#${id}`
+    await board.createTask('Frontend', 'p', { form: 'plan' })
+    await board.createTask('Backend', 'p', { form: 'plan' })
+    const started = await board.createTask('Started backend', 'p', { form: 'plan' })
+    await board.setOwner(started.id, await board.user())
+    await board.setState(started.id, 'in-progress')
+
+    await cycle()
+
+    expect(runs()).toEqual(['1:implement', '1:merge'])
+    expect((await board.getTask('2'))?.owner).toBeUndefined()
+    expect(logs.filter((line) => line.startsWith('task 2: skipped: the issue belongs to the project shop/backend, but the conveyor works in a clone of shop/frontend'))).toHaveLength(1)
+    expect((await board.getTask('3'))?.state).toBe('needs-input')
+    expect((await board.listComments('3')).some((comment) => comment.body.includes('needs `repos` in config.yaml'))).toBe(true)
   })
 
   it('finishes the task after a human merges the pull request', async () => {

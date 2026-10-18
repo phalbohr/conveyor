@@ -16,6 +16,7 @@ import { releaseClaim } from './release.js'
 import { sessionFile, sessionWriter, removeSession } from '../session-log.js'
 import type { RepoWorkspaces } from '../multi-workspaces.js'
 import { publicText, redactSecrets } from './redact.js'
+import { createRun } from '../run.js'
 import { Trust } from './trust.js'
 import { parseStageFile, readFormat, renderInstructions } from './stage-file.js'
 import { waitingDeadline } from './time.js'
@@ -135,6 +136,8 @@ export class Engine {
   private readonly held = new Set<string>()
   private draining = false
   private slotWaiters: Task[] = []
+  private originPath?: Promise<string | undefined>
+  private readonly misplaced = new Set<string>()
   private readonly yielded = new Set<string>()
   private baseRed?: { sha: string; fix?: string; failed: string[]; repairing?: boolean }
   private fixer?: string
@@ -272,6 +275,12 @@ export class Engine {
       if (this.baseRed && !fix) continue
       if (!fix && (blocked || slots <= 0)) break
       if (fix && overBudget) continue
+      const wrong = await this.wrongProject(task.id, config)
+      if (wrong) {
+        if (!this.misplaced.has(task.id)) this.log(`task ${task.id}: skipped: ${wrong}`)
+        this.misplaced.add(task.id)
+        continue
+      }
       if (!(await this.lock(task.id, LOCK_TTL))) continue
       await board.setOwner(task.id, me)
       this.log(`claimed task ${task.id}: ${task.title}`)
@@ -415,6 +424,11 @@ export class Engine {
       },
     }
 
+    const wrong = await this.wrongProject(id, config)
+    if (wrong) {
+      await this.stopWithError(run, state.stage ?? waiting?.stage ?? 'start', `**This task cannot run here:** ${wrong}`)
+      return
+    }
     await board.setState(id, 'in-progress')
     if (initial.form) {
       state.form = initial.form
@@ -493,18 +507,24 @@ export class Engine {
       const multi = this.repoWorkspaces(config)
       const needed = `${config.review.approvals} ${config.review.approvals === 1 ? 'approval' : 'approvals'}`
       let request: string
-      if (multi) {
-        state.repos ??= {}
-        for (const repo of this.repoOrder(state, await multi.changed(id))) {
-          const opened = await board.openPullRequest(id, title, body, repo)
-          state.repos[repo] = { number: opened.number, url: opened.url, headSha: opened.headSha }
+      try {
+        if (multi) {
+          state.repos ??= {}
+          for (const repo of this.repoOrder(state, await multi.changed(id))) {
+            if (state.repos[repo]) continue
+            const opened = await board.openPullRequest(id, title, body, repo)
+            state.repos[repo] = { number: opened.number, url: opened.url, headSha: opened.headSha }
+          }
+          const listed = this.repoOrder(state, Object.keys(state.repos)).map((repo) => `- \`${repo}\`: ${state.repos?.[repo]?.url}`).join('\n')
+          request = `**The merge requests are ready for review**, one per repository, in merge order:\n\n${listed}\n\nApprove each merge request in its project with an Approve review or a comment \`/approve\` on it (${needed} each). The feature merges as a whole when every merge request is approved and green. A plain comment is a note for the team and does not change the task.`
+        } else {
+          const opened = await board.openPullRequest(id, title, body)
+          state.pull = { number: opened.number, url: opened.url }
+          request = `**The pull request is ready for review:** ${opened.url}\n\nApprove it with an Approve review or a comment \`/approve\` (${needed} needed). A plain comment is a note for the team and does not change the task.`
         }
-        const listed = this.repoOrder(state, Object.keys(state.repos)).map((repo) => `- \`${repo}\`: ${state.repos?.[repo]?.url}`).join('\n')
-        request = `**The merge requests are ready for review**, one per repository, in merge order:\n\n${listed}\n\nApprove each merge request in its project with an Approve review or a comment \`/approve\` on it (${needed} each). The feature merges as a whole when every merge request is approved and green. A plain comment is a note for the team and does not change the task.`
-      } else {
-        const opened = await board.openPullRequest(id, title, body)
-        state.pull = { number: opened.number, url: opened.url }
-        request = `**The pull request is ready for review:** ${opened.url}\n\nApprove it with an Approve review or a comment \`/approve\` (${needed} needed). A plain comment is a note for the team and does not change the task.`
+      } catch (error) {
+        await this.stopWithError(run, 'merge', `**The ${multi ? 'merge request' : 'pull request'} was not opened.**\n\n${publicText((error as Error).message, this.options.home)}`)
+        return
       }
       if (chain.merge === 'review') {
         delete state.stage
@@ -1448,6 +1468,28 @@ export class Engine {
       context.signal.removeEventListener('abort', stop)
       if (!context.signal.aborted) await this.options.workspaces.runHook('after_run', context.workspace)
     }
+  }
+
+  private async stopWithError(run: TaskRun, stage: string, text: string) {
+    const { board } = this.options
+    const { id, config, state } = run
+    this.log(`task ${id}: ${text.replace(/\*\*/g, '').split('\n').filter(Boolean).join(' ')}`)
+    const comment = await board.addComment(id, agentComment('error', `${text}\n\nFix the cause, then reply with any comment to retry.\n\n${commandHelp(config)}`))
+    state.attempt = 0
+    state.waiting = { kind: 'error', stage, commentId: comment.id, since: new Date().toISOString() }
+    await board.setState(id, 'needs-input')
+    await run.save()
+  }
+
+  private async wrongProject(id: string, config: Config) {
+    if (config.repos || !config.board.group) return undefined
+    this.originPath ??= createRun(this.options.repo)('git', ['remote', 'get-url', 'origin']).then((result) =>
+      result.code === 0 ? result.stdout.trim().replace(/\.git$/, '').replace(/^[\w.-]+@[^:/]+:|^\w+:\/\/(?:[^@/]+@)?[^/]+\//, '') : undefined,
+    )
+    const origin = await this.originPath
+    const project = this.options.board.reference(id).replace(/#\d+$/, '')
+    if (!origin || !project || origin === project || origin.endsWith(`/${project}`)) return undefined
+    return `the issue belongs to the project ${project}, but the conveyor works in a clone of ${origin}, so it cannot open a merge request for it. A group board with issues in several projects needs \`repos\` in config.yaml (and \`repo_paths\` in local.yaml for existing clones), so that every task gets the repositories it changes.`
   }
 
   private async fail(id: string, stage: Stage, state: WorkpadState, result: StageResult, config: Config, fatal: boolean) {
