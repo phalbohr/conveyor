@@ -155,3 +155,7 @@ export function labelsToTask(labels: string[]): Pick<Task, 'state' | 'form' | 's
     ...(labels.includes(FIX_LABEL) ? { fixing: true } : {}),
   }
 }
+
+export function ignoredCheck(name: string, patterns: string[]) {
+  return patterns.some((pattern) => new RegExp(`^${pattern.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 'i').test(name))
+}

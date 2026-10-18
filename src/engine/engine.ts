@@ -136,6 +136,8 @@ export class Engine {
   private readonly held = new Set<string>()
   private draining = false
   private slotWaiters: Task[] = []
+  private readonly broke = new Set<string>()
+  private readonly reportedRed = new Set<string>()
   private originPath?: Promise<string | undefined>
   private readonly misplaced = new Set<string>()
   private readonly yielded = new Set<string>()
@@ -1004,7 +1006,11 @@ export class Engine {
           this.log(`task ${id}: ${state.parked}`)
           return false
         }
-        if (checks === 'failure') this.log(`task ${id}: the CI of ${repo} failed after the merge at ${entry.verify.sha.slice(0, 7)}; the fix task of the red base repairs it`)
+        if (checks === 'failure') {
+          this.broke.add(entry.verify.sha)
+          if (config.checks.fix_base === 'none') await this.leaveBroken(id, entry.verify.sha, repo)
+          else this.log(`task ${id}: the CI of ${repo} failed after the merge at ${entry.verify.sha.slice(0, 7)}; the fix task of the red base repairs it`)
+        }
         delete entry.verify
       }
       return true
@@ -1026,6 +1032,12 @@ export class Engine {
       return true
     }
     this.log(`task ${id}: the CI of the base branch failed after the merge at ${verify.sha.slice(0, 7)}`)
+    this.broke.add(verify.sha)
+    if (config.checks.fix_base === 'none') {
+      this.verifying.delete(verify.sha)
+      await this.leaveBroken(id, verify.sha, undefined)
+      return true
+    }
     const names = config.stages.map((stage) => stage.name)
     const repair = config.stages.slice(names.indexOf('merge') + 1).some((stage) => stage.when === 'failure' || stage.when === 'always')
     if (repair && (state.repairs ?? 0) < config.retry.max_attempts) {
@@ -1093,11 +1105,17 @@ export class Engine {
     return false
   }
 
+  private async leaveBroken(id: string, sha: string, repo: string | undefined) {
+    const where = repo ? `of ${repo} ` : ''
+    this.log(`task ${id}: the base branch CI ${where}failed after the merge at ${sha.slice(0, 7)}; checks.fix_base is none, so the team fixes it`)
+    await this.options.board.addComment(id, agentComment('note', `**The base branch CI ${where}failed after this task was merged** (commit \`${sha.slice(0, 7)}\`). \`checks.fix_base\` is \`none\`, so the conveyor does not repair it; the team fixes the base branch.`))
+  }
+
   private async guardBase(config: Config) {
     const repos = await this.repoWorkspaces(config)?.names().catch(() => undefined)
     let pending = false
     for (const repo of repos ?? [undefined]) {
-      const base = await this.guardRepo(repo)
+      const base = await this.guardRepo(repo, config)
       if (base === 'red') return
       if (base === 'pending') pending = true
     }
@@ -1107,12 +1125,22 @@ export class Engine {
     }
   }
 
-  private async guardRepo(repo: string | undefined): Promise<'red' | 'pending' | 'green'> {
+  private async guardRepo(repo: string | undefined, config: Config): Promise<'red' | 'pending' | 'green'> {
     const { board } = this.options
     const sha = await board.baseHead(repo)
     const checks = await board.commitChecks(sha, repo)
     if (checks === 'success') return 'green'
     if (checks !== 'failure') return 'pending'
+    const mode = config.checks.fix_base
+    if (mode === 'none' || (mode === 'own' && !this.verifying.has(sha) && !this.broke.has(sha))) {
+      const key = `${repo ?? ''}@${sha}`
+      if (!this.reportedRed.has(key)) {
+        this.reportedRed.add(key)
+        const failed = (await board.failedChecks(sha, repo).catch(() => [])).map((name) => name.replace(/[\r\n`]/g, ' ').slice(0, 100))
+        this.log(`the base branch CI ${repo ? `of ${repo} ` : ''}fails at ${sha.slice(0, 7)}${failed.length ? ` (${failed.join(', ')})` : ''}; checks.fix_base is ${mode}, so the conveyor ${mode === 'none' ? 'fixes nothing' : 'fixes only failures after its own merges'} and does not wait; add jobs that cannot pass to checks.ignore`)
+      }
+      return 'green'
+    }
     if (this.baseRed?.sha === sha && this.baseRed.fix && (this.baseRed.repairing ? this.verifying.has(sha) : await this.stillFixes(this.baseRed.fix))) return 'red'
     const failed = (await board.failedChecks(sha, repo).catch(() => [])).map((name) => name.replace(/[\r\n`]/g, ' ').slice(0, 100))
     const owner = this.verifying.get(sha)

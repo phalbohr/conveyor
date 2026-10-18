@@ -27,6 +27,7 @@ import {
   type TaskForm,
   type TaskLabels,
   type TaskState,
+  ignoredCheck,
 } from './board.js'
 
 type Issue = {
@@ -46,7 +47,7 @@ type Issue = {
 
 type GitHubComment = { id: number; user: { login: string }; body: string; created_at: string; updated_at: string }
 
-type Check = { status?: string; conclusion?: string; state?: string }
+type Check = { name?: string; context?: string; status?: string; conclusion?: string; state?: string }
 
 type GitHubPull = {
   number: number
@@ -64,7 +65,7 @@ type GitHubPull = {
 type ProjectField = { id: string; name: string; type: string; options?: { id: string; name: string }[] }
 type ProjectMirror = { projectId: string; fieldId: string; options: Map<string, string> }
 
-export type GitHubBoardOptions = { projectNumber?: number; baseBranch?: string; warn?: (message: string) => void }
+export type GitHubBoardOptions = { projectNumber?: number; baseBranch?: string; warn?: (message: string) => void; ignoreChecks?: string[] }
 
 const PROJECT_FIELD = 'Conveyor'
 const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,isDraft,isCrossRepository,statusCheckRollup,reviews,comments'
@@ -303,6 +304,7 @@ export class GitHubBoard implements Board {
     return toPull(
       pull,
       inline.flat().map((comment) => ({ author: comment.user?.login ?? '', body: `${comment.path}${comment.line ? `:${comment.line}` : ''}: ${comment.body}` })),
+      this.options.ignoreChecks ?? [],
     )
   }
 
@@ -345,16 +347,19 @@ export class GitHubBoard implements Board {
     return [
       ...runs.filter((run) => FAILED.includes((run.conclusion ?? '').toUpperCase())).map((run) => run.name),
       ...statuses.filter((status) => FAILED.includes(status.state.toUpperCase())).map((status) => status.context),
-    ]
+    ].filter((name) => !ignoredCheck(name, this.options.ignoreChecks ?? []))
   }
 
   async commitChecks(sha: string) {
-    const runs = (await this.api<{ check_runs: { status: string; conclusion: string | null }[] }[]>(['--paginate', '--slurp', `${this.repo}/commits/${sha}/check-runs?per_page=100`])).flatMap((page) => page.check_runs)
-    const statuses = (await this.api<{ statuses: { state: string }[] }>([`${this.repo}/commits/${sha}/status`])).statuses
-    return checksOf([
-      ...runs.map((run) => ({ status: run.status.toUpperCase(), ...(run.conclusion ? { conclusion: run.conclusion.toUpperCase() } : {}) })),
-      ...statuses.map((status) => ({ state: status.state.toUpperCase() })),
-    ])
+    const runs = (await this.api<{ check_runs: { name: string; status: string; conclusion: string | null }[] }[]>(['--paginate', '--slurp', `${this.repo}/commits/${sha}/check-runs?per_page=100`])).flatMap((page) => page.check_runs)
+    const statuses = (await this.api<{ statuses: { context: string; state: string }[] }>([`${this.repo}/commits/${sha}/status`])).statuses
+    return checksOf(
+      [
+        ...runs.map((run) => ({ name: run.name, status: run.status.toUpperCase(), ...(run.conclusion ? { conclusion: run.conclusion.toUpperCase() } : {}) })),
+        ...statuses.map((status) => ({ context: status.context, state: status.state.toUpperCase() })),
+      ],
+      this.options.ignoreChecks ?? [],
+    )
   }
 
   async closePullRequest(id: string) {
@@ -491,20 +496,21 @@ function toTask(issue: Issue): Task {
 
 const FAILED = ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE']
 
-function checksOf(checks: Check[]): PullRequest['checks'] {
+function checksOf(all: Check[], ignore: string[]): PullRequest['checks'] {
+  const checks = all.filter((check) => !ignoredCheck(check.name ?? check.context ?? '', ignore))
   const failed = checks.some((check) => FAILED.includes(check.conclusion ?? check.state ?? ''))
   const pending = checks.some((check) => (check.status && check.status !== 'COMPLETED') || ['PENDING', 'EXPECTED'].includes(check.state ?? ''))
   return checks.length === 0 ? 'none' : failed ? 'failure' : pending ? 'pending' : 'success'
 }
 
-function toPull(pull: GitHubPull, inline: PullRequest['feedback']): PullRequest {
+function toPull(pull: GitHubPull, inline: PullRequest['feedback'], ignore: string[]): PullRequest {
   const checks = pull.statusCheckRollup ?? []
   return {
     number: String(pull.number),
     url: pull.url,
     headSha: pull.headRefOid,
     state: pull.state === 'OPEN' ? 'open' : pull.state === 'MERGED' ? 'merged' : 'closed',
-    checks: checksOf(checks),
+    checks: checksOf(checks, ignore),
     mergeable: pull.mergeable === 'MERGEABLE' ? 'yes' : pull.mergeable === 'CONFLICTING' ? 'no' : 'unknown',
     ...(pull.isDraft ? { draft: true } : {}),
     feedback: inline,

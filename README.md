@@ -131,6 +131,7 @@ A stop at once aborts the running stages. They restart from their beginning on t
 |---|---|---|
 | the board and its GitHub project | `config.yaml` | `board.project`, `board.github_project` |
 | a GitLab board of a whole group (tasks become `project#number`, for example `frontend#12`) | `config.yaml` | `board.group`; `board.project` must be in the group, new tasks are created there |
+| CI jobs that never count, and which red base the conveyor repairs | `config.yaml` | `checks.ignore` (job names, `*` matches any text), `checks.fix_base` (`all`, `own`, `none`) |
 | one feature in several GitLab repositories (one merge request per changed repository, each approved on its own, merged together in planned order) | `config.yaml` / `local.yaml` | `repos` (`group` with `include`, `exclude`, or `projects` with full paths from any groups; `base`) / `repo_paths` (existing clones, for example submodules of a parent repository; relative paths start at the project folder) |
 | the branch that task branches start from and pull requests merge into | `config.yaml` | `board.base_branch` (empty: the default branch of the repository) |
 | from which state the conveyor takes tasks | `config.yaml` | `pickup_from` (`idea`, `story`, `plan`) |

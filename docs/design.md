@@ -421,6 +421,19 @@ The fixer: at most one task fixes CI at a time, on the whole board. It carries t
 
 Base guard: every cycle the CLI reads the checks of the base branch head. When they fail and an open task has `fix::ci`, that task is the fixer. When they fail at the merge commit of a task that verifies the base after its merge and has a repair stage, that task takes `fix::ci` and repairs the base; when another task already has the label, it finishes without repair, and when the lock is busy, it checks again after a minute. Without a repair stage it asks a human and leaves the base to the fix task. A fix task that is reset or closed no longer counts; a done one stays responsible while the base head is the same red commit. Otherwise the CLI creates, under `conveyor-lock/fix`, one task `Fix the CI of the base branch <name>` with the failing check names, `form::plan`, priority 1, a hidden marker, and `fix::ci`, and orders it before all candidates. Until the fix task is merged and the base head is green, no workstation claims a new task (a new branch would start from the red base), and other tasks run their stages up to `merge` and wait there; their stage prompts name the failing base checks and the fix task (section `Base branch`). The fix task itself starts outside the task limits. When the base head is green again, the others continue; the up-to-date check rebases the waiting branches and their CI runs again.
 
+`checks` (team) tunes the guard:
+
+```yaml
+checks:
+  ignore: ["deploy*"]   # CI jobs that never count, for the base and for pull requests; * matches any text, case does not matter
+  fix_base: all             # all: any red base gets a fix task, as above; own: only a base that a merge of the conveyor turned red; none: never
+```
+
+- `ignore` is applied by the board adapters: GitHub drops the check runs and statuses with these names; GitLab judges a pipeline that is not green by its other jobs (jobs with `allow_failure` never count). Use it for jobs that cannot pass in the conveyor's reach, for example a deploy job without its secret.
+- With `own`, a red base that the conveyor did not cause is logged once per commit (`the base branch CI fails at … ; checks.fix_base is own …`) and nothing waits; a base that turns red after a merge of the conveyor is repaired as with `all`.
+- With `none`, a red base is only logged; a task whose merge turned the base red finishes with a note in the issue, and the team fixes the base.
+- In both modes a pull request whose checks fail on a failure that the base already has fails its merge as usual; list such jobs in `ignore`.
+
 One repair at a time: a task whose checks fail on the latest base takes `fix::ci` (conflicts and closed pull requests run their repair stages without it), runs its repair stages (`when: failure`), and stays the fixer until it is done; every workstation holds the `merge` stage, landing, and repairs of its other tasks; earlier stages and new claims go on, because the base is green. A task whose merge fails while another task is the fixer does not repair: it waits and lands again on the new base after the fixer is done. Merges that people make outside the conveyor are not frozen; branch protection with required checks covers them.
 
 Landing is a deterministic CLI step, retried every minute while it waits:

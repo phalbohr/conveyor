@@ -92,6 +92,7 @@ const teamSchema = z.strictObject({
     .prefault({}),
   pickup_from: z.enum(['idea', 'story', 'plan']).default('plan'),
   parts: z.enum(['separate', 'together']).default('separate'),
+  checks: z.strictObject({ ignore: z.array(z.string().min(1)).default([]), fix_base: z.enum(['all', 'own', 'none']).default('all') }).prefault({}),
   transitions: z
     .strictObject({
       idea_to_story: gateMode.default('interactive'),

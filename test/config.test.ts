@@ -306,6 +306,15 @@ describe('model and effort names', () => {
   })
 })
 
+describe('checks', () => {
+  it('counts every check and fixes any red base by default, and takes ignored jobs and a fix mode', () => {
+    expect(config('board: {provider: github, project: acme/app}\n').checks).toEqual({ ignore: [], fix_base: 'all' })
+    expect(config('board: {provider: github, project: acme/app}\nchecks: {ignore: ["deploy*"], fix_base: own}\n').checks).toEqual({ ignore: ['deploy*'], fix_base: 'own' })
+    const result = load('board: {provider: github, project: acme/app}\nchecks: {fix_base: some}\n')
+    expect(result.ok ? [] : result.errors.join('\n')).toContain('checks.fix_base')
+  })
+})
+
 describe('group boards and several repositories', () => {
   const gitlab = 'board: {provider: gitlab, project: shop/frontend, group: shop}\n'
   const errors = (text: string, local?: string) => {

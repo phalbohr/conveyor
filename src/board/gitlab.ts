@@ -24,6 +24,7 @@ import {
   type TaskForm,
   type TaskLabels,
   type TaskState,
+  ignoredCheck,
 } from './board.js'
 
 type GraphIssue = {
@@ -48,7 +49,7 @@ type MergeRequest = {
   sha: string
   state: 'opened' | 'merged' | 'closed' | 'locked'
   detailed_merge_status: string
-  head_pipeline: { status: string } | null
+  head_pipeline: { id: number; status: string } | null
   draft?: boolean
   source_project_id?: number
   target_project_id?: number
@@ -75,7 +76,7 @@ export class GitLabBoard implements Board {
   constructor(
     private readonly project: string,
     private readonly run: Run,
-    private readonly options: { retryDelay?: number; baseBranch?: string; group?: string; repos?: { group?: string; paths?: Record<string, string>; base: Record<string, string> } } = {},
+    private readonly options: { retryDelay?: number; baseBranch?: string; group?: string; repos?: { group?: string; paths?: Record<string, string>; base: Record<string, string> }; ignoreChecks?: string[] } = {},
   ) {
     this.api = `projects/${encodeURIComponent(project)}`
     this.scope = options.group ? `groups/${encodeURIComponent(options.group)}` : this.api
@@ -319,7 +320,7 @@ export class GitLabBoard implements Board {
       url: request.web_url,
       headSha: request.sha,
       state: request.state === 'opened' || request.state === 'locked' ? 'open' : request.state,
-      checks: checks(request.head_pipeline?.status),
+      checks: await this.pipelineChecks(api, request.head_pipeline),
       mergeable: mergeable(request.detailed_merge_status),
       ...(request.draft ? { draft: true } : {}),
       feedback: notes
@@ -378,15 +379,24 @@ export class GitLabBoard implements Board {
   async failedChecks(sha: string, repo?: string) {
     const api = this.repoApi(repo)
     const commit = await this.json<{ last_pipeline: { id: number; status: string } | null }>([`${api}/repository/commits/${sha}`])
-    if (!commit.last_pipeline || checks(commit.last_pipeline.status) !== 'failure') return []
-    const jobs = await this.json<{ name: string; status: string }[]>([`${api}/pipelines/${commit.last_pipeline.id}/jobs?scope[]=failed&per_page=100`])
-    return jobs.map((job) => job.name)
+    if (!commit.last_pipeline || (await this.pipelineChecks(api, commit.last_pipeline)) !== 'failure') return []
+    const jobs = await this.json<{ name: string; status: string; allow_failure?: boolean }[]>([`${api}/pipelines/${commit.last_pipeline.id}/jobs?scope[]=failed&per_page=100`])
+    return jobs.filter((job) => !job.allow_failure && !ignoredCheck(job.name, this.options.ignoreChecks ?? [])).map((job) => job.name)
   }
 
   async commitChecks(sha: string, repo?: string) {
     const api = this.repoApi(repo)
-    const commit = await this.json<{ last_pipeline: { status: string } | null }>([`${api}/repository/commits/${sha}`])
-    return checks(commit.last_pipeline?.status)
+    const commit = await this.json<{ last_pipeline: { id: number; status: string } | null }>([`${api}/repository/commits/${sha}`])
+    return this.pipelineChecks(api, commit.last_pipeline)
+  }
+
+  private async pipelineChecks(api: string, pipeline: { id: number; status: string } | null): Promise<PullRequest['checks']> {
+    const ignore = this.options.ignoreChecks ?? []
+    if (!pipeline || ignore.length === 0 || pipeline.status === 'success') return checks(pipeline?.status)
+    const jobs = (await this.json<{ name: string; status: string; allow_failure?: boolean }[]>([`${api}/pipelines/${pipeline.id}/jobs?per_page=100`])).filter((job) => !ignoredCheck(job.name, ignore))
+    if (jobs.some((job) => ['failed', 'canceled', 'canceling'].includes(job.status) && !job.allow_failure)) return 'failure'
+    if (jobs.some((job) => ['created', 'pending', 'running', 'preparing', 'waiting_for_resource', 'scheduled'].includes(job.status))) return 'pending'
+    return jobs.some((job) => job.status === 'success') ? 'success' : 'none'
   }
 
   async closePullRequest(id: string, repo?: string) {

@@ -127,9 +127,10 @@ export function boardAdapter(context: Context, config: Config): Board {
       ? new GitLabBoard(project, context.run, {
           ...(base_branch ? { baseBranch: base_branch } : {}),
           ...(group ? { group } : {}),
+          ...(config.checks.ignore.length ? { ignoreChecks: config.checks.ignore } : {}),
           ...(config.repos ? { repos: { ...(config.repos.group ? { group: config.repos.group } : {}), ...(config.repos.projects ? { paths: config.repos.projects } : {}), base: config.repos.base } } : {}),
         })
-      : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), ...(base_branch ? { baseBranch: base_branch } : {}), warn }))
+      : new GitHubBoard(project, context.run, { ...(github_project ? { projectNumber: github_project } : {}), ...(base_branch ? { baseBranch: base_branch } : {}), ...(config.checks.ignore.length ? { ignoreChecks: config.checks.ignore } : {}), warn }))
   )
 }
 

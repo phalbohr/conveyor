@@ -100,6 +100,36 @@ describe('draft pull requests', () => {
   })
 })
 
+describe('ignored checks', () => {
+  it('leaves listed check runs and statuses out of the result on GitHub', async () => {
+    const { run } = recorder((args) =>
+      args.some((arg) => arg.includes('/check-runs'))
+        ? JSON.stringify([{ check_runs: [{ name: 'deploy (prod)', status: 'completed', conclusion: 'failure' }, { name: 'test', status: 'completed', conclusion: 'success' }] }])
+        : JSON.stringify({ statuses: [{ context: 'Deploy/preview', state: 'error' }] }),
+    )
+    const board = new GitHubBoard('acme/app', run, { ignoreChecks: ['deploy*'] })
+    expect(await board.commitChecks('abc')).toBe('success')
+    expect(await board.failedChecks('abc')).toEqual([])
+    expect(await new GitHubBoard('acme/app', run).commitChecks('abc')).toBe('failure')
+  })
+
+  it('judges a GitLab pipeline by its other jobs when a listed job fails', async () => {
+    const jobs = [
+      { name: 'unit-test-job', status: 'success' },
+      { name: 'deploy:catalog', status: 'failed' },
+      { name: 'lint', status: 'failed', allow_failure: true },
+    ]
+    const { run, calls } = recorder((args) => (args.some((arg) => arg.includes('/jobs')) ? JSON.stringify(jobs) : JSON.stringify({ last_pipeline: { id: 5, status: 'failed' } })))
+    const board = new GitLabBoard('acme/app', run, { retryDelay: 0, ignoreChecks: ['deploy*'] })
+    expect(await board.commitChecks('abc')).toBe('success')
+    expect(await board.failedChecks('abc')).toEqual([])
+    expect(calls).toContainEqual(['api', `projects/${encodeURIComponent('acme/app')}/pipelines/5/jobs?per_page=100`])
+    jobs.push({ name: 'integration-test-job', status: 'failed' })
+    expect(await board.commitChecks('abc')).toBe('failure')
+    expect(await new GitLabBoard('acme/app', run, { retryDelay: 0 }).commitChecks('abc')).toBe('failure')
+  })
+})
+
 describe('pull requests from forks', () => {
   it('ignores a fork pull request with the task branch name on GitHub', async () => {
     const pull = (number: number, cross: boolean) => ({ number, url: `https://example.test/pull/${number}`, headRefOid: 'a'.repeat(40), state: 'OPEN', mergeable: 'MERGEABLE', isCrossRepository: cross, statusCheckRollup: [], reviews: [], comments: [] })

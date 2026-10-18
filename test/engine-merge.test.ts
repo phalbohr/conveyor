@@ -678,6 +678,44 @@ describe('a red base branch', () => {
     expect(fixes[0]?.author).toBe('me')
   })
 
+  it('with checks.fix_base own, reports a base it did not break and neither fixes it nor waits', async () => {
+    const { board, cycle, logs } = setup({ mode: 'ai', config: 'checks: {fix_base: own}' })
+    board.headChecks = 'failure'
+    board.baseFailures = ['deploy:catalog']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    await cycle()
+
+    expect((await board.listTasks()).some((task) => task.title.startsWith('Fix the CI'))).toBe(false)
+    expect(board.merges.map((merge) => merge.id)).toEqual(['1'])
+    expect(logs.filter((line) => line.includes('checks.fix_base is own, so the conveyor fixes only failures after its own merges'))).toHaveLength(1)
+    expect(logs.join('\n')).toContain('(deploy:catalog)')
+  })
+
+  it('with checks.fix_base own, still repairs a base its own merge broke', async () => {
+    const { board, cycle } = setup({ mode: 'ai', config: 'checks: {fix_base: own}' })
+    board.baseChecks = ['failure']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+    expect((await board.listComments('1')).at(-1)?.body).toContain('The base branch CI failed after this task was merged')
+  })
+
+  it('with checks.fix_base none, finishes a task whose merge broke the base and leaves the base to the team', async () => {
+    const { board, cycle } = setup({ mode: 'ai', config: 'checks: {fix_base: none}' })
+    board.baseChecks = ['failure']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('done')
+    expect((await board.listComments('1')).some((comment) => comment.body.includes('`checks.fix_base` is `none`, so the conveyor does not repair it'))).toBe(true)
+    board.headChecks = 'failure'
+    await board.createTask('Next', 'p', { form: 'plan' })
+    await cycle()
+    expect((await board.listTasks()).some((task) => task.title.startsWith('Fix the CI'))).toBe(false)
+    expect(board.merges.map((merge) => merge.id)).toEqual(['1', '2'])
+  })
+
   it('creates one fix task, merges it first, and holds the other merges until the base is green', async () => {
     const { board, harness, cycle } = setup({ mode: 'ai' })
     board.headChecks = 'failure'

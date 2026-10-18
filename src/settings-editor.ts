@@ -76,6 +76,18 @@ const TEAM: Spec[] = [
       together: 'the parts collect in one draft pull request per repository; it is reviewed and merged after the last part',
     },
   },
+  {
+    key: 'checks.fix_base',
+    label: 'Fix a red base',
+    kind: 'select',
+    options: ['all', 'own', 'none'],
+    help: 'which red base branch CI the conveyor repairs (checks.ignore lists jobs that never count)',
+    optionHelp: {
+      all: 'any red base: a fix task repairs it first, new tasks and merges wait',
+      own: 'only a base that its own merge turned red; another red base is logged and nothing waits',
+      none: 'never; a red base is logged and the team fixes it',
+    },
+  },
   { key: 'merge_method', label: 'Merge method', kind: 'select', options: ['merge', 'squash', 'rebase'], help: 'how the pull request is merged' },
   {
     key: 'close_on_done',
