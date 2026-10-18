@@ -716,6 +716,26 @@ describe('a red base branch', () => {
     expect(board.merges.map((merge) => merge.id)).toEqual(['1', '2'])
   })
 
+  it('checks a merged task that waits for the base CI even when every running slot is taken', async () => {
+    const gate = deferred<StageResult>()
+    const { board, engine, cycle, runs, expireRetry } = setup({ mode: 'ai', limits: 'running: 1', script: (run) => (run.taskId === '2' ? gate.promise : done) })
+    board.baseChecks = ['pending']
+    await board.createTask('Merged', 'p', { form: 'plan' })
+    await cycle()
+    expect(board.merges.map((merge) => merge.id)).toEqual(['1'])
+    expect((await board.getTask('1'))?.state).toBe('in-progress')
+
+    await board.createTask('Busy', 'p', { form: 'plan' })
+    await engine.tick()
+    await vi.waitFor(() => expect(runs()).toContain('2:implement'))
+    board.baseChecks = ['success']
+    await expireRetry('1')
+    await engine.tick()
+    await vi.waitFor(async () => expect((await board.getTask('1'))?.state).toBe('done'))
+    gate.resolve(done)
+    await engine.idle()
+  })
+
   it('creates one fix task, merges it first, and holds the other merges until the base is green', async () => {
     const { board, harness, cycle } = setup({ mode: 'ai' })
     board.headChecks = 'failure'

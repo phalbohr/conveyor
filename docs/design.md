@@ -395,7 +395,7 @@ If the board read fails, running stages continue; the next cycle tries again.
 - The conveyor only sees its own runs. `limits.subscription.probe: true` adds a cheap run per harness (claude: haiku, codex: gpt-6-luna; low effort) when the last reading is older than 10 minutes, to see usage from interactive sessions too.
 - A confirmed task leaves `awaiting_me`. If no `running` slot is free, it gets `conveyor::queued` and waits. Before its next stage, a running task with a lower priority gives its slot to it and waits in `conveyor::queued` itself, so higher priorities finish first.
 - When a slot is free: first tasks from the resume queue, then new tasks from the board.
-- A task that waits to merge (checks, approvals, a red base, or the base CI after its merge) runs no harness and takes no `running` slot.
+- A task that waits to merge (checks, approvals, a red base, or the base CI after its merge) runs no harness and takes no `running` slot. Its check runs in every cycle even when all slots are taken.
 - The fix task of a red base starts even when every slot is taken, the resume queue is not empty, or `awaiting_me`/`awaiting_review` is reached: no other task merges before it. The daily token limit and the subscription reserves still apply to it.
 - A task whose checks failed on an older base branch is rebased onto the latest base and waits for its new checks before any repair stage runs.
 - Before landing, the CLI pushes task branch commits that a failed push left in the workspace (for example after a network error) and waits for their checks.

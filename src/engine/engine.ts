@@ -257,6 +257,10 @@ export class Engine {
     let waiting = 0
     this.slotWaiters = []
     for (const task of this.sorted(resumable, me)) {
+      if (parked.has(task.id)) {
+        this.start(task, config)
+        continue
+      }
       if (slots > 0 || task.id === fixer) {
         this.start(task, config)
         slots--
