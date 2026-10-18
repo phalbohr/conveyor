@@ -11,6 +11,7 @@
 - The control screen scrolls a page at a time with PgUp and PgDn, or Shift+↑↓ (on a Mac keyboard without these keys, and in Terminal.app, where Fn+↑↓ scrolls the terminal), in the opened task, watch, help, usage, log, and board check.
 - The status columns of the control screen follow the board: backlog, needs input, queued, in progress, review.
 - A started task that waits for a free `running` slot between stages (for example before the next part of a plan) moves to `conveyor::queued` and shows `waits for a free slot`; before, it stayed in progress with `waits for its next attempt`. Tasks that wait for merge checks or the base CI stay in progress.
+- Higher priorities finish first: between two stages, a running task gives its slot to a waiting started task with a higher priority (for example one that just got its answer), moves to `conveyor::queued`, and continues at its next stage later. The next cycle starts at once. Before, the higher priority waited until the lower one finished its whole part.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
 
 ## 0.2.2 — 2026-10-14

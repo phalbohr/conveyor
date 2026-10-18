@@ -130,6 +130,7 @@ export class Runner {
       loadConfig: () => loadConfig(settings),
       log,
       redact: (text) => redactSecrets(text, this.setup.secrets()),
+      wake: () => this.cycle(),
     }))
 
     let noticed = ''

@@ -11,7 +11,7 @@ import type { StageResult } from '../src/harness/harness.js'
 import { FakeWorkspaces, deferred, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
-type Setup = { config?: string; local?: string; script?: Script; instructions?: Record<string, string> }
+type Setup = { config?: string; local?: string; script?: Script; instructions?: Record<string, string>; wake?: () => void }
 
 function setup(options: Setup = {}) {
   const settings = tempDir('conveyor-settings-')
@@ -36,6 +36,7 @@ function setup(options: Setup = {}) {
     usage,
     home,
     loadConfig: () => loadConfig(settings),
+    ...(options.wake ? { wake: options.wake } : {}),
   })
   const cycle = async () => {
     await engine.tick()
@@ -316,6 +317,40 @@ describe('Engine scheduling', () => {
     expect((await board.getTask('3'))?.state).toBe('in-progress')
     gate.resolve(done())
     await engine.idle()
+  })
+
+  it('gives the slot to a waiting task with a higher priority between two stages and continues later', async () => {
+    const gate = deferred<StageResult>()
+    const wake = vi.fn()
+    const { board, engine, runs } = setup({
+      local: 'limits: {running: 1, awaiting_me: 5}\n',
+      script: (run) => (run.taskId === '1' && run.stage === 'implement' ? gate.promise : done()),
+      wake,
+    })
+    const low = await board.createTask('Low', 'p', { form: 'plan' })
+    await board.setPriority(low.id, 2)
+    await engine.tick()
+    await vi.waitFor(() => expect(runs()).toEqual(['1:implement']))
+    const high = await board.createTask('High', 'p', { form: 'plan' })
+    await board.setPriority(high.id, 1)
+    await board.setOwner(high.id, await board.user())
+    await board.setState(high.id, 'in-progress')
+    await board.addComment(high.id, renderWorkpad({ attempt: 0, stage: 'implement' }, ''))
+    await engine.tick()
+    expect((await board.getTask(high.id))?.state).toBe('queued')
+
+    gate.resolve(done())
+    await vi.waitFor(async () => expect((await board.getTask(low.id))?.state).toBe('queued'))
+    expect(runs()).toEqual(['1:implement'])
+    await engine.idle()
+    expect(wake).toHaveBeenCalledTimes(1)
+    await engine.tick()
+    await engine.idle()
+    expect(runs().slice(0, 3)).toEqual(['1:implement', '2:implement', '2:review'])
+    await engine.tick()
+    await engine.idle()
+    expect(runs()).toContain('1:review')
+    expect(runs().filter((entry) => entry === '1:implement')).toHaveLength(1)
   })
 
   it('skips a task claimed by another workstation', async () => {

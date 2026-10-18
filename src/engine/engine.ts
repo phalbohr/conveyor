@@ -43,6 +43,7 @@ export type EngineOptions = {
   loadConfig: () => LoadResult
   log?: (message: string) => void
   redact?: (text: string) => string
+  wake?: () => void
 }
 
 type Running = { controller: AbortController; promise: Promise<void> }
@@ -133,6 +134,8 @@ export class Engine {
   private readonly halt = new AbortController()
   private readonly held = new Set<string>()
   private draining = false
+  private slotWaiters: Task[] = []
+  private readonly yielded = new Set<string>()
   private baseRed?: { sha: string; fix?: string; failed: string[]; repairing?: boolean }
   private fixer?: string
   private readonly verifying = new Map<string, string>()
@@ -247,6 +250,7 @@ export class Engine {
     if (previous && fixer === undefined) this.log(`CI freeze over: task ${taskRef(previous)} no longer fixes the CI; merges continue`)
     let slots = config.limits.running - this.running.size - backingOff
     let waiting = 0
+    this.slotWaiters = []
     for (const task of this.sorted(resumable, me)) {
       if (slots > 0 || task.id === fixer) {
         this.start(task, config)
@@ -254,6 +258,7 @@ export class Engine {
         continue
       }
       waiting++
+      this.slotWaiters.push(task)
       if (task.state === 'needs-input' || (task.state === 'in-progress' && !parked.has(task.id))) await board.setState(task.id, 'queued')
     }
 
@@ -366,7 +371,10 @@ export class Engine {
     const controller = new AbortController()
     const promise = this.execute(task, config, controller.signal)
       .catch((error: unknown) => this.log(`task ${task.id}: ${(error as Error).message}`))
-      .finally(() => this.running.delete(task.id))
+      .finally(() => {
+        this.running.delete(task.id)
+        if (this.yielded.delete(task.id)) this.options.wake?.()
+      })
     this.running.set(task.id, { controller, promise })
   }
 
@@ -606,8 +614,17 @@ export class Engine {
     let summary = ''
     let merge: 'land' | 'review' | undefined
 
-    for (const stage of stages) {
+    for (const [index, stage] of stages.entries()) {
       if (signal.aborted) return { status: 'stopped', summary }
+      const waiter = index > 0 ? await this.higherWaiter(id) : undefined
+      if (waiter) {
+        state.stage = stage.name
+        await run.save()
+        await board.setState(id, 'queued')
+        this.yielded.add(id)
+        this.log(`task ${id}: gives its slot to task ${taskRef(waiter.id)} with a higher priority; it continues at stage ${stage.name}`)
+        return { status: 'stopped', summary }
+      }
       if (this.draining) {
         state.stage = stage.name
         await run.save()
@@ -1565,6 +1582,15 @@ export class Engine {
     const assignee = config.pickup.assignee === 'me' ? me : config.pickup.assignee
     if (task.assignees.length > 0) return task.assignees.includes(assignee)
     return config.pickup.include_unassigned
+  }
+
+  private async higherWaiter(id: string) {
+    const waiters = this.slotWaiters.filter((task) => task.id !== id && !this.running.has(task.id))
+    if (waiters.length === 0 || id === this.fixer || !this.me) return undefined
+    const current = await this.options.board.getTask(id)
+    if (!current) return undefined
+    const [first] = this.sorted([current, ...waiters], this.me)
+    return first && first.id !== id && (first.priority ?? Number.MAX_SAFE_INTEGER) < (current.priority ?? Number.MAX_SAFE_INTEGER) ? first : undefined
   }
 
   private sorted(tasks: Task[], me: string) {
