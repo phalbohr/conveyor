@@ -20,6 +20,7 @@
 - `checks.ignore` lists CI jobs that never count, for the base branch and for pull requests (for example a deploy job without its secret); GitLab judges a pipeline by its other jobs. `checks.fix_base` chooses which red base the conveyor repairs: `all` (default, as before), `own` (only a base its own merge turned red; another red base is logged and nothing waits), or `none`.
 - A task branch that cannot be deleted is reported with the git error: reset says `The branch was not deleted: …`, and a finished task logs it. Before, the failure was silent, and a reset task could continue on its old remote branch.
 - A task that waits for its merge checks or for the base CI after its merge is checked even when every `running` slot is taken; before, a merged task with green base CI could wait until a stage of another task finished.
+- The stage templates set test and edit habits: a failing test first only for new behavior; single test cases or files while working and the full suite, type check, and build once at the end; long test output saved to a file instead of rerunning the command; no search-and-replace of ordinary words over many files. Existing projects keep their own stage files; copy the rules there by hand.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
 
 ## 0.2.2 — 2026-10-14
