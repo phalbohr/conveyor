@@ -114,6 +114,29 @@ describe('MultiWorkspaces', () => {
     expect(existsSync(join(root, 'frontend-12'))).toBe(false)
   })
 
+  it('deletes the pushed task branch in every repository on reset', async () => {
+    const { workspaces, clones } = await setup()
+    const { path } = await workspaces.prepare('frontend#12')
+    writeFileSync(join(path, 'frontend', 'ui.txt'), 'ui\n')
+    await workspaces.commitAll('frontend#12', 'implement: ui')
+    await workspaces.push('frontend#12')
+    const remote = () => git(clones.find((clone) => clone.name === 'frontend')?.path ?? '', 'ls-remote', '--heads', 'origin', 'conveyor/frontend-12')
+    expect(remote()).toContain('conveyor/frontend-12')
+    await workspaces.remove('frontend#12')
+    await workspaces.deleteBranch('frontend#12')
+    expect(remote()).toBe('')
+    await expect(workspaces.deleteBranch('frontend#12')).resolves.toBeUndefined()
+    const again = await workspaces.prepare('frontend#12')
+    expect(existsSync(join(again.path, 'frontend', 'ui.txt'))).toBe(false)
+  })
+
+  it('says why a task branch could not be deleted', async () => {
+    const { workspaces, clones } = await setup()
+    await workspaces.prepare('frontend#12')
+    git(clones[0]?.path ?? '', 'remote', 'set-url', 'origin', join(tempDir(), 'gone.git'))
+    await expect(workspaces.deleteBranch('frontend#12')).rejects.toThrow('git push origin --delete conveyor/frontend-12 failed in')
+  })
+
   it('removes every worktree and the folder of the task', async () => {
     const { workspaces, root, clones } = await setup()
     await workspaces.prepare('frontend#12')

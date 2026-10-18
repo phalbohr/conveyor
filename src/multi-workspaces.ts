@@ -113,7 +113,9 @@ export class MultiWorkspaces implements RepoWorkspaces {
   }
 
   async deleteBranch(taskId: string) {
-    for (const { workspaces } of await this.all()) await workspaces.deleteBranch(taskId)
+    const errors: string[] = []
+    for (const { workspaces } of await this.all()) await workspaces.deleteBranch(taskId).catch((error: unknown) => errors.push((error as Error).message))
+    if (errors.length > 0) throw new Error(errors.join('; '))
   }
 
   async push(taskId: string) {

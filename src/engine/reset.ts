@@ -21,7 +21,10 @@ export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remo
   if (pull?.state === 'open') await board.closePullRequest(id)
   for (const [repo, entry] of Object.entries(pad?.state.repos ?? {})) if (!entry.merged) await board.closePullRequest(id, repo)
   await workspaces.remove(id)
-  await workspaces.deleteBranch(id)
+  const branchError = await workspaces.deleteBranch(id).then(
+    () => '',
+    (error: unknown) => ` The branch was not deleted: ${(error as Error).message}.`,
+  )
   if (session) removeSession(session)
   if (task.fixing) await board.setFixing(id, false)
   const kept = chosen === 'plan' && pad?.state.parts ? { parts: pad.state.parts, part: parts === 'together' ? 0 : (pad.state.part ?? 0) } : undefined
@@ -33,7 +36,7 @@ export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remo
   const merged = pad?.state.parts && pad.state.part && parts === 'separate' ? ` Parts 1–${pad.state.part} stay merged in the base branch.` : ''
   const resumes = kept ? ` The ${kept.parts.length} parts of the plan stay; the work starts again at part ${kept.part + 1}.` : ''
   const closed = pull?.state === 'open' ? `, closed pull request ${pull.number}` : ''
-  const summary = `Reset by @${me}: stopped the work${closed}, deleted the branch conveyor/${taskSlug(id)} and the workspace, cleared the workpad; back in Backlog ${chosen ? `with form::${chosen}` : 'without a form'}.${merged}${resumes}`
+  const summary = `Reset by @${me}: stopped the work${closed}, deleted the branch conveyor/${taskSlug(id)} and the workspace, cleared the workpad; back in Backlog ${chosen ? `with form::${chosen}` : 'without a form'}.${merged}${resumes}${branchError}`
   if (task.owner) await releaseClaim(board, id, summary)
   else await board.release(id)
   return summary

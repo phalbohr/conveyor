@@ -144,8 +144,11 @@ export class GitWorkspaces implements Workspaces {
   }
 
   async deleteBranch(taskId: string) {
-    await this.tryGit(this.options.repo, 'push', '--quiet', 'origin', '--delete', taskBranch(taskId))
+    const result = await createRun(this.options.repo)('git', ['push', '--quiet', 'origin', '--delete', taskBranch(taskId)])
     await this.tryGit(this.options.repo, 'update-ref', '-d', leaseRef(taskId))
+    if (result.code !== 0 && !/remote ref does not exist|unable to delete .*: remote ref/i.test(result.stderr)) {
+      throw new Error(`git push origin --delete ${taskBranch(taskId)} failed in ${this.options.repo}: ${result.stderr.trim() || `exit code ${result.code}`}`)
+    }
   }
 
   async push(taskId: string) {

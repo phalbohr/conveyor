@@ -632,7 +632,7 @@ export class Engine {
     if (config.close_on_done) await board.closeTask(id)
     await board.release(id)
     await workspaces.remove(id)
-    await workspaces.deleteBranch(id)
+    await workspaces.deleteBranch(id).catch((error: unknown) => this.log(`task ${id}: ${(error as Error).message}`))
     removeSession(sessionFile(this.options.home, config.board.project, id))
     this.log(`task ${id}: done`)
   }
