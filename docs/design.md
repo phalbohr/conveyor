@@ -432,7 +432,7 @@ checks:
 ```
 
 - `ignore` is applied by the board adapters: GitHub drops the check runs and statuses with these names; GitLab judges a pipeline that is not green by its other jobs (jobs with `allow_failure` never count). Use it for jobs that cannot pass in the conveyor's reach, for example a deploy job without its secret.
-- With `own`, a red base that the conveyor did not cause is logged once per commit (`the base branch CI fails at … ; checks.fix_base is own …`) and nothing waits; a base that turns red after a merge of the conveyor is repaired as with `all`.
+- With `own`, a red base that the conveyor did not cause is logged once per commit (`the base branch CI fails at … ; checks.fix_base is own …`) and nothing waits. A base that turns red after a merge of the conveyor is its own only when a failing job passed in the merged pull request and did not fail on the base before the merge; the conveyor records the head of the pull request and the base head before each merge for this. Jobs that the pull request does not run (deploys, updates of other repositories) or that failed before are logged and left to the team. An own failure is repaired as with `all`.
 - With `none`, a red base is only logged; a task whose merge turned the base red finishes with a note in the issue, and the team fixes the base.
 - In both modes a pull request whose checks fail on a failure that the base already has fails its merge as usual; list such jobs in `ignore`.
 

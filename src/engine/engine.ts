@@ -137,6 +137,7 @@ export class Engine {
   private draining = false
   private slotWaiters: Task[] = []
   private readonly broke = new Set<string>()
+  private readonly deciding = new Set<string>()
   private readonly reportedRed = new Set<string>()
   private originPath?: Promise<string | undefined>
   private readonly misplaced = new Set<string>()
@@ -855,11 +856,12 @@ export class Engine {
         synced = await this.options.workspaces.syncBase(id).catch(() => 'unknown' as const)
         if (synced === 'rebased') state.headSha = await this.options.workspaces.push(id)
         if (synced === 'current') {
+          const before = await board.baseHead().catch(() => undefined)
           const merged = await board.mergePullRequest(id, config.merge_method, pull.headSha)
           if (!merged.ok) error = merged.error
           const sha = merged.ok ? await board.mergeCommit(id).catch(() => undefined) : undefined
           if (sha) {
-            state.verify = { sha, since: new Date().toISOString() }
+            state.verify = { sha, since: new Date().toISOString(), head: pull.headSha, ...(before ? { before } : {}) }
             this.verifying.set(sha, id)
           }
         }
@@ -960,6 +962,7 @@ export class Engine {
           this.log(`task ${id}: the base branch of ${repo} moved and the rebase conflicts; the merge stage runs again`)
           return 'stop'
         }
+        const before = await board.baseHead(repo).catch(() => undefined)
         const merged = await board.mergePullRequest(id, config.merge_method, sha, repo)
         if (!merged.ok) {
           error = `${repo}: ${merged.error}`
@@ -967,7 +970,7 @@ export class Engine {
         }
         entry.merged = true
         const commit = await board.mergeCommit(id, repo).catch(() => undefined)
-        if (commit) entry.verify = { sha: commit, since: new Date().toISOString() }
+        if (commit) entry.verify = { sha: commit, since: new Date().toISOString(), head: sha, ...(before ? { before } : {}) }
         await run.save()
         this.log(`task ${id}: merged the merge request of ${repo}`)
       }
@@ -1005,6 +1008,7 @@ export class Engine {
     if (state.repos && this.repoWorkspaces(config)) {
       for (const [repo, entry] of Object.entries(state.repos)) {
         if (!entry.verify) continue
+        this.deciding.add(entry.verify.sha)
         const checks = await board.commitChecks(entry.verify.sha, repo).catch(() => 'pending' as const)
         if (checks === 'pending' || (checks === 'none' && Date.now() - Date.parse(entry.verify.since) < CHECKS_GRACE)) {
           state.parked = `merged; waits for the CI of ${repo} at ${entry.verify.sha.slice(0, 7)}`
@@ -1014,10 +1018,15 @@ export class Engine {
           return false
         }
         if (checks === 'failure') {
-          this.broke.add(entry.verify.sha)
-          if (config.checks.fix_base === 'none') await this.leaveBroken(id, entry.verify.sha, repo)
-          else this.log(`task ${id}: the CI of ${repo} failed after the merge at ${entry.verify.sha.slice(0, 7)}; the fix task of the red base repairs it`)
+          const cause = config.checks.fix_base === 'own' ? await this.causedByMerge(entry.verify, repo) : undefined
+          if (cause && !cause.ours) this.notCaused(id, entry.verify.sha, repo, cause.failed)
+          else {
+            this.broke.add(entry.verify.sha)
+            if (config.checks.fix_base === 'none') await this.leaveBroken(id, entry.verify.sha, repo)
+            else this.log(`task ${id}: the CI of ${repo} failed after the merge at ${entry.verify.sha.slice(0, 7)}; the fix task of the red base repairs it`)
+          }
         }
+        this.deciding.delete(entry.verify.sha)
         delete entry.verify
       }
       return true
@@ -1025,6 +1034,7 @@ export class Engine {
     const verify = state.verify
     if (!verify) return true
     this.verifying.set(verify.sha, id)
+    this.deciding.add(verify.sha)
     const checks = await board.commitChecks(verify.sha).catch(() => 'pending' as const)
     if (checks === 'pending' || (checks === 'none' && Date.now() - Date.parse(verify.since) < CHECKS_GRACE)) {
       state.parked = `merged; waits for the CI of the base branch at ${verify.sha.slice(0, 7)}`
@@ -1036,6 +1046,14 @@ export class Engine {
     delete state.verify
     if (checks !== 'failure') {
       this.verifying.delete(verify.sha)
+      this.deciding.delete(verify.sha)
+      return true
+    }
+    const cause = config.checks.fix_base === 'own' ? await this.causedByMerge(verify, undefined) : undefined
+    this.deciding.delete(verify.sha)
+    if (cause && !cause.ours) {
+      this.verifying.delete(verify.sha)
+      this.notCaused(id, verify.sha, undefined, cause.failed)
       return true
     }
     this.log(`task ${id}: the CI of the base branch failed after the merge at ${verify.sha.slice(0, 7)}`)
@@ -1112,6 +1130,20 @@ export class Engine {
     return false
   }
 
+  private async causedByMerge(verify: { sha: string; head?: string; before?: string }, repo: string | undefined) {
+    const { board } = this.options
+    const failed = await board.failedChecks(verify.sha, repo).catch(() => [])
+    if (!verify.head || failed.length === 0) return { ours: true, failed }
+    const passed = new Set(await board.passedChecks(verify.head, repo).catch(() => []))
+    const before = new Set(verify.before ? await board.failedChecks(verify.before, repo).catch(() => []) : [])
+    return { ours: failed.some((name) => passed.has(name) && !before.has(name)), failed }
+  }
+
+  private notCaused(id: string, sha: string, repo: string | undefined, failed: string[]) {
+    this.reportedRed.add(`${repo ?? ''}@${sha}`)
+    this.log(`task ${id}: the base branch CI ${repo ? `of ${repo} ` : ''}failed after the merge at ${sha.slice(0, 7)} (${failed.join(', ')}), but no job that passed in the merge request and before the merge fails; checks.fix_base is own, so the conveyor leaves it to the team`)
+  }
+
   private async leaveBroken(id: string, sha: string, repo: string | undefined) {
     const where = repo ? `of ${repo} ` : ''
     this.log(`task ${id}: the base branch CI ${where}failed after the merge at ${sha.slice(0, 7)}; checks.fix_base is none, so the team fixes it`)
@@ -1139,7 +1171,8 @@ export class Engine {
     if (checks === 'success') return 'green'
     if (checks !== 'failure') return 'pending'
     const mode = config.checks.fix_base
-    if (mode === 'none' || (mode === 'own' && !this.verifying.has(sha) && !this.broke.has(sha))) {
+    if (mode === 'own' && this.deciding.has(sha)) return 'pending'
+    if (mode === 'none' || (mode === 'own' && !this.broke.has(sha))) {
       const key = `${repo ?? ''}@${sha}`
       if (!this.reportedRed.has(key)) {
         this.reportedRed.add(key)

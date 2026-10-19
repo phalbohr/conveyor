@@ -27,7 +27,7 @@ export type WorkpadState = {
   form?: 'idea' | 'story' | 'plan'
   checksWait?: { sha: string; since: string }
   branch?: string
-  verify?: { sha: string; since: string }
+  verify?: { sha: string; since: string; head?: string; before?: string }
   broken?: string
   followUp?: boolean
   repairs?: number
@@ -39,7 +39,7 @@ export type WorkpadState = {
   mergeOrder?: string[]
 }
 
-export type RepoPull = { number: string; url: string; headSha?: string; merged?: boolean; verify?: { sha: string; since: string }; checksWait?: { sha: string; since: string } }
+export type RepoPull = { number: string; url: string; headSha?: string; merged?: boolean; verify?: { sha: string; since: string; head?: string; before?: string }; checksWait?: { sha: string; since: string } }
 
 export type Workpad = { id: string; state: WorkpadState; text: string }
 
@@ -69,7 +69,7 @@ const stateSchema = z.object({
   form: z.enum(['idea', 'story', 'plan']).optional(),
   checksWait: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
   branch: z.string().optional(),
-  verify: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
+  verify: z.object({ sha: z.string(), since: z.iso.datetime(), head: z.string().optional(), before: z.string().optional() }).optional(),
   broken: z.string().optional(),
   followUp: z.boolean().optional(),
   repairs: z.int().nonnegative().optional(),
@@ -85,7 +85,7 @@ const stateSchema = z.object({
         url: z.string(),
         headSha: z.string().optional(),
         merged: z.boolean().optional(),
-        verify: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
+        verify: z.object({ sha: z.string(), since: z.iso.datetime(), head: z.string().optional(), before: z.string().optional() }).optional(),
         checksWait: z.object({ sha: z.string(), since: z.iso.datetime() }).optional(),
       }),
     )

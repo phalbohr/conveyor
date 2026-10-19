@@ -95,6 +95,21 @@ describe('a feature in several repositories', () => {
     expect(board.merges.map((merge) => merge.repo)).toEqual(['user-service', 'frontend'])
   })
 
+  it('leaves a red base after the merge to the team when the merge request did not run the failing job, with checks.fix_base own', async () => {
+    const { board, cycle, logs } = setup({ extra: 'checks: {fix_base: own}' })
+    board.baseChecks = ['failure']
+    for (const repo of ['frontend', 'user-service']) {
+      board.checkNames.set(`merged-${repo}-1`.padEnd(40, '0'), { failed: ['update_parent_repo'] })
+      board.checkNames.set(`${repo}-1`.padStart(40, '0'), { passed: ['build', 'test'] })
+    }
+    await board.createTask('Checkout', 'story', { form: 'story' })
+    await cycle()
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('done')
+    expect((await board.listTasks()).some((task) => task.title.startsWith('Fix the CI'))).toBe(false)
+    expect(logs.filter((line) => line.includes('so the conveyor leaves it to the team'))).toHaveLength(2)
+  })
+
   it('opens merge requests only for the repositories the task changed', async () => {
     const { board, workspaces, cycle } = setup()
     workspaces.changedRepos = ['frontend']

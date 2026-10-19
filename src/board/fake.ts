@@ -98,8 +98,14 @@ export class FakeBoard implements Board {
   baseSha = 'b'.repeat(40)
   baseFailures: string[] = []
 
-  async failedChecks() {
-    return [...this.baseFailures]
+  readonly checkNames = new Map<string, { failed?: string[]; passed?: string[] }>()
+
+  async failedChecks(sha: string) {
+    return [...(this.checkNames.get(sha)?.failed ?? this.baseFailures)]
+  }
+
+  async passedChecks(sha: string) {
+    return [...(this.checkNames.get(sha)?.passed ?? [])]
   }
 
   readonly linkedPullsOf = new Map<string, LinkedPull[]>()

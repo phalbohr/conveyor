@@ -96,6 +96,7 @@ export interface Board {
   mergeCommit(id: string, repo?: string): Promise<string | undefined>
   commitChecks(sha: string, repo?: string): Promise<PullRequest['checks']>
   failedChecks(sha: string, repo?: string): Promise<string[]>
+  passedChecks(sha: string, repo?: string): Promise<string[]>
   baseHead(repo?: string): Promise<string>
   linkedPulls(id: string): Promise<LinkedPull[]>
   commentPullRequest(id: string, body: string, repo?: string): Promise<void>

@@ -39,6 +39,10 @@ export class RedactingBoard implements Board {
     return this.board.failedChecks(sha, repo)
   }
 
+  passedChecks(sha: string, repo?: string) {
+    return this.board.passedChecks(sha, repo)
+  }
+
   baseHead(repo?: string) {
     return this.board.baseHead(repo)
   }

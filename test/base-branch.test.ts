@@ -130,6 +130,20 @@ describe('ignored checks', () => {
   })
 })
 
+describe('passed checks', () => {
+  it('lists passed jobs without the ignored ones on GitLab and GitHub', async () => {
+    const lab = recorder((args) => (args.some((arg) => arg.includes('/jobs')) ? JSON.stringify([{ name: 'unit-test-job' }, { name: 'deploy:x' }]) : JSON.stringify({ last_pipeline: { id: 5 } })))
+    expect(await new GitLabBoard('acme/app', lab.run, { retryDelay: 0, ignoreChecks: ['deploy*'] }).passedChecks('abc')).toEqual(['unit-test-job'])
+    expect(lab.calls).toContainEqual(['api', `projects/${encodeURIComponent('acme/app')}/pipelines/5/jobs?scope[]=success&per_page=100`])
+    const hub = recorder((args) =>
+      args.some((arg) => arg.includes('/check-runs'))
+        ? JSON.stringify([{ check_runs: [{ name: 'test', conclusion: 'success' }, { name: 'e2e', conclusion: 'failure' }] }])
+        : JSON.stringify({ statuses: [{ context: 'ci/lint', state: 'success' }] }),
+    )
+    expect(await new GitHubBoard('acme/app', hub.run).passedChecks('abc')).toEqual(['test', 'ci/lint'])
+  })
+})
+
 describe('pull requests from forks', () => {
   it('ignores a fork pull request with the task branch name on GitHub', async () => {
     const pull = (number: number, cross: boolean) => ({ number, url: `https://example.test/pull/${number}`, headRefOid: 'a'.repeat(40), state: 'OPEN', mergeable: 'MERGEABLE', isCrossRepository: cross, statusCheckRollup: [], reviews: [], comments: [] })

@@ -342,6 +342,15 @@ export class GitHubBoard implements Board {
     return (await this.api<{ object: { sha: string } }>([`${this.repo}/git/ref/heads/${await this.baseBranch()}`])).object.sha
   }
 
+  async passedChecks(sha: string) {
+    const runs = (await this.api<{ check_runs: { name: string; conclusion: string | null }[] }[]>(['--paginate', '--slurp', `${this.repo}/commits/${sha}/check-runs?per_page=100`])).flatMap((page) => page.check_runs)
+    const statuses = (await this.api<{ statuses: { context: string; state: string }[] }>([`${this.repo}/commits/${sha}/status`])).statuses
+    return [
+      ...runs.filter((run) => (run.conclusion ?? '').toUpperCase() === 'SUCCESS').map((run) => run.name),
+      ...statuses.filter((status) => status.state.toUpperCase() === 'SUCCESS').map((status) => status.context),
+    ].filter((name) => !ignoredCheck(name, this.options.ignoreChecks ?? []))
+  }
+
   async failedChecks(sha: string) {
     const runs = (await this.api<{ check_runs: { name: string; conclusion: string | null }[] }[]>(['--paginate', '--slurp', `${this.repo}/commits/${sha}/check-runs?per_page=100`])).flatMap((page) => page.check_runs)
     const statuses = (await this.api<{ statuses: { context: string; state: string }[] }>([`${this.repo}/commits/${sha}/status`])).statuses

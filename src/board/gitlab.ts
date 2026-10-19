@@ -387,6 +387,14 @@ export class GitLabBoard implements Board {
     return jobs.filter((job) => !job.allow_failure && !ignoredCheck(job.name, this.options.ignoreChecks ?? [])).map((job) => job.name)
   }
 
+  async passedChecks(sha: string, repo?: string) {
+    const api = this.repoApi(repo)
+    const commit = await this.json<{ last_pipeline: { id: number } | null }>([`${api}/repository/commits/${sha}`])
+    if (!commit.last_pipeline) return []
+    const jobs = await this.json<{ name: string }[]>([`${api}/pipelines/${commit.last_pipeline.id}/jobs?scope[]=success&per_page=100`])
+    return jobs.map((job) => job.name).filter((name) => !ignoredCheck(name, this.options.ignoreChecks ?? []))
+  }
+
   async commitChecks(sha: string, repo?: string) {
     const api = this.repoApi(repo)
     const commit = await this.json<{ last_pipeline: { id: number; status: string } | null }>([`${api}/repository/commits/${sha}`])

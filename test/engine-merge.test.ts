@@ -702,6 +702,36 @@ describe('a red base branch', () => {
     expect((await board.listComments('1')).at(-1)?.body).toContain('The base branch CI failed after this task was merged')
   })
 
+  describe('with checks.fix_base own, a red base after its own merge', () => {
+    const merged = 'merged-1'.padEnd(40, '0')
+    const head = '1'.padStart(40, '0')
+    const run = async (failed: string[], passedInPull: string[], failedBefore: string[]) => {
+      const { board, cycle, logs } = setup({ mode: 'ai', config: 'checks: {fix_base: own}' })
+      board.baseChecks = ['failure']
+      board.checkNames.set(merged, { failed })
+      board.checkNames.set(head, { passed: passedInPull })
+      board.checkNames.set(board.baseSha, { failed: failedBefore })
+      await board.createTask('Add login', 'p', { form: 'plan' })
+      await cycle()
+      return { board, logs, state: (await board.getTask('1'))?.state }
+    }
+
+    it('is ours when a job that passed in the merge request and before the merge fails', async () => {
+      expect((await run(['unit-test'], ['build', 'unit-test'], [])).state).toBe('needs-input')
+    })
+
+    it('is not ours when only jobs fail that the merge request did not run', async () => {
+      const { state, logs, board } = await run(['update_parent_repo'], ['build', 'unit-test'], [])
+      expect(state).toBe('done')
+      expect(logs.join('\n')).toContain('(update_parent_repo), but no job that passed in the merge request and before the merge fails; checks.fix_base is own, so the conveyor leaves it to the team')
+      expect((await board.listTasks()).some((task) => task.title.startsWith('Fix the CI'))).toBe(false)
+    })
+
+    it('is not ours when the failing job already failed before the merge', async () => {
+      expect((await run(['lint'], ['lint'], ['lint'])).state).toBe('done')
+    })
+  })
+
   it('with checks.fix_base none, finishes a task whose merge broke the base and leaves the base to the team', async () => {
     const { board, cycle } = setup({ mode: 'ai', config: 'checks: {fix_base: none}' })
     board.baseChecks = ['failure']
