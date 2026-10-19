@@ -47,9 +47,9 @@ describe('GitLab merge request approvals', () => {
       const path = args[1] ?? ''
       const body = /merge_requests\?source_branch=/.test(path)
         ? [{ iid: 7 }]
-        : /merge_requests\/7$/.test(path)
+        : path.endsWith('merge_requests/7')
           ? { iid: 7, web_url: 'https://gitlab.test/mr/7', sha: 'b'.repeat(40), state: 'opened', detailed_merge_status: 'not_approved', head_pipeline: null }
-          : /approvals$/.test(path)
+          : path.endsWith('approvals')
             ? { approved_by: [] }
             : []
       return { code: 0, stdout: JSON.stringify(body), stderr: '' }
