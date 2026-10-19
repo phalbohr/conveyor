@@ -239,8 +239,11 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .description('stop a task, close its pull request, delete its branch and workspace, clear its workpad, and return it to Backlog')
     .argument('<issue>', 'issue number on the board, for example 51 (frontend#12 on a group board)')
     .addOption(new Option('--form <form>', 'form to start again with; default: the form the conveyor took it with').choices(['idea', 'story', 'plan', 'none']))
-    .action(async (issue: string, options: { form?: 'idea' | 'story' | 'plan' | 'none' }) => {
-      exitCode = validIssue(context, issue) ? await resetCommand(context, issue, options.form) : 1
+    .addOption(new Option('--close', 'close the issue after the reset').conflicts(['delete', 'form']))
+    .addOption(new Option('--delete', 'delete the issue after the reset; GitLab needs the Owner role, GitHub admin rights; without them the issue is closed').conflicts('form'))
+    .action(async (issue: string, options: { form?: 'idea' | 'story' | 'plan' | 'none'; close?: boolean; delete?: boolean }) => {
+      const end = options.delete ? 'delete' : options.close ? 'close' : 'backlog'
+      exitCode = validIssue(context, issue) ? await resetCommand(context, issue, end === 'backlog' ? options.form : 'none', end) : 1
     })
 
   try {

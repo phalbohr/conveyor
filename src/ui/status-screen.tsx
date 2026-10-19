@@ -47,7 +47,7 @@ type Props = {
 }
 
 type Panel = 'status' | 'help' | 'usage' | 'log' | 'task' | 'board' | 'watch'
-type Input = { kind: 'attach' | 'release' } | { kind: 'new' } | { kind: 'idea' } | { kind: 'comment'; id: string; target: Target } | { kind: 'reset'; id: string }
+type Input = { kind: 'attach' | 'release' } | { kind: 'new' } | { kind: 'idea' } | { kind: 'comment'; id: string; target: Target } | { kind: 'reset'; id: string } | { kind: 'delete'; id: string }
 
 const RESET_FORMS: Record<string, 'idea' | 'story' | 'plan' | 'none'> = { i: 'idea', s: 'story', p: 'plan', d: 'none' }
 type Opened = { id: string; target: Target; detail?: TaskDetail }
@@ -310,13 +310,18 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         if (key === 'i') setInput({ kind: 'idea' })
         return
       }
-      const form = RESET_FORMS[key]
+      if (input?.kind === 'reset' && key === 'D') {
+        setInput({ kind: 'delete', id: input.id })
+        return
+      }
+      const form = input?.kind === 'reset' && key === 'c' ? 'none' : RESET_FORMS[key]
       if (input?.kind === 'reset' && form && control) {
         const { id } = input
+        const end = key === 'c' ? 'close' : 'backlog'
         setInput(undefined)
-        setMessage({ text: `Resetting ${taskRef(id)}: stopping its stage, closing its pull request, deleting its branch and workspace…` })
+        setMessage({ text: `Resetting ${taskRef(id)}: stopping its stage, closing its pull request, deleting its branch and workspace${end === 'close' ? ', closing the issue' : ''}…` })
         void control
-          .reset(id, form)
+          .reset(id, form, end)
           .then((text) => {
             setMessage({ text })
             setPanel('status')
@@ -418,7 +423,33 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       {input?.kind === 'reset' && (
         <Box flexDirection="column" marginTop={1}>
           <Text color="yellow">{`Reset ${taskRef(input.id)}: stop its stage, close its pull request, delete the branch conveyor/${taskSlug(input.id)} and its workspace, clear the workpad, and return it to Backlog.`}</Text>
-          <Text color="cyan">Start again as: [i] idea · [s] story · [p] plan · [d] draft without a form · [Esc] cancel</Text>
+          <Text color="cyan">Start again as: [i] idea · [s] story · [p] plan · [d] draft without a form · or [c] close the issue · [D] delete the issue · [Esc] cancel</Text>
+        </Box>
+      )}
+      {input?.kind === 'delete' && control && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="red">{`Delete ${taskRef(input.id)} for good: the issue, its comments, and its history are gone and cannot come back. GitLab needs the Owner role, GitHub admin rights; without them the issue is closed instead.`}</Text>
+          <Text color="cyan">Type the task number to confirm · Enter deletes · Esc cancels</Text>
+          <TextInput
+            placeholder={input.id}
+            onSubmit={(value) => {
+              const { id } = input
+              setInput(undefined)
+              if (value.trim().replace(/^#/, '') !== id) {
+                setMessage({ text: `Not deleted: the number did not match ${taskRef(id)}.`, error: true })
+                return
+              }
+              setMessage({ text: `Deleting ${taskRef(id)}…` })
+              control
+                .reset(id, 'none', 'delete')
+                .then((text) => {
+                  setMessage({ text })
+                  setPanel('status')
+                  refresh(true)
+                })
+                .catch(fail)
+            }}
+          />
         </Box>
       )}
       {input?.kind === 'comment' && control && (

@@ -243,6 +243,10 @@ export class GitLabBoard implements Board {
     await this.json(['-X', 'PUT', `${this.issuePath(id)}`, '-f', 'state_event=close'])
   }
 
+  async deleteTask(id: string) {
+    await this.json(['-X', 'DELETE', this.issuePath(id)])
+  }
+
   async listComments(id: string) {
     const notes = await this.pages<Note>(`${this.issuePath(id)}/notes?sort=asc&order_by=created_at`)
     return notes.filter((note) => !note.system).map((note) => toComment(id, note))

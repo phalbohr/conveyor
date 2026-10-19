@@ -233,6 +233,10 @@ export class GitHubBoard implements Board {
     await this.api(['-X', 'PATCH', `${this.repo}/issues/${id}`, '-f', 'state=closed'])
   }
 
+  async deleteTask(id: string) {
+    await this.gh(['issue', 'delete', id, '-R', this.project, '--yes'])
+  }
+
   async listComments(id: string) {
     const pages = await this.api<GitHubComment[][]>(['--paginate', '--slurp', `${this.repo}/issues/${id}/comments?per_page=100`])
     return pages.flat().map(toComment)

@@ -6,7 +6,7 @@ import { harnessesInUse, modelsFile } from './commands/models.js'
 import { checkStages, cleanupWorkspaces, quotaFile, usageFile } from './commands/run.js'
 import { loadConfig, type Config } from './config.js'
 import { Engine, type Activity } from './engine/engine.js'
-import { resetTask, type ResetForm } from './engine/reset.js'
+import { resetTask, type ResetEnd, type ResetForm } from './engine/reset.js'
 import { sessionFile } from './session-log.js'
 import { ClaudeHarness } from './harness/claude.js'
 import { CodexHarness } from './harness/codex.js'
@@ -224,11 +224,11 @@ export class Runner {
     return true
   }
 
-  async reset(id: string, form?: ResetForm) {
+  async reset(id: string, form?: ResetForm, end: ResetEnd = 'backlog') {
     const { settings, config, board } = this.setup
     const pid = this.loop ? undefined : runningPid(this.context.home, config.board.project)
     if (pid) throw new Error(`the conveyor runs in another terminal (pid ${pid}); stop it there first, then reset ${taskRef(id)}`)
-    const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form, sessionFile(this.context.home, config.board.project, id), config.parts)
+    const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form, sessionFile(this.context.home, config.board.project, id), config.parts, end)
     const summary = await (this.loop && this.engine ? this.engine.hold(id, work) : work())
     this.emit('info', `task ${id}: ${summary}`)
     return summary

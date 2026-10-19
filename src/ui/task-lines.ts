@@ -21,7 +21,7 @@ export type TaskControl = {
   open(url: string): Promise<void>
   openBoard(): Promise<void>
   updateBoard(): Promise<string>
-  reset(id: string, form: 'idea' | 'story' | 'plan' | 'none'): Promise<string>
+  reset(id: string, form: 'idea' | 'story' | 'plan' | 'none', end?: 'backlog' | 'close' | 'delete'): Promise<string>
 }
 
 const time = dateTime

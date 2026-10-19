@@ -203,7 +203,7 @@ export function helpLines(): Line[] {
     row('● ○ in progress', '● running here with time and last harness activity: output or CPU work (yellow: quiet) · ○ waits or not running · pid N: another terminal'),
     row('s while running', 'first s: running stages finish, nothing new starts, then the conveyor stops · second s: stop at once · q twice: stop at once and quit'),
     row('live sessions', 'n, a, h, and a in help use live.harness and live.model from local.yaml (settings: Personal)'),
-    row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h harness · w watch its stage (session_logs) · x reset · i form::idea on/off (backlog) · Esc back'),
+    row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h harness · w watch its stage (session_logs) · x reset, close, or delete · i form::idea on/off (backlog) · Esc back'),
     row('part::2/3', 'the plan split the story into parts, one pull request each; the story is done after the last part merges'),
     row('an opened task', 'p switches between the issue and its pull request · c comments where you are · ↑↓ scroll · PgUp PgDn or Shift+↑↓ scroll a page'),
     { text: '' },

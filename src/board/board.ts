@@ -81,6 +81,7 @@ export interface Board {
   setOwner(id: string, owner: string | undefined): Promise<void>
   updateBody(id: string, body: string): Promise<void>
   closeTask(id: string): Promise<void>
+  deleteTask(id: string): Promise<void>
   listComments(id: string): Promise<Comment[]>
   addComment(id: string, body: string): Promise<Comment>
   updateComment(commentId: string, body: string): Promise<void>

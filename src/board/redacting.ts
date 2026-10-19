@@ -123,6 +123,10 @@ export class RedactingBoard implements Board {
     return this.board.closeTask(id)
   }
 
+  deleteTask(id: string) {
+    return this.board.deleteTask(id)
+  }
+
   listComments(id: string) {
     return this.board.listComments(id)
   }

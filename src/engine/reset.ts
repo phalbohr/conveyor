@@ -1,16 +1,17 @@
-import { taskSlug, type Board, type TaskForm } from '../board/board.js'
+import { taskRef, taskSlug, type Board, type TaskForm } from '../board/board.js'
 import { removeSession } from '../session-log.js'
 import type { Workspaces } from '../workspaces.js'
 import { releaseClaim } from './release.js'
 import { findWorkpad, renderWorkpad } from './workpad.js'
 
 export type ResetForm = TaskForm | 'none'
+export type ResetEnd = 'backlog' | 'close' | 'delete'
 
 export async function recordedForm(board: Board, id: string): Promise<TaskForm | undefined> {
   return findWorkpad(await board.listComments(id))?.state.form
 }
 
-export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remove' | 'deleteBranch'>, id: string, form?: ResetForm, session?: string, parts: 'separate' | 'together' = 'separate'): Promise<string> {
+export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remove' | 'deleteBranch'>, id: string, form?: ResetForm, session?: string, parts: 'separate' | 'together' = 'separate', end: ResetEnd = 'backlog'): Promise<string> {
   const task = await board.getTask(id)
   if (!task) throw new Error(`task ${id} not found`)
   const me = await board.user()
@@ -37,7 +38,21 @@ export async function resetTask(board: Board, workspaces: Pick<Workspaces, 'remo
   const resumes = kept ? ` The ${kept.parts.length} parts of the plan stay; the work starts again at part ${kept.part + 1}.` : ''
   const closed = pull?.state === 'open' ? `, closed pull request ${pull.number}` : ''
   const summary = `Reset by @${me}: stopped the work${closed}, deleted the branch conveyor/${taskSlug(id)} and the workspace, cleared the workpad; back in Backlog ${chosen ? `with form::${chosen}` : 'without a form'}.${merged}${resumes}${branchError}`
-  if (task.owner) await releaseClaim(board, id, summary)
+  if (end === 'delete') {
+    await board.release(id)
+    const deleted = await board.deleteTask(id).then(
+      () => true,
+      (error: unknown) => (error as Error).message,
+    )
+    if (deleted === true) return `Deleted ${taskRef(id)} by @${me}: stopped the work${closed}, deleted the branch conveyor/${taskSlug(id)} and the workspace, and deleted the issue.${branchError}`
+    await board.closeTask(id)
+    return `${summary} The issue was not deleted (${deleted}), so it is closed instead.`
+  }
+  if (task.owner) await releaseClaim(board, id, end === 'close' ? `${summary} Closed by the reset.` : summary)
   else await board.release(id)
+  if (end === 'close') {
+    await board.closeTask(id)
+    return `${summary} Closed the issue.`
+  }
   return summary
 }

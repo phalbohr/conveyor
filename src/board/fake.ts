@@ -215,6 +215,14 @@ export class FakeBoard implements Board {
     this.issue(id).closed = true
   }
 
+  deletable = true
+
+  async deleteTask(id: string) {
+    if (!this.deletable) throw new Error('403 Forbidden: only owners delete issues')
+    this.issue(id)
+    this.issues.delete(id)
+  }
+
   async listComments(id: string) {
     return [...this.comments.values()].filter((comment) => comment.taskId === id).map(({ taskId, ...comment }) => comment)
   }

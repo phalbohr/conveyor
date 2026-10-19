@@ -79,6 +79,22 @@ describe('resetTask', () => {
     expect(findWorkpad(await board.listComments(story))?.state).toEqual({ attempt: 0 })
   })
 
+  it('closes or deletes the issue after the reset, and closes it when it may not be deleted', async () => {
+    const board = new FakeBoard('me')
+    const closed = await started(board)
+    expect(await resetTask(board, new FakeWorkspaces(), closed, 'none', undefined, 'separate', 'close')).toContain('Closed the issue.')
+    expect((await board.getTask(closed))?.closed).toBe(true)
+
+    const deleted = await started(board)
+    expect(await resetTask(board, new FakeWorkspaces(), deleted, 'none', undefined, 'separate', 'delete')).toMatch(/^Deleted #\d+ by @me: .*deleted the issue\./)
+    expect(await board.getTask(deleted)).toBeUndefined()
+
+    board.deletable = false
+    const kept = await started(board)
+    expect(await resetTask(board, new FakeWorkspaces(), kept, 'none', undefined, 'separate', 'delete')).toContain('The issue was not deleted (403 Forbidden: only owners delete issues), so it is closed instead.')
+    expect((await board.getTask(kept))?.closed).toBe(true)
+  })
+
   it('leaves a task of another member alone', async () => {
     const board = new FakeBoard('me')
     const id = await started(board)
@@ -98,6 +114,18 @@ describe('conveyor reset', () => {
     expect(result.code).toBe(0)
     expect(result.stdout).toContain('back in Backlog with form::idea')
     expect((await board.getTask(id))?.form).toBe('idea')
+  })
+
+  it('closes the issue with --close and refuses --close together with --form', async () => {
+    const init = await runCli(['init', '--provider', 'github', '--project', 'acme/app'])
+    const board = new FakeBoard('me')
+    const id = await started(board)
+    const result = await runCli(['reset', id, '--close'], { cwd: init.context.cwd, home: init.context.home, board })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('Closed the issue.')
+    expect((await board.getTask(id))?.closed).toBe(true)
+    const both = await runCli(['reset', id, '--close', '--form', 'idea'], { cwd: init.context.cwd, home: init.context.home, board })
+    expect(both.code).not.toBe(0)
   })
 })
 
