@@ -211,7 +211,7 @@ export class Engine {
         case 'review': {
           const verdict = await this.reviewSignal(task.id, config)
           if (verdict.kind === 'invalid') await this.rejectCommand(task.id, verdict.error ?? 'Invalid command.')
-          if (verdict.kind === 'stale' && verdict.pull) await this.reviewAgain(task.id, verdict.pull.headSha, verdict.repo)
+          if (verdict.kind === 'stale' && verdict.pull) await this.reviewAgain(task.id, verdict.pull.headSha, verdict.repo, verdict.pull.headAt)
           if (verdict.kind !== 'wait' && verdict.kind !== 'invalid' && verdict.kind !== 'stale') (owned ? resumable : fresh).push(task)
           else if (owned) awaitingReview++
           break
@@ -533,7 +533,7 @@ export class Engine {
           }
           if (together) for (const repo of Object.keys(state.repos)) await board.readyPullRequest(id, title, body, repo)
           const listed = this.repoOrder(state, Object.keys(state.repos)).map((repo) => `- \`${repo}\`: ${state.repos?.[repo]?.url}`).join('\n')
-          request = `**The merge requests are ready for review**, one per repository, in merge order:\n\n${listed}\n\nApprove each merge request in its project with an Approve review or a comment \`/approve\` on it (${needed} each). The feature merges as a whole when every merge request is approved and green. A plain comment is a note for the team and does not change the task.`
+          request = `**The merge requests are ready for review**, one per repository, in merge order:\n\n${listed}\n\nApprove each merge request in its project with its Approve button (${needed} each); a comment \`/approve\` there is the GitLab quick action and does the same. GitLab may not let the author of a merge request approve it; the conveyor opens them as its own user, so a teammate approves. The feature merges as a whole when every merge request is approved and green. A plain comment is a note for the team and does not change the task.`
         } else {
           const opened = await board.openPullRequest(id, title, body)
           state.pull = { number: opened.number, url: opened.url }
@@ -811,10 +811,10 @@ export class Engine {
     const pull = await board.pullRequest(id)
     if (pull?.state === 'merged') return 'success'
     if (pull?.state === 'open' && pull.draft) return wait('the pull request is a draft; mark it ready for review')
-    const review = async (sha: string) => {
+    const review = async (sha: string, at?: string) => {
       delete state.stage
       state.headSha = sha
-      state.waiting = { kind: 'review', since: new Date().toISOString() }
+      state.waiting = { kind: 'review', since: reviewSince(at) }
       await board.addComment(id, agentComment('review', changedText(sha)))
       await board.setState(id, 'review')
       await board.setStage(id, undefined)
@@ -822,7 +822,7 @@ export class Engine {
       this.log(`task ${id}: the branch changed after approval, back to review`)
       return 'stop' as const
     }
-    if (pull?.state === 'open' && pull.headSha !== state.headSha) return review(pull.headSha)
+    if (pull?.state === 'open' && pull.headSha !== state.headSha) return review(pull.headSha, pull.headAt)
     const local = pull?.state === 'open' ? await this.options.workspaces.head(id).catch(() => undefined) : undefined
     if (pull && local && local !== pull.headSha && (await this.options.workspaces.contains(id, pull.headSha).catch(() => false))) {
       let pushed: string
@@ -887,11 +887,11 @@ export class Engine {
     const { board } = this.options
     const { id, config, state } = run
     const repos = state.repos ?? {}
-    const review = async (repo: string, sha: string) => {
+    const review = async (repo: string, sha: string, at?: string) => {
       const entry = repos[repo]
       if (entry) entry.headSha = sha
       delete state.stage
-      state.waiting = { kind: 'review', since: new Date().toISOString() }
+      state.waiting = { kind: 'review', since: reviewSince(at) }
       await board.addComment(id, agentComment('review', changedText(sha, repo)))
       await board.setState(id, 'review')
       await board.setStage(id, undefined)
@@ -910,7 +910,7 @@ export class Engine {
       }
       if (!pull || pull.state === 'closed') return this.landFailed(run, `the merge request of ${repo} is closed`)
       if (pull.draft) return wait(`the merge request of ${repo} is a draft; mark it ready for review`)
-      if (pull.headSha !== entry.headSha) return review(repo, pull.headSha)
+      if (pull.headSha !== entry.headSha) return review(repo, pull.headSha, pull.headAt)
       const local = await multi.repoHead(id, repo).catch(() => undefined)
       if (local && local !== pull.headSha && (await multi.repoContains(id, repo, pull.headSha).catch(() => false))) {
         let pushed: string
@@ -1367,14 +1367,14 @@ export class Engine {
     await this.options.board.setPart(run.id, state.parts ? `${(state.part ?? 0) + 1}/${state.parts.length}` : undefined)
   }
 
-  private async reviewAgain(id: string, sha: string, repo?: string) {
+  private async reviewAgain(id: string, sha: string, repo?: string, headAt?: string) {
     const { board } = this.options
     const { pad } = await this.workpad(id)
     if (!pad) return
     const entry = repo ? pad.state.repos?.[repo] : undefined
     if (entry) entry.headSha = sha
     else pad.state.headSha = sha
-    pad.state.waiting = { kind: 'review', since: new Date(Date.now() + 1).toISOString() }
+    pad.state.waiting = { kind: 'review', since: reviewSince(headAt) }
     await board.addComment(id, agentComment('review', changedText(sha, entry ? repo : undefined)))
     await board.updateComment(pad.id, renderWorkpad(pad.state, pad.text))
     this.log(`task ${id}: the branch changed during review, approval needed for ${sha.slice(0, 7)}`)
@@ -1768,8 +1768,12 @@ function commandHelp(config: Config) {
   ].join('\n')
 }
 
+function reviewSince(headAt: string | undefined) {
+  return headAt && Date.parse(headAt) <= Date.now() ? new Date(Date.parse(headAt)).toISOString() : new Date(Date.now() + 1).toISOString()
+}
+
 function changedText(sha: string, repo?: string) {
-  return `**The ${repo ? `branch of \`${repo}\`` : 'branch'} changed to \`${sha.slice(0, 7)}\` after the review request.** Earlier approvals and \`/approve\` ${repo ? 'on its merge request ' : ''}no longer count. Review the new commits, then approve or write \`/approve\` again.`
+  return `**The ${repo ? `branch of \`${repo}\`` : 'branch'} changed to \`${sha.slice(0, 7)}\` after the review request.** Approvals and \`/approve\` ${repo ? 'on its merge request ' : ''}from before this change no longer count; approvals given after it count. Review the new commits, then approve or write \`/approve\` again if you have not yet.`
 }
 
 function withoutOwner(task: Task): Task {

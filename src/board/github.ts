@@ -58,6 +58,7 @@ type GitHubPull = {
   isDraft?: boolean
   isCrossRepository?: boolean
   statusCheckRollup: Check[] | null
+  commits?: { committedDate: string }[]
   reviews: { state: string; body: string; submittedAt: string; author: { login: string } | null }[]
   comments: { body: string; createdAt: string; author: { login: string } | null }[]
 }
@@ -68,7 +69,7 @@ type ProjectMirror = { projectId: string; fieldId: string; options: Map<string, 
 export type GitHubBoardOptions = { projectNumber?: number; baseBranch?: string; warn?: (message: string) => void; ignoreChecks?: string[] }
 
 const PROJECT_FIELD = 'Conveyor'
-const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,isDraft,isCrossRepository,statusCheckRollup,reviews,comments'
+const PULL_FIELDS = 'number,url,headRefOid,state,mergeable,isDraft,isCrossRepository,statusCheckRollup,reviews,comments,commits'
 
 const LOCK_PREFIX = 'conveyor-lock/'
 const WRITE_PERMISSIONS = ['admin', 'write']
@@ -513,6 +514,7 @@ function toPull(pull: GitHubPull, inline: PullRequest['feedback'], ignore: strin
     checks: checksOf(checks, ignore),
     mergeable: pull.mergeable === 'MERGEABLE' ? 'yes' : pull.mergeable === 'CONFLICTING' ? 'no' : 'unknown',
     ...(pull.isDraft ? { draft: true } : {}),
+    ...(pull.commits?.length ? { headAt: pull.commits.at(-1)?.committedDate ?? '' } : {}),
     feedback: inline,
     reviews: pull.reviews.map((review) => ({
       author: review.author?.login ?? '',

@@ -314,6 +314,7 @@ export class GitLabBoard implements Board {
     const all = await this.pages<Note>(`${api}/merge_requests/${first.iid}/notes?sort=asc&order_by=created_at`)
     const notes = all.filter((note) => !note.system)
     const approvedAt = new Map(all.filter((note) => note.system && APPROVED.test(note.body)).map((note) => [note.author.username, note.created_at]))
+    const headAt = all.filter((note) => note.system && /^added \d+ (new )?commits?\b/.test(note.body)).at(-1)?.created_at
     const now = new Date().toISOString()
     return {
       number: String(request.iid),
@@ -323,6 +324,7 @@ export class GitLabBoard implements Board {
       checks: await this.pipelineChecks(api, request.head_pipeline),
       mergeable: mergeable(request.detailed_merge_status),
       ...(request.draft ? { draft: true } : {}),
+      ...(headAt ? { headAt } : {}),
       feedback: notes
         .filter((note) => note.position)
         .map((note) => ({ author: note.author.username, body: `${note.position?.new_path ?? ''}${note.position?.new_line ? `:${note.position.new_line}` : ''}: ${note.body}` })),

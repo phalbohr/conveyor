@@ -78,6 +78,23 @@ describe('a feature in several repositories', () => {
     expect(board.merges).toEqual([])
   })
 
+  it('keeps an approval given after a new commit that the conveyor notices only later', async () => {
+    const { board, workspaces, cycle } = setup({ mode: 'human' })
+    workspaces.repoContains = async () => false
+    await board.createTask('Checkout', 'story', { form: 'story' })
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('review')
+    const pushed = new Date(Date.now() - 2_000).toISOString()
+    const approved = new Date(Date.now() - 1_000).toISOString()
+    board.updatePullRequest('1', { headSha: 'c'.repeat(40), headAt: pushed }, 'frontend')
+    for (const repo of ['frontend', 'user-service']) board.updatePullRequest('1', { reviews: [{ author: 'alice', state: 'approved', body: '', submittedAt: approved }] }, repo)
+
+    await cycle()
+    expect((await board.listComments('1')).at(-1)?.body).toContain('from before this change no longer count; approvals given after it count')
+    await cycle()
+    expect(board.merges.map((merge) => merge.repo)).toEqual(['user-service', 'frontend'])
+  })
+
   it('opens merge requests only for the repositories the task changed', async () => {
     const { board, workspaces, cycle } = setup()
     workspaces.changedRepos = ['frontend']

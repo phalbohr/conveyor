@@ -21,6 +21,7 @@
 - A task branch that cannot be deleted is reported with the git error: reset says `The branch was not deleted: …`, and a finished task logs it. Before, the failure was silent, and a reset task could continue on its old remote branch.
 - A task that waits for its merge checks or for the base CI after its merge is checked even when every `running` slot is taken; before, a merged task with green base CI could wait until a stage of another task finished.
 - The stage templates set test and edit habits: a failing test first only for new behavior; single test cases or files while working and the full suite, type check, and build once at the end; long test output saved to a file instead of rerunning the command; no search-and-replace of ordinary words over many files. Existing projects keep their own stage files; copy the rules there by hand.
+- When the branch of a pull request changes during review, approvals given after the new commit count; before, only approvals after the conveyor noticed the change counted, so an approval of the new commit could be lost. On GitLab the review request says that the Approve button (or the GitLab quick action `/approve` on the merge request) approves, and that a teammate approves because the conveyor opens merge requests as its own user.
 - The `implement` and `review` stage templates also tell the harness to run checks in the foreground and wait for them, like `merge` and `fix-ci`.
 
 ## 0.2.2 — 2026-10-14

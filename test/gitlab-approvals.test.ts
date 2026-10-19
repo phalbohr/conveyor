@@ -33,6 +33,15 @@ describe('GitLab merge request approvals', () => {
     expect(pull?.comments).toEqual([{ author: 'carol', body: 'Looks fine', createdAt: '2026-10-01T11:00:00.000Z' }])
   })
 
+  it('dates the head of the merge request by its latest commit note', async () => {
+    const board = gitlab(
+      [note(1, 'alice', 'added 3 commits', true, '2026-10-17T10:00:00Z'), note(2, 'alice', 'added 1 commit\n\n<ul><li>1a2b3c4d - Fix form labels</li></ul>', true, '2026-10-19T07:39:00Z'), note(3, 'bob', 'approved this merge request', true, '2026-10-19T12:23:00Z')],
+      ['bob'],
+    )
+    expect((await board.pullRequest('3'))?.headAt).toBe('2026-10-19T07:39:00Z')
+    expect((await gitlab([], []).pullRequest('3'))?.headAt).toBeUndefined()
+  })
+
   it('takes the latest approval note of a user', async () => {
     const board = gitlab(
       [

@@ -39,6 +39,7 @@ export type PullRequest = {
   checks: 'pending' | 'success' | 'failure' | 'none'
   mergeable: 'yes' | 'no' | 'unknown'
   draft?: boolean
+  headAt?: string
   feedback: { author: string; body: string }[]
   reviews: { author: string; state: 'approved' | 'changes_requested' | 'commented' | 'dismissed'; body: string; submittedAt: string }[]
   comments: { author: string; body: string; createdAt: string }[]
