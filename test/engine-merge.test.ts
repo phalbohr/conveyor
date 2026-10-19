@@ -736,6 +736,22 @@ describe('a red base branch', () => {
     await engine.idle()
   })
 
+  it('waits with the reason when the board blocks the merge by its own rules', async () => {
+    const { board, cycle, logs } = setup({ mode: 'ai' })
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    const open = board.openPullRequest.bind(board)
+    board.openPullRequest = async (...args) => {
+      const pull = await open(...args)
+      board.updatePullRequest('1', { blocked: 'GitLab approval rules are not met yet' })
+      return { ...pull, blocked: 'GitLab approval rules are not met yet' }
+    }
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect(logs).toContain('task 1: merge waits: GitLab approval rules are not met yet')
+    board.updatePullRequest('1', { blocked: undefined })
+    await cycle()
+  })
+
   it('creates one fix task, merges it first, and holds the other merges until the base is green', async () => {
     const { board, harness, cycle } = setup({ mode: 'ai' })
     board.headChecks = 'failure'

@@ -838,6 +838,7 @@ export class Engine {
     let error: string | undefined
     if (!pull || pull.state === 'closed') error = 'the pull request is closed'
     else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait('checks are pending')
+    else if (pull.blocked && pull.checks !== 'failure') return wait(pull.blocked)
     else if (pull.checks === 'none' && this.checksMayStart(state, pull.headSha)) return wait('no checks yet; waiting for CI to start')
     else if (pull.checks === 'failure') {
       if ((await this.options.workspaces.syncBase(id).catch(() => 'unknown' as const)) === 'rebased') {
@@ -924,6 +925,7 @@ export class Engine {
         return wait(`${repo} had commits that were not pushed; they are pushed now and the branch waits for CI`)
       }
       if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait(`checks of ${repo} are pending`)
+      if (pull.blocked && pull.checks !== 'failure') return wait(`${repo}: ${pull.blocked}`)
       if (pull.checks === 'none' && this.checksMayStart(entry, pull.headSha)) return wait(`no checks yet in ${repo}; waiting for CI to start`)
       if (pull.checks === 'failure') {
         if ((await multi.repoSync(id, repo).catch(() => 'unknown' as const)) === 'rebased') {

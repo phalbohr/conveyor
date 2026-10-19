@@ -98,7 +98,7 @@ const TEAM: Spec[] = [
     optionHelp: { false: 'done issues stay open until a human closes them, e.g. after a sprint review', true: 'the conveyor closes the issue when the task is done' },
   },
   { key: 'review.approvals', label: 'Approvals for merge', kind: 'number', help: 'distinct people who approve before the conveyor merges' },
-  { key: 'review.count_own_approvals', label: 'Count approvals of the conveyor account', kind: 'boolean', options: BOOLEAN, help: 'false when the conveyor runs as a separate bot account: then a harness cannot approve its own work with /approve' },
+  { key: 'review.count_own_approvals', label: 'Count own approvals', kind: 'boolean', options: BOOLEAN, help: 'false when the conveyor runs as a separate bot account: then a harness cannot approve its own work with /approve' },
   { key: 'language.docs', label: 'Documentation language', kind: 'text', help: 'language of everything the team sees' },
   { key: 'timeouts.stage', label: 'Stage timeout', kind: 'text', fallback: '60m', help: 'longest run of one stage before it fails and retries, e.g. 60m' },
   { key: 'timeouts.stall', label: 'Stall timeout (0 = off)', kind: 'text', fallback: '5m', help: 'a stage with no harness output for this long fails and retries' },

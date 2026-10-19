@@ -28,6 +28,14 @@ stages:
   merge: {model: haiku}
 `
 
+describe('setting labels', () => {
+  it('fit the label column of the settings screen', () => {
+    const doc = new SettingsDocument(settings(CONFIG))
+    const long = doc.fields().filter((field) => field.label.length > 30).map((field) => field.label)
+    expect(long).toEqual([])
+  })
+})
+
 describe('SettingsDocument', () => {
   const CATALOGS = {
     claude: { models: [{ id: 'claude-opus-5-5', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] }], efforts: ['low', 'medium', 'high', 'xhigh', 'max'], fetchedAt: '' },

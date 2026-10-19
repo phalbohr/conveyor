@@ -325,6 +325,7 @@ export class GitLabBoard implements Board {
       mergeable: mergeable(request.detailed_merge_status),
       ...(request.draft ? { draft: true } : {}),
       ...(headAt ? { headAt } : {}),
+      ...(BLOCKED[request.detailed_merge_status] ? { blocked: BLOCKED[request.detailed_merge_status] } : {}),
       feedback: notes
         .filter((note) => note.position)
         .map((note) => ({ author: note.author.username, body: `${note.position?.new_path ?? ''}${note.position?.new_line ? `:${note.position.new_line}` : ''}: ${note.body}` })),
@@ -515,6 +516,13 @@ function checks(status: string | undefined): PullRequest['checks'] {
   if (['failed', 'canceled', 'canceling'].includes(status)) return 'failure'
   if (['skipped', 'manual'].includes(status)) return 'none'
   return 'pending'
+}
+
+const BLOCKED: Record<string, string> = {
+  not_approved: 'GitLab approval rules are not met yet',
+  discussions_not_resolved: 'GitLab requires every thread of the merge request to be resolved',
+  requested_changes: 'a reviewer requested changes in GitLab',
+  blocked_status: 'another merge request blocks it in GitLab',
 }
 
 function mergeable(status: string): PullRequest['mergeable'] {

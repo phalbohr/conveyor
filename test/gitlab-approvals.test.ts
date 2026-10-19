@@ -42,6 +42,21 @@ describe('GitLab merge request approvals', () => {
     expect((await gitlab([], []).pullRequest('3'))?.headAt).toBeUndefined()
   })
 
+  it('names a GitLab rule that blocks the merge', async () => {
+    const run: Run = async (_command, args) => {
+      const path = args[1] ?? ''
+      const body = /merge_requests\?source_branch=/.test(path)
+        ? [{ iid: 7 }]
+        : /merge_requests\/7$/.test(path)
+          ? { iid: 7, web_url: 'https://gitlab.test/mr/7', sha: 'b'.repeat(40), state: 'opened', detailed_merge_status: 'not_approved', head_pipeline: null }
+          : /approvals$/.test(path)
+            ? { approved_by: [] }
+            : []
+      return { code: 0, stdout: JSON.stringify(body), stderr: '' }
+    }
+    expect((await new GitLabBoard('group/project', run, { retryDelay: 0 }).pullRequest('3'))?.blocked).toBe('GitLab approval rules are not met yet')
+  })
+
   it('takes the latest approval note of a user', async () => {
     const board = gitlab(
       [
