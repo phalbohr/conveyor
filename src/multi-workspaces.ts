@@ -150,12 +150,18 @@ export class MultiWorkspaces implements RepoWorkspaces {
   }
 
   private all() {
-    this.parts ??= this.options.clones().then((clones) =>
-      clones.map((clone) => ({
-        clone,
-        workspaces: new GitWorkspaces({ repo: clone.path, root: this.options.root, base: async () => clone.base, hooks: () => NO_HOOKS, subdir: clone.name }),
-      })),
-    )
+    this.parts ??= this.options
+      .clones()
+      .then((clones) =>
+        clones.map((clone) => ({
+          clone,
+          workspaces: new GitWorkspaces({ repo: clone.path, root: this.options.root, base: async () => clone.base, hooks: () => NO_HOOKS, subdir: clone.name }),
+        })),
+      )
+      .catch((error: unknown) => {
+        this.parts = undefined
+        throw error
+      })
     return this.parts
   }
 

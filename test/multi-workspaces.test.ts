@@ -137,6 +137,23 @@ describe('MultiWorkspaces', () => {
     await expect(workspaces.deleteBranch('frontend#12')).rejects.toThrow('git push origin --delete conveyor/frontend-12 failed in')
   })
 
+  it('lists the repositories again after a failed first attempt', async () => {
+    const { projects, home, cwd } = group()
+    const clones = await repoClones({ repos: { group: 'shop', exclude: ['docs'], base: {} }, projects, paths: {}, home, cwd })
+    let calls = 0
+    const workspaces = new MultiWorkspaces({
+      root: join(tempDir('conveyor-ws-'), 'workspaces'),
+      clones: async () => {
+        calls++
+        if (calls === 1) throw new Error('glab api failed (HTTP 502)')
+        return clones
+      },
+      hooks: () => ({ timeout: 5_000 }),
+    })
+    await expect(workspaces.names()).rejects.toThrow('HTTP 502')
+    expect(await workspaces.names()).toEqual(['frontend', 'user-service'])
+  })
+
   it('removes every worktree and the folder of the task', async () => {
     const { workspaces, root, clones } = await setup()
     await workspaces.prepare('frontend#12')
