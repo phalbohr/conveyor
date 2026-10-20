@@ -69,7 +69,7 @@ export interface Board {
   linkedProjects(): Promise<LinkedProject[]>
   createProject(title: string): Promise<LinkedProject>
   prepare(stages: string[]): Promise<void>
-  canWrite(user: string): Promise<boolean>
+  canWrite(user: string, where?: Where): Promise<boolean>
   createTask(title: string, body: string, labels?: TaskLabels): Promise<Task>
   listTasks(): Promise<Task[]>
   getTask(id: string): Promise<Task | undefined>
@@ -163,3 +163,5 @@ export function labelsToTask(labels: string[]): Pick<Task, 'state' | 'form' | 's
 export function ignoredCheck(name: string, patterns: string[]) {
   return patterns.some((pattern) => new RegExp(`^${pattern.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 'i').test(name))
 }
+
+export type Where = { repo?: string; task?: string }

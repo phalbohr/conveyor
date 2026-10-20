@@ -1,5 +1,5 @@
 import { redactSecrets } from '../engine/redact.js'
-import type { Board, MergeMethod, Task, TaskForm, TaskLabels, TaskState } from './board.js'
+import type { Board, MergeMethod, Task, TaskForm, TaskLabels, TaskState, Where } from './board.js'
 
 export class RedactingBoard implements Board {
   constructor(
@@ -75,8 +75,8 @@ export class RedactingBoard implements Board {
     return this.board.reference(id)
   }
 
-  canWrite(user: string) {
-    return this.board.canWrite(user)
+  canWrite(user: string, where?: Where) {
+    return this.board.canWrite(user, where)
   }
 
   createTask(title: string, body: string, labels?: TaskLabels) {

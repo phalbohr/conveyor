@@ -193,14 +193,14 @@ export class Engine {
       .then((synced) => synced && this.log(`board: moved ${synced} cards to the column of their conveyor:: label`))
       .catch((error: unknown) => this.log(`board: the project columns were not synced: ${(error as Error).message}`))
     for (const listed of listedTasks) {
-      if (this.isFixTask(listed) && (await this.trust.trusted(listed.author))) {
+      if (this.isFixTask(listed) && (await this.trust.trusted(listed.author, { task: listed.id }))) {
         labeled = listed.id
         break
       }
     }
     for (const listed of listedTasks) {
       if (this.running.has(listed.id) || this.held.has(listed.id)) continue
-      if (!(await this.trust.trusted(listed.author))) {
+      if (!(await this.trust.trusted(listed.author, { task: listed.id }))) {
         if (!this.untrusted.has(listed.id)) this.log(`task ${listed.id}: skipped: its author @${listed.author} has no write access to the repository`)
         this.untrusted.add(listed.id)
         continue
@@ -1298,7 +1298,7 @@ export class Engine {
     if (Date.now() < this.triageRetryAt) return
     if (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) return
     if (this.quotaBlock(config.triage.harness, config)) return
-    const tasks = await this.trust.only(await board.listTasks())
+    const tasks = await this.trust.only(await board.listTasks(), (task) => ({ task: task.id }))
     const fresh = tasks.filter((task) => !task.owner && task.form !== undefined && task.priority === undefined).map((task) => task.id)
     if (fresh.length === 0) return
     const harness = this.options.harnesses[config.triage.harness]
@@ -1723,13 +1723,14 @@ export class Engine {
   }
 
   private async comments(id: string) {
-    return this.trust.only(await this.options.board.listComments(id))
+    return this.trust.only(await this.options.board.listComments(id), () => ({ task: id }))
   }
 
   private async trustedPull(id: string, repo?: string): Promise<PullRequest | undefined> {
     const pull = await this.options.board.pullRequest(id, repo)
     if (!pull) return undefined
-    return { ...pull, reviews: await this.trust.only(pull.reviews), comments: await this.trust.only(pull.comments), feedback: await this.trust.only(pull.feedback) }
+    const where = () => (repo ? { repo } : { task: id })
+    return { ...pull, reviews: await this.trust.only(pull.reviews, where), comments: await this.trust.only(pull.comments, where), feedback: await this.trust.only(pull.feedback, where) }
   }
 
   private repoWorkspaces(config: Config) {
@@ -1775,7 +1776,7 @@ export class Engine {
 
   private async fixTask() {
     for (const task of await this.options.board.listTasks()) {
-      if (this.isFixTask(task) && (await this.trust.trusted(task.author))) return task.id
+      if (this.isFixTask(task) && (await this.trust.trusted(task.author, { task: task.id }))) return task.id
     }
     return undefined
   }

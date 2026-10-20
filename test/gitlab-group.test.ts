@@ -143,6 +143,19 @@ describe('GitLabBoard on a group board', () => {
     expect(idOf('shop/user-service#3')).toBe('user-service#3')
   })
 
+  it('takes a writer of the repository or of the issue project who is no member of the group', async () => {
+    const members: Record<string, string[]> = { [`projects/${encodeURIComponent('tools/handbook')}`]: ['alice'], [`projects/${encodeURIComponent('shop/frontend')}`]: ['bob'] }
+    const board = new GitLabBoard('shop/frontend', async (_command, args) => {
+      const path = (args[1] ?? '').split('/members/all')[0] ?? ''
+      const user = new URLSearchParams((args[1] ?? '').split('?')[1]).get('query') ?? ''
+      return { code: 0, stdout: JSON.stringify((members[path] ?? []).filter((name) => name === user).map((username) => ({ username, access_level: 30 }))), stderr: '' }
+    }, { retryDelay: 0, group: GROUP, repos: { paths: { handbook: 'tools/handbook' }, base: {} } })
+    expect(await board.canWrite('alice')).toBe(false)
+    expect(await board.canWrite('alice', { repo: 'handbook' })).toBe(true)
+    expect(await board.canWrite('bob', { task: 'frontend#12' })).toBe(true)
+    expect(await board.canWrite('bob', { task: 'user-service#3' })).toBe(false)
+  })
+
   it('names the group when GitLab does not find it', async () => {
     const run: Run = async () => ({ code: 0, stdout: JSON.stringify({ data: { scope: null } }), stderr: '' })
     const board = new GitLabBoard('acme/shop/frontend', run, { retryDelay: 0, group: 'acme/shop' })
