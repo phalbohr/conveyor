@@ -5,6 +5,8 @@ import type { Repos } from './config.js'
 import { expandPath } from './paths.js'
 import { createRun } from './run.js'
 
+const CLONE_TIMEOUT = 60 * 60_000
+
 export type GroupProject = { name: string; path: string; sshUrl: string; defaultBranch: string }
 export type RepoClone = { name: string; path: string; base: string }
 
@@ -50,7 +52,7 @@ export async function repoClones(options: { repos: Repos; projects: GroupProject
     if (!existsSync(path)) {
       if (own) throw new Error(`repo_paths.${project.name}: ${path} does not exist`)
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-      const cloned = await createRun(dirname(path))('git', ['clone', '--quiet', project.sshUrl, path])
+      const cloned = await createRun(dirname(path), CLONE_TIMEOUT)('git', ['clone', '--quiet', project.sshUrl, path])
       if (cloned.code !== 0) throw new Error(`git clone ${project.sshUrl} failed: ${cloned.stderr.trim()}`)
     }
     const origin = await createRun(path)('git', ['remote', 'get-url', 'origin'])
