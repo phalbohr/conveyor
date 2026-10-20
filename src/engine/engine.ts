@@ -960,7 +960,7 @@ export class Engine {
     if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return wait('another workstation merges')
     let error: string | undefined
     try {
-      for (const { repo, sha } of ready) {
+      for (const { repo } of ready) {
         const entry = repos[repo] as RepoPull
         const synced = await multi.repoSync(id, repo).catch(() => 'unknown' as const)
         if (synced === 'unknown') return wait(`${repo} could not be compared with its latest base branch`)
@@ -976,6 +976,9 @@ export class Engine {
           this.log(`task ${id}: the base branch of ${repo} moved and the rebase conflicts; the merge stage runs again`)
           return 'stop'
         }
+      }
+      for (const { repo, sha } of ready) {
+        const entry = repos[repo] as RepoPull
         const before = await board.baseHead(repo).catch(() => undefined)
         const merged = await board.mergePullRequest(id, config.merge_method, sha, repo)
         if (!merged.ok) {

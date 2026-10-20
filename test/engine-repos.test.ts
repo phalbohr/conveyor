@@ -110,6 +110,15 @@ describe('a feature in several repositories', () => {
     expect(logs.filter((line) => line.includes('so the conveyor leaves it to the team'))).toHaveLength(2)
   })
 
+  it('merges no repository while a later one in the order still has to be rebased', async () => {
+    const { board, workspaces, cycle, logs } = setup()
+    workspaces.repoSyncs.set('frontend', ['rebased'])
+    await board.createTask('Checkout', 'story', { form: 'story' })
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect(logs.join('\n')).toContain('the base branch of frontend moved; the branch is rebased onto it and waits for CI')
+  })
+
   it('opens merge requests only for the repositories the task changed', async () => {
     const { board, workspaces, cycle } = setup()
     workspaces.changedRepos = ['frontend']
