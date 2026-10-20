@@ -1169,7 +1169,8 @@ export class Engine {
   }
 
   private async guardBase(config: Config) {
-    const repos = await this.repoWorkspaces(config)?.names().catch(() => undefined)
+    const multi = this.repoWorkspaces(config)
+    const repos = multi ? await multi.names() : undefined
     let pending = false
     for (const repo of repos ?? [undefined]) {
       const base = await this.guardRepo(repo, config)
