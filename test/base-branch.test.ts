@@ -113,17 +113,27 @@ describe('ignored checks', () => {
     expect(await new GitHubBoard('acme/app', run).commitChecks('abc')).toBe('failure')
   })
 
-  it('judges a GitLab pipeline by its other jobs when a listed job fails', async () => {
-    const jobs = [
+  it('judges a GitLab pipeline by its other jobs, bridges, and blocking manual jobs when a listed job fails', async () => {
+    const jobs: { name: string; status: string; allow_failure?: boolean }[] = [
       { name: 'unit-test-job', status: 'success' },
       { name: 'deploy:catalog', status: 'failed' },
       { name: 'lint', status: 'failed', allow_failure: true },
     ]
-    const { run, calls } = recorder((args) => (args.some((arg) => arg.includes('/jobs')) ? JSON.stringify(jobs) : JSON.stringify({ last_pipeline: { id: 5, status: 'failed' } })))
+    const bridges: { name: string; status: string; allow_failure?: boolean }[] = []
+    const { run, calls } = recorder((args) =>
+      args.some((arg) => arg.includes('/jobs')) ? JSON.stringify(jobs) : args.some((arg) => arg.includes('/bridges')) ? JSON.stringify(bridges) : JSON.stringify({ last_pipeline: { id: 5, status: 'failed' } }),
+    )
     const board = new GitLabBoard('acme/app', run, { retryDelay: 0, ignoreChecks: ['deploy*'] })
     expect(await board.commitChecks('abc')).toBe('success')
     expect(await board.failedChecks('abc')).toEqual([])
-    expect(calls).toContainEqual(['api', `projects/${encodeURIComponent('acme/app')}/pipelines/5/jobs?per_page=100`])
+    expect(calls).toContainEqual(['api', `projects/${encodeURIComponent('acme/app')}/pipelines/5/jobs?per_page=100&page=1`])
+    bridges.push({ name: 'trigger:downstream', status: 'failed' })
+    expect(await board.commitChecks('abc')).toBe('failure')
+    expect(await board.failedChecks('abc')).toEqual(['trigger:downstream'])
+    bridges.pop()
+    jobs.push({ name: 'approve:release', status: 'manual', allow_failure: false })
+    expect(await board.commitChecks('abc')).toBe('pending')
+    jobs.pop()
     jobs.push({ name: 'integration-test-job', status: 'failed' })
     expect(await board.commitChecks('abc')).toBe('failure')
     expect(await new GitLabBoard('acme/app', run, { retryDelay: 0 }).commitChecks('abc')).toBe('failure')
@@ -132,9 +142,14 @@ describe('ignored checks', () => {
 
 describe('passed checks', () => {
   it('lists passed jobs without the ignored ones on GitLab and GitHub', async () => {
-    const lab = recorder((args) => (args.some((arg) => arg.includes('/jobs')) ? JSON.stringify([{ name: 'unit-test-job' }, { name: 'deploy:x' }]) : JSON.stringify({ last_pipeline: { id: 5 } })))
-    expect(await new GitLabBoard('acme/app', lab.run, { retryDelay: 0, ignoreChecks: ['deploy*'] }).passedChecks('abc')).toEqual(['unit-test-job'])
-    expect(lab.calls).toContainEqual(['api', `projects/${encodeURIComponent('acme/app')}/pipelines/5/jobs?scope[]=success&per_page=100`])
+    const lab = recorder((args) =>
+      args.some((arg) => arg.includes('/jobs'))
+        ? JSON.stringify([{ name: 'unit-test-job', status: 'success' }, { name: 'deploy:x', status: 'success' }, { name: 'e2e', status: 'failed' }])
+        : args.some((arg) => arg.includes('/bridges'))
+          ? JSON.stringify([{ name: 'trigger:docs', status: 'success' }])
+          : JSON.stringify({ last_pipeline: { id: 5 } }),
+    )
+    expect(await new GitLabBoard('acme/app', lab.run, { retryDelay: 0, ignoreChecks: ['deploy*'] }).passedChecks('abc')).toEqual(['unit-test-job', 'trigger:docs'])
     const hub = recorder((args) =>
       args.some((arg) => arg.includes('/check-runs'))
         ? JSON.stringify([{ check_runs: [{ name: 'test', conclusion: 'success' }, { name: 'e2e', conclusion: 'failure' }] }])

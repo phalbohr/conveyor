@@ -387,16 +387,16 @@ export class GitLabBoard implements Board {
     const api = this.repoApi(repo)
     const commit = await this.json<{ last_pipeline: { id: number; status: string } | null }>([`${api}/repository/commits/${sha}`])
     if (!commit.last_pipeline || (await this.pipelineChecks(api, commit.last_pipeline)) !== 'failure') return []
-    const jobs = await this.json<{ name: string; status: string; allow_failure?: boolean }[]>([`${api}/pipelines/${commit.last_pipeline.id}/jobs?scope[]=failed&per_page=100`])
-    return jobs.filter((job) => !job.allow_failure && !ignoredCheck(job.name, this.options.ignoreChecks ?? [])).map((job) => job.name)
+    const jobs = await this.pipelineJobs(api, commit.last_pipeline.id)
+    return jobs.filter((job) => ['failed', 'canceled'].includes(job.status) && !job.allow_failure && !ignoredCheck(job.name, this.options.ignoreChecks ?? [])).map((job) => job.name)
   }
 
   async passedChecks(sha: string, repo?: string) {
     const api = this.repoApi(repo)
     const commit = await this.json<{ last_pipeline: { id: number } | null }>([`${api}/repository/commits/${sha}`])
     if (!commit.last_pipeline) return []
-    const jobs = await this.json<{ name: string }[]>([`${api}/pipelines/${commit.last_pipeline.id}/jobs?scope[]=success&per_page=100`])
-    return jobs.map((job) => job.name).filter((name) => !ignoredCheck(name, this.options.ignoreChecks ?? []))
+    const jobs = await this.pipelineJobs(api, commit.last_pipeline.id)
+    return jobs.filter((job) => job.status === 'success').map((job) => job.name).filter((name) => !ignoredCheck(name, this.options.ignoreChecks ?? []))
   }
 
   async commitChecks(sha: string, repo?: string) {
@@ -405,12 +405,17 @@ export class GitLabBoard implements Board {
     return this.pipelineChecks(api, commit.last_pipeline)
   }
 
+  private async pipelineJobs(api: string, id: number) {
+    type Job = { name: string; status: string; allow_failure?: boolean }
+    return [...(await this.pages<Job>(`${api}/pipelines/${id}/jobs`)), ...(await this.pages<Job>(`${api}/pipelines/${id}/bridges`))]
+  }
+
   private async pipelineChecks(api: string, pipeline: { id: number; status: string } | null): Promise<PullRequest['checks']> {
     const ignore = this.options.ignoreChecks ?? []
     if (!pipeline || ignore.length === 0 || pipeline.status === 'success') return checks(pipeline?.status)
-    const jobs = (await this.json<{ name: string; status: string; allow_failure?: boolean }[]>([`${api}/pipelines/${pipeline.id}/jobs?per_page=100`])).filter((job) => !ignoredCheck(job.name, ignore))
+    const jobs = (await this.pipelineJobs(api, pipeline.id)).filter((job) => !ignoredCheck(job.name, ignore))
     if (jobs.some((job) => ['failed', 'canceled', 'canceling'].includes(job.status) && !job.allow_failure)) return 'failure'
-    if (jobs.some((job) => ['created', 'pending', 'running', 'preparing', 'waiting_for_resource', 'scheduled'].includes(job.status))) return 'pending'
+    if (jobs.some((job) => ['created', 'pending', 'running', 'preparing', 'waiting_for_resource', 'scheduled'].includes(job.status) || (job.status === 'manual' && job.allow_failure === false))) return 'pending'
     return jobs.some((job) => job.status === 'success') ? 'success' : 'none'
   }
 
