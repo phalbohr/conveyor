@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import { join } from 'node:path'
-import { onBoard, taskRef, type Board, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
+import { compareIds, onBoard, taskRef, type Board, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { LENGTH_LIMIT, NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
@@ -1824,7 +1824,7 @@ export class Engine {
         started(a) - started(b) ||
         (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) ||
         a.createdAt.localeCompare(b.createdAt) ||
-        Number(a.id) - Number(b.id),
+        compareIds(a.id, b.id),
     )
   }
 

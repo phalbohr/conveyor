@@ -165,3 +165,7 @@ export function ignoredCheck(name: string, patterns: string[]) {
 }
 
 export type Where = { repo?: string; task?: string }
+
+export function compareIds(a: string, b: string) {
+  return a.localeCompare(b, 'en', { numeric: true })
+}

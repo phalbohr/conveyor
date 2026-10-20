@@ -1,4 +1,4 @@
-import { taskRef, type Board, type Task } from './board/board.js'
+import { compareIds, taskRef, type Board, type Task } from './board/board.js'
 import { harnessesInUse } from './commands/models.js'
 import { quotaFile, usageFile } from './commands/run.js'
 import type { Config } from './config.js'
@@ -114,7 +114,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     mine.push(entry)
   }
   for (const entry of mine) if (fixer && entry.id !== fixer && (entry.stage === 'merge' || entry.stage === 'land') && (entry.state === 'in-progress' || entry.state === 'queued' || entry.answered)) entry.held = `waits: task ${taskRef(fixer)} fixes the CI first`
-  mine.sort((a, b) => Number(a.id) - Number(b.id))
+  mine.sort((a, b) => compareIds(a.id, b.id))
   const backlog = tasks
     .filter((task) => !task.owner && task.state !== 'done' && (task.state !== undefined || task.form !== undefined))
     .map(
@@ -127,7 +127,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
         ...(task.state && task.state !== 'backlog' ? { released: { state: task.state, ...(task.stage ? { stage: task.stage } : {}) } } : {}),
       }),
     )
-    .sort((a, b) => Number(!a.released) - Number(!b.released) || (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) || Number(a.id) - Number(b.id))
+    .sort((a, b) => Number(!a.released) - Number(!b.released) || (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) || compareIds(a.id, b.id))
 
   const pid = runningPid(home, project)
   const fetch = Date.now() - lastFetch >= FETCH_EVERY

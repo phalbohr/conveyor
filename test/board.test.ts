@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { labelsToTask, taskFile, taskOfFile, taskRef, taskSlug } from '../src/board/board.js'
+import { compareIds, labelsToTask, taskFile, taskOfFile, taskRef, taskSlug } from '../src/board/board.js'
 import { FakeBoard } from '../src/board/fake.js'
 import { GitHubBoard } from '../src/board/github.js'
 import { GitLabBoard } from '../src/board/gitlab.js'
@@ -142,6 +142,13 @@ if (group && groupProject) {
     })
   })
 }
+
+describe('compareIds', () => {
+  it('orders plain numbers and group references by project, then by number', () => {
+    expect(['12', '9', '100'].sort(compareIds)).toEqual(['9', '12', '100'])
+    expect(['frontend#12', 'api#3', 'frontend#9'].sort(compareIds)).toEqual(['api#3', 'frontend#9', 'frontend#12'])
+  })
+})
 
 describe('task references', () => {
   it('turns a reference into a branch name, a flat file name, and back', () => {
