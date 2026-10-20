@@ -809,6 +809,21 @@ describe('a red base branch', () => {
     expect(runs()).toContain('1:merge')
   })
 
+  it('starts and merges nothing in a cycle whose base branch check fails', async () => {
+    const { board, cycle, runs, logs } = setup({ mode: 'ai' })
+    const head = board.baseHead.bind(board)
+    board.baseHead = async () => {
+      throw new Error('gh api failed (HTTP 502)')
+    }
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    expect(runs()).toEqual([])
+    expect(logs).toContain('the base branch check failed: gh api failed (HTTP 502); no task starts or merges in this cycle')
+    board.baseHead = head
+    await cycle()
+    expect(board.merges.map((merge) => merge.id)).toEqual(['1'])
+  })
+
   it('creates one fix task, merges it first, and holds the other merges until the base is green', async () => {
     const { board, harness, cycle } = setup({ mode: 'ai' })
     board.headChecks = 'failure'
