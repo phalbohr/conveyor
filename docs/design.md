@@ -462,7 +462,7 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 - Precedence: `/rework` > `/fix_from` > `/fix` > approvals.
 - Only reviews and comments after the task entered `review` count, so a stale "Request changes" does not trigger a fix loop. After the branch changes during review, the window starts at the new head commit on GitLab (from its "added N commits" note) and when the conveyor notices the change on GitHub.
 - An unknown stage in `/fix_from` gets one error comment with the allowed stages; the command is then ignored.
-- `review.approvals` in `config.yaml` sets the number of distinct approvers (default 1). `review.count_own_approvals` (default `true`) decides whether approvals of the account the conveyor runs as count; set it to `false` for a bot account, so a harness cannot approve its own work.
+- `review.approvals` in `config.yaml` sets the number of distinct approvers (default 1). `review.count_own_approvals` (default `false`) decides whether approvals of the account the conveyor runs as count; with `false` a harness cannot approve its own work through that account. Set it to `true` when one person runs the conveyor as their own account and approves with it.
 - Comments count because GitHub does not let the author approve their own pull request, and pull requests are opened with the personal token.
 - Branch protection on GitHub (required reviews, required checks) still applies: if it rejects the merge, the task goes to the failure path.
 

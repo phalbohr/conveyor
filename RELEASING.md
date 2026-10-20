@@ -1,6 +1,6 @@
 # Releasing
 
-Only the maintainer publishes. npm 2FA is required.
+Only the maintainer publishes. npm 2FA is required. There is no second reviewer; `SECURITY.md` (Maintenance of this repository) records this as an accepted risk.
 
 1. On `develop`: update `CHANGELOG.md` (replace "unreleased" with the date) and `version` in `package.json`; run `npm install --package-lock-only`. Commit and push.
 2. Wait until CI on `develop` is green.

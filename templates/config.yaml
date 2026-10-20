@@ -20,6 +20,7 @@ merge_method: merge
 close_on_done: false
 review:
   approvals: 1
+  count_own_approvals: false
 defaults: {harness: claude, model: sonnet, effort: medium}
 triage: {model: opus, effort: high}
 stages:

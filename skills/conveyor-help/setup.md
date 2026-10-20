@@ -75,7 +75,7 @@ A description can use `{{ issue.id }}`, `{{ issue.title }}`, `{{ issue.body }}`,
 | `smart` | The merge stage decides by `smart/merge.md` (offer to review it): risky changes go to review as with `human`, the rest merges. |
 | `ai` | The conveyor merges without a human, after blockers are closed and CI is green. `review.approvals` is not used. If branch protection on the base branch requires approvals the token cannot bypass, the merge fails and the task goes to needs-input; choose `human` there. |
 
-`review.count_own_approvals` (default `true`): when the conveyor runs as a separate bot account, set it to `false`, so a harness cannot approve its own work with `/approve` from that account. Keep `true` when the conveyor runs as your own account and you approve with it.
+`review.count_own_approvals` (default `false`): approvals and `/approve` of the account the conveyor runs as do not count, so a harness cannot approve its own work. Set it to `true` only when one person runs the conveyor as their own account and approves with it; then the harness could approve through that account, which `SECURITY.md` explains.
 
 `checks` (edit `config.yaml`): `checks.ignore` lists CI jobs that never count for the base or for pull requests, for example a deploy job that needs secrets the pipeline of a pull request lacks (`*` matches any text); `checks.fix_base` (`conveyor config set checks.fix_base own`) chooses which red base the conveyor repairs: `all` (default), `own` (only a base its own merge turned red; recommended in teams where others merge too), or `none`.
 
