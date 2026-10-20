@@ -119,6 +119,22 @@ describe('a feature in several repositories', () => {
     expect(logs.join('\n')).toContain('the base branch of frontend moved; the branch is rebased onto it and waits for CI')
   })
 
+  it('opens a merge request for a repository that only a later change touched, and asks for its review before merging', async () => {
+    const { board, workspaces, cycle } = setup({ mode: 'human' })
+    workspaces.changedRepos = ['frontend']
+    await board.createTask('Copy change', 'story', { form: 'story' })
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('review')
+    board.updatePullRequest('1', { reviews: [{ author: 'alice', state: 'approved', body: '', submittedAt: new Date(Date.now() + 1_000).toISOString() }] }, 'frontend')
+    await new Promise((resolve) => setTimeout(resolve, 1_100))
+    workspaces.changedRepos = ['frontend', 'user-service']
+    await cycle()
+    expect(board.merges).toEqual([])
+    expect(await board.pullRequest('1', 'user-service')).toMatchObject({ state: 'open' })
+    expect((await board.getTask('1'))?.state).toBe('review')
+    expect((await board.listComments('1')).at(-1)?.body).toContain('**A repair changed more repositories.**')
+  })
+
   it('opens merge requests only for the repositories the task changed', async () => {
     const { board, workspaces, cycle } = setup()
     workspaces.changedRepos = ['frontend']

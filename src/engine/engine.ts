@@ -903,7 +903,34 @@ export class Engine {
   private async landRepos(run: TaskRun, multi: RepoWorkspaces, wait: (reason: string) => Promise<'stop'>): Promise<'success' | 'failure' | 'stop'> {
     const { board } = this.options
     const { id, config, state } = run
-    const repos = state.repos ?? {}
+    const repos = (state.repos ??= {})
+    const extra = this.repoOrder(state, (await multi.changed(id).catch(() => [])).filter((repo) => !repos[repo]))
+    if (extra.length > 0) {
+      const task = await board.getTask(id)
+      const opened: string[] = []
+      try {
+        for (const repo of extra) {
+          const pull = await board.openPullRequest(id, task?.title ?? taskRef(id), `Part of ${board.reference(id)}: a repair after a failed merge changed this repository.`, repo)
+          repos[repo] = { number: pull.number, url: pull.url, headSha: pull.headSha }
+          opened.push(`- \`${repo}\`: ${pull.url}`)
+        }
+      } catch (error) {
+        await this.stopWithError(run, LAND, `**The merge request was not opened.**\n\n${publicText((error as Error).message, this.options.home)}`)
+        return 'stop'
+      }
+      this.log(`task ${id}: a repair changed ${extra.join(', ')}; opened merge requests for them`)
+      if (config.transitions.merge !== 'ai') {
+        delete state.stage
+        state.waiting = { kind: 'review', since: new Date().toISOString() }
+        await board.addComment(id, agentComment('review', `**A repair changed more repositories.** New merge requests:\n\n${opened.join('\n')}\n\nApprove each of them in its project; the feature merges as a whole when every merge request is approved and green.`))
+        await board.setState(id, 'review')
+        await board.setStage(id, undefined)
+        await run.save()
+        return 'stop'
+      }
+      await run.save()
+      return wait(`opened merge requests for ${extra.join(', ')}; they wait for CI`)
+    }
     const review = async (repo: string, sha: string, at?: string) => {
       const entry = repos[repo]
       if (entry) entry.headSha = sha
