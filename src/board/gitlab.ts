@@ -150,12 +150,12 @@ export class GitLabBoard implements Board {
 
   async canWrite(user: string, where: Where = {}) {
     if (!user) return false
-    const paths = [this.scope, ...(where.repo ? [this.repoApi(where.repo)] : []), ...(where.task && this.options.group ? [`projects/${encodeURIComponent(this.split(where.task).project)}`] : [])]
-    for (const path of new Set(paths)) {
+    const own = where.repo ? this.repoApi(where.repo) : where.task && this.options.group ? `projects/${encodeURIComponent(this.split(where.task).project)}` : this.scope
+    for (const path of new Set([own, ...(where.repos ?? []).map((repo) => this.repoApi(repo))])) {
       const members = await this.json<{ username: string; access_level: number }[]>([`${path}/members/all?query=${encodeURIComponent(user)}&per_page=100`])
-      if (members.some((member) => member.username === user && member.access_level >= DEVELOPER)) return true
+      if (!members.some((member) => member.username === user && member.access_level >= DEVELOPER)) return false
     }
-    return false
+    return true
   }
 
   async createTask(title: string, body: string, labels: TaskLabels = {}) {

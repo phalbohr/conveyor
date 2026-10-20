@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import { join } from 'node:path'
-import { compareIds, onBoard, taskRef, type Board, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
+import { compareIds, onBoard, taskRef, type Board, type Where, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { LENGTH_LIMIT, NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
@@ -143,6 +143,7 @@ export class Engine {
   private readonly misplaced = new Set<string>()
   private readonly yielded = new Set<string>()
   private readonly free = new Set<string>()
+  private repoSet?: string[]
   private baseRed?: { sha: string; fix?: string; failed: string[]; repairing?: boolean }
   private fixer?: string
   private readonly verifying = new Map<string, string>()
@@ -173,7 +174,13 @@ export class Engine {
     }
     const config = loaded.config
     if (this.draining) return
-    await this.guardBase(config).catch((error: unknown) => this.log(`the base branch check failed: ${(error as Error).message}`))
+    try {
+      await this.guardBase(config)
+      this.repoSet = await this.repoWorkspaces(config)?.names()
+    } catch (error) {
+      this.log(`the base branch check failed: ${(error as Error).message}; no task starts or merges in this cycle`)
+      return
+    }
     await this.probeQuotas(config)
     await this.triage(config).catch((error: unknown) => this.log(`triage failed: ${(error as Error).message}`))
     if (this.halt.signal.aborted || this.draining) return
@@ -193,15 +200,15 @@ export class Engine {
       .then((synced) => synced && this.log(`board: moved ${synced} cards to the column of their conveyor:: label`))
       .catch((error: unknown) => this.log(`board: the project columns were not synced: ${(error as Error).message}`))
     for (const listed of listedTasks) {
-      if (this.isFixTask(listed) && (await this.trust.trusted(listed.author, { task: listed.id }))) {
+      if (this.isFixTask(listed) && (await this.trust.trusted(listed.author, this.taskWhere(listed.id)))) {
         labeled = listed.id
         break
       }
     }
     for (const listed of listedTasks) {
       if (this.running.has(listed.id) || this.held.has(listed.id)) continue
-      if (!(await this.trust.trusted(listed.author, { task: listed.id }))) {
-        if (!this.untrusted.has(listed.id)) this.log(`task ${listed.id}: skipped: its author @${listed.author} has no write access to the repository`)
+      if (!(await this.trust.trusted(listed.author, this.taskWhere(listed.id)))) {
+        if (!this.untrusted.has(listed.id)) this.log(`task ${listed.id}: skipped: its author @${listed.author} has no write access to ${this.repoSet ? 'every repository of the feature' : 'the repository'}`)
         this.untrusted.add(listed.id)
         continue
       }
@@ -1298,7 +1305,7 @@ export class Engine {
     if (Date.now() < this.triageRetryAt) return
     if (config.limits.daily_tokens > 0 && this.options.usage.today() >= config.limits.daily_tokens) return
     if (this.quotaBlock(config.triage.harness, config)) return
-    const tasks = await this.trust.only(await board.listTasks(), (task) => ({ task: task.id }))
+    const tasks = await this.trust.only(await board.listTasks(), (task) => this.taskWhere(task.id))
     const fresh = tasks.filter((task) => !task.owner && task.form !== undefined && task.priority === undefined).map((task) => task.id)
     if (fresh.length === 0) return
     const harness = this.options.harnesses[config.triage.harness]
@@ -1723,7 +1730,11 @@ export class Engine {
   }
 
   private async comments(id: string) {
-    return this.trust.only(await this.options.board.listComments(id), () => ({ task: id }))
+    return this.trust.only(await this.options.board.listComments(id), () => this.taskWhere(id))
+  }
+
+  private taskWhere(id: string): Where {
+    return { task: id, ...(this.repoSet ? { repos: this.repoSet } : {}) }
   }
 
   private async trustedPull(id: string, repo?: string): Promise<PullRequest | undefined> {
@@ -1776,7 +1787,7 @@ export class Engine {
 
   private async fixTask() {
     for (const task of await this.options.board.listTasks()) {
-      if (this.isFixTask(task) && (await this.trust.trusted(task.author, { task: task.id }))) return task.id
+      if (this.isFixTask(task) && (await this.trust.trusted(task.author, this.taskWhere(task.id)))) return task.id
     }
     return undefined
   }

@@ -135,6 +135,15 @@ describe('a feature in several repositories', () => {
     expect((await board.listComments('1')).at(-1)?.body).toContain('**A repair changed more repositories.**')
   })
 
+  it('takes no task whose author cannot write to every repository of the feature', async () => {
+    const { board, cycle, logs, harness } = setup()
+    board.repoOutsiders.set('user-service', new Set(['mallory']))
+    await board.createTaskAs('mallory', 'Checkout', 'story', { form: 'story' })
+    await cycle()
+    expect(stageRuns(harness)).toEqual([])
+    expect(logs).toContain('task 1: skipped: its author @mallory has no write access to every repository of the feature')
+  })
+
   it('opens merge requests only for the repositories the task changed', async () => {
     const { board, workspaces, cycle } = setup()
     workspaces.changedRepos = ['frontend']

@@ -164,7 +164,7 @@ export function ignoredCheck(name: string, patterns: string[]) {
   return patterns.some((pattern) => new RegExp(`^${pattern.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 'i').test(name))
 }
 
-export type Where = { repo?: string; task?: string }
+export type Where = { repo?: string; task?: string; repos?: string[] }
 
 export function compareIds(a: string, b: string) {
   return a.localeCompare(b, 'en', { numeric: true })

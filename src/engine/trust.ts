@@ -8,7 +8,7 @@ export class Trust {
   constructor(private readonly board: Board) {}
 
   trusted(user: string, where: Where = {}) {
-    const key = `${user}|${where.repo ?? ''}|${where.task ?? ''}`
+    const key = `${user}|${where.repo ?? ''}|${where.task ?? ''}|${(where.repos ?? []).join(',')}`
     const known = this.writers.get(key)
     if (known && Date.now() - known.at < FRESH) return known.ok
     const ok = this.board.canWrite(user, where)

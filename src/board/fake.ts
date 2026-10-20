@@ -1,5 +1,6 @@
 import {
   type LinkedPull,
+  type Where,
   boardLabels,
   CONVEYOR_PREFIXES,
   FORM_LABEL,
@@ -149,8 +150,11 @@ export class FakeBoard implements Board {
     return 'https://example.test/board'
   }
 
-  async canWrite(user: string) {
-    return Boolean(user) && !this.outsiders.has(user)
+  readonly repoOutsiders = new Map<string, Set<string>>()
+
+  async canWrite(user: string, where: Where = {}) {
+    const repos = [...(where.repo ? [where.repo] : []), ...(where.repos ?? [])]
+    return Boolean(user) && !this.outsiders.has(user) && !repos.some((repo) => this.repoOutsiders.get(repo)?.has(user))
   }
 
   async createTask(title: string, body: string, labels: TaskLabels = {}) {

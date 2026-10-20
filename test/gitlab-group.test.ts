@@ -154,6 +154,9 @@ describe('GitLabBoard on a group board', () => {
     expect(await board.canWrite('alice', { repo: 'handbook' })).toBe(true)
     expect(await board.canWrite('bob', { task: 'frontend#12' })).toBe(true)
     expect(await board.canWrite('bob', { task: 'user-service#3' })).toBe(false)
+    expect(await board.canWrite('bob', { task: 'frontend#12', repos: ['handbook'] })).toBe(false)
+    members[`projects/${encodeURIComponent('tools/handbook')}`]?.push('bob')
+    expect(await board.canWrite('bob', { task: 'frontend#12', repos: ['handbook'] })).toBe(true)
   })
 
   it('names the group when GitLab does not find it', async () => {
