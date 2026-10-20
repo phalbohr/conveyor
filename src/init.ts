@@ -70,9 +70,15 @@ export async function boardTarget(context: Context, provider: Board['provider'],
   }
   const project = await context.run('glab', ['api', `projects/${encodeURIComponent(path)}`])
   if (project.code === 0) return { kind: 'project' }
-  const group = await context.run('glab', ['api', `groups/${encodeURIComponent(path)}/projects?include_subgroups=true&archived=false&per_page=100&order_by=path&sort=asc`])
+  const list = (page: number) => context.run('glab', ['api', `groups/${encodeURIComponent(path)}/projects?include_subgroups=true&archived=false&per_page=100&order_by=path&sort=asc&page=${page}`])
+  let group = await list(1)
   if (group.code === 0) {
-    const projects = (JSON.parse(group.stdout || '[]') as { path_with_namespace: string }[]).map((entry) => entry.path_with_namespace)
+    const projects: string[] = []
+    for (let page = 1; group.code === 0; group = await list(++page)) {
+      const batch = JSON.parse(group.stdout || '[]') as { path_with_namespace: string }[]
+      projects.push(...batch.map((entry) => entry.path_with_namespace))
+      if (batch.length < 100) break
+    }
     return { kind: 'group', projects }
   }
   return { kind: 'missing', error: `GitLab project or group ${path} was not found, or you have no access to it: ${(project.stderr || project.stdout).trim() || 'no answer from glab'}` }

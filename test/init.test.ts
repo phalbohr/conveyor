@@ -143,11 +143,11 @@ describe('conveyor init', () => {
 describe('conveyor init checks the board first', () => {
   const missing = { code: 1 }
   const shopProjects = { code: 0, stdout: JSON.stringify([{ path_with_namespace: 'acme/shop/backend' }, { path_with_namespace: 'acme/shop/frontend' }]) }
-  const groupList = 'glab api groups/acme%2Fshop/projects?include_subgroups=true&archived=false&per_page=100&order_by=path&sort=asc'
+  const groupList = 'glab api groups/acme%2Fshop/projects?include_subgroups=true&archived=false&per_page=100&order_by=path&sort=asc&page=1'
 
   it('creates nothing when the GitLab project or group does not exist', async () => {
     const result = await runCli(['init', '--provider', 'gitlab', '--project', 'acme/nothing'], {
-      responses: { 'glab api projects/acme%2Fnothing': missing, 'glab api groups/acme%2Fnothing/projects?include_subgroups=true&archived=false&per_page=100&order_by=path&sort=asc': missing },
+      responses: { 'glab api projects/acme%2Fnothing': missing, 'glab api groups/acme%2Fnothing/projects?include_subgroups=true&archived=false&per_page=100&order_by=path&sort=asc&page=1': missing },
     })
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('GitLab project or group acme/nothing was not found')
@@ -191,6 +191,16 @@ describe('conveyor init checks the board first', () => {
     const other = await runCli(['init', '--provider', 'gitlab', '--group', 'acme/shop', '--project', 'acme/other'], { responses: { 'glab api projects/acme%2Fshop': missing, [groupList]: shopProjects } })
     expect(other.code).toBe(1)
     expect(other.stderr).toContain('acme/other is not a project of the group acme/shop; choose one of: acme/shop/backend, acme/shop/frontend')
+  })
+
+  it('reads every page of the projects of a group', async () => {
+    const page = (n: number) => groupList.replace('&page=1', `&page=${n}`)
+    const full = { code: 0, stdout: JSON.stringify(Array.from({ length: 100 }, (_, index) => ({ path_with_namespace: `acme/shop/app-${String(index).padStart(3, '0')}` }))) }
+    const last = { code: 0, stdout: JSON.stringify([{ path_with_namespace: 'acme/shop/zeta' }]) }
+    const result = await runCli(['init', '--provider', 'gitlab', '--group', 'acme/shop', '--project', 'acme/shop/zeta'], {
+      responses: { 'glab api projects/acme%2Fshop': missing, [page(1)]: full, [page(2)]: last },
+    })
+    expect(result.code).toBe(0)
   })
 
   it('takes the project path from a URL', async () => {
