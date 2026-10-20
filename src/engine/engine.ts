@@ -1640,7 +1640,7 @@ export class Engine {
     )
     const origin = await this.originPath
     const project = this.options.board.reference(id).replace(/#\d+$/, '')
-    if (!origin || !project || origin === project || origin.endsWith(`/${project}`)) return undefined
+    if (!origin || !project || origin.toLowerCase() === project.toLowerCase() || origin.toLowerCase().endsWith(`/${project.toLowerCase()}`)) return undefined
     return `the issue belongs to the project ${project}, but the conveyor works in a clone of ${origin}, so it cannot open a merge request for it. A group board with issues in several projects needs \`repos\` in config.yaml (and \`repo_paths\` in local.yaml for existing clones), so that every task gets the repositories it changes.`
   }
 

@@ -108,7 +108,7 @@ export class GitLabBoard implements Board {
     const project = reference.slice(0, at)
     const iid = reference.slice(at + 1)
     const group = this.options.group
-    return group && project.startsWith(`${group}/`) ? `${project.slice(group.length + 1)}#${iid}` : iid
+    return group && project.toLowerCase().startsWith(`${group.toLowerCase()}/`) ? `${project.slice(group.length + 1)}#${iid}` : iid
   }
 
   async user() {

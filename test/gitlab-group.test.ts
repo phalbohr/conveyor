@@ -136,6 +136,13 @@ describe('GitLabBoard on a group board', () => {
     expect(calls).toContainEqual(['api', `projects/${encodeURIComponent('tools/handbook')}`])
   })
 
+  it('names a task by its project in the group whatever case the group path has in the settings', async () => {
+    const board = new GitLabBoard('Shop/frontend', async () => ({ code: 0, stdout: '{}', stderr: '' }), { retryDelay: 0, group: 'Shop' })
+    const idOf = (reference: string) => (board as unknown as { idOf(reference: string): string }).idOf(reference)
+    expect(idOf('shop/frontend#12')).toBe('frontend#12')
+    expect(idOf('shop/user-service#3')).toBe('user-service#3')
+  })
+
   it('names the group when GitLab does not find it', async () => {
     const run: Run = async () => ({ code: 0, stdout: JSON.stringify({ data: { scope: null } }), stderr: '' })
     const board = new GitLabBoard('acme/shop/frontend', run, { retryDelay: 0, group: 'acme/shop' })
