@@ -1,12 +1,19 @@
 # Changelog
 
-## 0.3.0 — 2026-10-20
+## 0.3.1 — 2026-10-20
+
+The first published version of this line. The tag `v0.3.0` was set but never published to npm; 0.3.1 contains all of it and the fixes of its review.
+
+### Changes you may need to act on
+
+- `review.count_own_approvals` now defaults to `false`: an `/approve` or approval from the account the conveyor runs as no longer counts, so a harness cannot approve its own work. If you run the conveyor as your own account and approve with it, set `review.count_own_approvals: true` in `config.yaml`.
+- A cycle whose base branch check fails (for example when the board API does not answer) starts and merges nothing and tries again in the next cycle; before, it went on with an unknown base.
 
 ### GitLab: group boards and features in several repositories
 
 - `board.group` makes the board and its labels cover every project of the group. Tasks are named `project#number` (for example `frontend#12`) on the screen, in the log, and in commands such as `conveyor attach frontend#12`; issue work goes to the project of each issue, new tasks are created in `board.project`, and merge requests link the issue with its full reference. Group paths compare without case. On a group board without `repos`, the conveyor takes no issue of a project other than the one of its own clone (the log says why) and stops a started one with the hint to set `repos`.
 - `repos` makes one feature span several repositories: `group` with `include`/`exclude`, or `projects` with full paths from any groups (named by the last part of the path); `base` sets other target branches. The workspace of a task is a folder with a worktree of every repository side by side. `repo_paths` in `local.yaml` uses existing clones (absolute, `~`, or relative to the project folder), for example submodules of a parent repository; the others are cloned into `~/.conveyor/repos/<full project path>` (a first clone may take up to an hour).
-- The plan returns the repositories in merge order (`repos` in the stage result). Every changed repository gets one merge request, approved on its own; the feature merges as a whole, in that order, only when every merge request is approved and green and every branch is current with its base. A repository that a later repair changes gets its merge request before the merge, and the review asks for it. Base CI is checked and guarded per repository. Approvals count from members with write access to the project of the merge request or the issue, not only to the board group.
+- The plan returns the repositories in merge order (`repos` in the stage result). Every changed repository gets one merge request, approved on its own; the feature merges as a whole, in that order, only when every merge request is approved and green and every branch is current with its base. A repository that a later repair changes gets its merge request before the merge, and the review asks for it. Base CI is checked and guarded per repository. With `repos`, the conveyor takes a task only when its author has Developer access to the project of the issue and to every repository of the set, and it reads comments only from such members, because the harness works in all of them; an approval of a merge request counts from Developers of its project.
 
 ### Merge, review, and CI
 
