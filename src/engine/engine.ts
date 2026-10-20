@@ -142,6 +142,7 @@ export class Engine {
   private originPath?: Promise<string | undefined>
   private readonly misplaced = new Set<string>()
   private readonly yielded = new Set<string>()
+  private readonly free = new Set<string>()
   private baseRed?: { sha: string; fix?: string; failed: string[]; repairing?: boolean }
   private fixer?: string
   private readonly verifying = new Map<string, string>()
@@ -259,6 +260,7 @@ export class Engine {
     this.slotWaiters = []
     for (const task of this.sorted(resumable, me)) {
       if (parked.has(task.id)) {
+        this.free.add(task.id)
         this.start(task, config)
         continue
       }
@@ -389,6 +391,7 @@ export class Engine {
       .catch((error: unknown) => this.log(`task ${task.id}: ${(error as Error).message}`))
       .finally(() => {
         this.running.delete(task.id)
+        this.free.delete(task.id)
         if (this.yielded.delete(task.id)) this.options.wake?.()
       })
     this.running.set(task.id, { controller, promise })
@@ -655,6 +658,17 @@ export class Engine {
 
     for (const [index, stage] of stages.entries()) {
       if (signal.aborted) return { status: 'stopped', summary }
+      if (this.free.has(id) && id !== this.fixer) {
+        if ([...this.running.keys()].filter((key) => !this.free.has(key)).length >= config.limits.running) {
+          state.stage = stage.name
+          state.parked = 'waits for a free running slot'
+          state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
+          await run.save()
+          this.log(`task ${id}: waits for a free running slot before stage ${stage.name}`)
+          return { status: 'stopped', summary }
+        }
+        this.free.delete(id)
+      }
       if (stage.name === 'merge' && this.collectsParts(state, config)) break
       if (stage.name === 'review' && this.collectsParts(state, config)) continue
       const waiter = index > 0 ? await this.higherWaiter(id) : undefined

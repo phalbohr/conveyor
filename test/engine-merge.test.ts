@@ -782,6 +782,29 @@ describe('a red base branch', () => {
     await cycle()
   })
 
+  it('lets a waiting task run a harness stage only when a running slot is free', async () => {
+    const gate = deferred<StageResult>()
+    const { board, engine, runs, logs, expireRetry } = setup({ mode: 'ai', limits: 'running: 1', script: (run) => (run.taskId === '2' ? gate.promise : done) })
+    const parked = await board.createTask('Parked', 'p', { form: 'plan' })
+    await board.setOwner(parked.id, await board.user())
+    await board.setState(parked.id, 'in-progress')
+    await board.addComment(parked.id, renderWorkpad({ attempt: 0, stage: 'merge', parked: 'waits: task #9 fixes the CI', retryAt: new Date(0).toISOString() }, ''))
+    await board.createTask('Busy', 'p', { form: 'plan' })
+    await board.setPriority(parked.id, 4)
+    await engine.tick()
+    await vi.waitFor(() => expect(runs()).toContain('2:implement'))
+    await expireRetry('1')
+    await engine.tick()
+    await vi.waitFor(() => expect(logs).toContain('task 1: waits for a free running slot before stage merge'))
+    expect(runs()).not.toContain('1:merge')
+    gate.resolve(done)
+    await engine.idle()
+    await expireRetry('1')
+    await engine.tick()
+    await engine.idle()
+    expect(runs()).toContain('1:merge')
+  })
+
   it('creates one fix task, merges it first, and holds the other merges until the base is green', async () => {
     const { board, harness, cycle } = setup({ mode: 'ai' })
     board.headChecks = 'failure'
