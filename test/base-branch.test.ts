@@ -144,6 +144,15 @@ describe('passed checks', () => {
   })
 })
 
+describe('head time', () => {
+  it('gives no head time on GitHub, where only the commit date is known and a push can come later', async () => {
+    const pull = { number: 4, url: 'https://example.test/pull/4', headRefOid: 'a'.repeat(40), state: 'OPEN', mergeable: 'MERGEABLE', isCrossRepository: false, statusCheckRollup: [], reviews: [], comments: [], commits: [{ committedDate: '2026-10-19T07:30:00Z' }] }
+    const { run, calls } = recorder((args) => (args[0] === 'pr' ? JSON.stringify([pull]) : '[[]]'))
+    expect((await new GitHubBoard('acme/app', run).pullRequest('5'))?.headAt).toBeUndefined()
+    expect(calls.find((args) => args[1] === 'list')?.join(' ')).not.toContain('commits')
+  })
+})
+
 describe('pull requests from forks', () => {
   it('ignores a fork pull request with the task branch name on GitHub', async () => {
     const pull = (number: number, cross: boolean) => ({ number, url: `https://example.test/pull/${number}`, headRefOid: 'a'.repeat(40), state: 'OPEN', mergeable: 'MERGEABLE', isCrossRepository: cross, statusCheckRollup: [], reviews: [], comments: [] })
