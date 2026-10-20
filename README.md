@@ -61,10 +61,10 @@ The task is not taken? Check that the issue has a `form::` label that `pickup_fr
 | `conveyor settings` | Settings editor (also `e` on the control screen): team, stage, and personal fields; `↑` `↓` move, `←` `→` switch between the options of a field, Enter edits a value, `m` refreshes the model lists, `a` adds a stage, `x` removes it, `[` `]` move it, `s` saves after validation, `q` quits. Formatting and comments of the YAML files stay as they are |
 | `conveyor run` | Works the board: claims tasks within your limits and runs their stages. In a terminal it opens the control screen with the conveyor already running; without a terminal (server, cron) it prints the log. `--once` runs one cycle. The log also goes to `~/.conveyor/logs/<project>.log` |
 | `conveyor new` | Live harness session; creates a task with `conveyor::backlog` and `form::idea`, `form::story`, or `form::plan` (a story with your prepared plan). The conveyor may take it at once. `--write` opens a template in your editor (title, form `idea`/`story`/`plan`/`draft`, text); `--title "…" --form idea [--body "…"]` creates it at once. On the control screen `n` offers the same: `e` editor, `i` one-line idea, `h` live harness session |
-| `conveyor attach <number>` | Live session to answer the questions of a waiting task; `<number>` is the issue number on the board, e.g. `51` |
+| `conveyor attach <number>` | Live session to answer the questions of a waiting task; `<number>` is the issue number on the board, e.g. `51` (`project#number` on a GitLab group board, e.g. `frontend#12`) |
 | `conveyor release <number>` | Releases the claim of a task (`--force` for private tasks of others) |
 | `conveyor watch <number> [-f]` | Shows what the harness does in the stages of a task: commands, edited files, its messages and errors. `-f` keeps showing new lines until Ctrl+C. Needs `session_logs: true` in `local.yaml` |
-| `conveyor reset <number> [--form idea\|story\|plan\|none] [--close\|--delete]` | Starts a task over: stops its stage, closes its open pull request, deletes the branch `conveyor/<number>` and the workspace, clears the workpad and the `stage::` and `part::` labels, releases the claim, and returns the task to Backlog with a form you choose (default: the form the conveyor took it with; `none` leaves a draft). Merged parts stay in the base branch. Only the owner resets; while the conveyor runs, use `x` on its control screen |
+| `conveyor reset <number> [--form idea\|story\|plan\|none \| --close \| --delete]` | Starts a task over: stops its stage, closes its open pull request, deletes the branch `conveyor/<number>` and the workspace, clears the workpad and the `stage::` and `part::` labels, releases the claim, and returns the task to Backlog with a form you choose (default: the form the conveyor took it with; `none` leaves a draft). Merged parts stay in the base branch. Only the owner resets; while the conveyor runs, use `x` on its control screen |
 | `conveyor config list` | Every setting with value, options, and description (`--json` for scripts) |
 | `conveyor config get/set <key> [value]` | Reads or changes one setting; validates before saving |
 | `conveyor config stage add/remove/move` | Adds (`--after-merge --when …`), removes, or moves a stage |
@@ -102,7 +102,7 @@ Keys on the main screen:
 
 Keys on a task:
 
-- Enter: open its text, workpad, and comments; `p` switches to its pull request; `↑` `↓` scroll.
+- Enter: open its text, workpad, and comments; `p` switches to its pull request; `↑` `↓` scroll; PgUp PgDn or Shift+↑↓ scroll a page (also in watch, help, usage, log, and board check).
 - `c`: comment; `b`: open it in the browser.
 - `h`: live harness session on the task (`live.harness`, `live.model`, `live.effort` from `local.yaml`; instructions in `live/task.md`). When the session ends, it can post a comment on the issue.
 - `w`: watch the stage of the task live: commands, edited files, messages and errors of the harness. The harness keeps running; `↑` pauses and scrolls back, `↓` at the end follows again, `w` or Esc goes back. Needs `session_logs: true` in `local.yaml` (settings: Personal, "Session logs for watch"). The log is `~/.conveyor/sessions/<project>/<number>.log`, outside the repository; the conveyor deletes it when the task is done or reset.
@@ -142,7 +142,8 @@ A stop at once aborts the running stages. They restart from their beginning on t
 | where idea, story, and plan are stored | `config.yaml`, `local.yaml` | `artifacts` (`board`, `repo`, `path`) |
 | the documentation language / my chat language | `config.yaml` / `local.yaml` | `language.docs` / `language.chat` |
 | the harness and model of my live sessions (`new`, `attach`, `h` on a task, `a` in help) | `local.yaml` | `live.harness`, `live.model`, `live.effort` (empty: `defaults`) |
-| approvals needed for merge, merge method, closing done issues | `config.yaml` | `review.approvals`, `merge_method`, `close_on_done` |
+| approvals needed for merge, merge method, closing done issues | `config.yaml` | `review.approvals`, `review.count_own_approvals` (`false` when the conveyor runs as a bot account, so it cannot approve its own work), `merge_method`, `close_on_done` |
+| a plan in parts: one pull request per part, or all parts in one | `config.yaml` | `parts` (`separate`, `together`) |
 | timeouts and retries | `config.yaml` | `timeouts`, `retry` |
 | workspace setup scripts | `config.yaml` | `hooks` |
 | how much I run in parallel, my token and subscription limits | `local.yaml` | `limits` |

@@ -45,7 +45,7 @@ Commands:
 | `conveyor attach <issue>` | answer the questions of a `needs-input` task in a live harness session |
 | `conveyor release <issue>` | release the task claim manually (`--force` for private tasks of others) |
 | `conveyor watch <issue> [-f]` | show the session log of a task (`session_logs: true`); `-f` follows it |
-| `conveyor reset <issue> [--form]` | start a task over: stop it, close its PR/MR, delete its branch and workspace, clear the workpad, return it to Backlog with a form |
+| `conveyor reset <issue> [--form \| --close \| --delete]` | start a task over: stop it, close its PR/MR, delete its branch and workspace, clear the workpad, return it to Backlog with a form; or end it: `--close` closes the issue, `--delete` deletes it (falls back to closing it without the right to delete) |
 
 ## Language and formats
 
@@ -96,6 +96,8 @@ artifacts:
   story: {store: board, write: replace}   # replace | append
   plan:  {store: repo, path: docs/plans, allow_private: true}
 pickup_from: story                 # idea | story | plan
+parts: separate                    # separate: one pull request per part; together: all parts in one draft pull request
+checks: {ignore: [], fix_base: all} # CI jobs that never count; which red base to repair: all | own | none
 transitions:
   idea_to_story: smart             # interactive | autonomous | smart
   story_to_plan: interactive
@@ -324,7 +326,7 @@ Release deletes the lock branch, removes `claimed-by::<user>`, and posts a comme
 - Automatic releases skip tasks with private artifacts. Manual release of such a task by a non-owner requires `--force`, because the next owner cannot read the private artifacts.
 - `conveyor release <issue>` on a task that runs on this workstation stops the harness first.
 - A released started task keeps its `conveyor::` state, `stage::` label, and workpad. The control screen lists it first in Backlog (`released · resumes at stage::<name>`), and the engine takes started tasks before new ones (after tasks assigned to me), so it resumes at its stage.
-- Reset (`x` on the control screen, `conveyor reset <issue>`): the engine holds the task (aborts its stage and skips it in cycles), then the CLI closes the open PR/MR, removes the workspace, deletes `conveyor/<issue>`, writes an empty workpad, removes `stage::` and `part::`, sets `conveyor::backlog` with the chosen form, and releases the claim. The workpad records `form` when the conveyor takes a task; it is the default form of a reset. Only the owner resets; `conveyor reset` refuses while a conveyor runs for the board, because that process may run the stage. Merged parts stay merged.
+- Reset (`x` on the control screen, `conveyor reset <issue>`): the engine holds the task (aborts its stage and skips it in cycles), then the CLI closes the open PR/MR, removes the workspace, deletes `conveyor/<issue>`, writes an empty workpad, removes `stage::` and `part::`, sets `conveyor::backlog` with the chosen form, and releases the claim. The workpad records `form` when the conveyor takes a task; it is the default form of a reset. Only the owner resets; `conveyor reset` refuses while a conveyor runs for the board, because that process may run the stage. Merged parts stay merged. After `x`, `c` closes the issue and `D` deletes it once its number is typed; without the right to delete, the issue is closed and the message says why.
 
 ## Candidate order
 
@@ -458,9 +460,9 @@ In `review` the CLI checks every cycle for signals since the task entered `revie
 
 - The text after a command and the review comments become the feedback for the stages. Fix and rework keep the plan artifact; fix also keeps the workpad.
 - Precedence: `/rework` > `/fix_from` > `/fix` > approvals.
-- Only reviews and comments after the task entered `review` count, so a stale "Request changes" does not trigger a fix loop.
+- Only reviews and comments after the task entered `review` count, so a stale "Request changes" does not trigger a fix loop. After the branch changes during review, the window starts at the new head commit on GitLab (from its "added N commits" note) and when the conveyor notices the change on GitHub.
 - An unknown stage in `/fix_from` gets one error comment with the allowed stages; the command is then ignored.
-- `review.approvals` in `config.yaml` sets the number of distinct approvers (default 1).
+- `review.approvals` in `config.yaml` sets the number of distinct approvers (default 1). `review.count_own_approvals` (default `true`) decides whether approvals of the account the conveyor runs as count; set it to `false` for a bot account, so a harness cannot approve its own work.
 - Comments count because GitHub does not let the author approve their own pull request, and pull requests are opened with the personal token.
 - Branch protection on GitHub (required reviews, required checks) still applies: if it rejects the merge, the task goes to the failure path.
 

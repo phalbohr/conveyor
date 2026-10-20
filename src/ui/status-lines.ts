@@ -214,7 +214,7 @@ export function helpLines(): Line[] {
     row('small fixes', '`/fix <notes>`, or `/fix_from: <stage> <notes>` to start later'),
     row('start over', '`/rework <notes>`'),
     row('hand a task over', '`conveyor release <number>`'),
-    row('start a task over', 'x on my task: stops it, closes its pull request, deletes its branch and workspace, back to Backlog as idea, story, plan, or draft'),
+    row('start a task over', 'x on my task: stops it, closes its pull request, deletes its branch and workspace, back to Backlog as idea, story, plan, or draft; or c closes, D deletes the issue'),
     row('<number>', 'the issue number on the board: issues/51 → `conveyor attach 51`'),
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },

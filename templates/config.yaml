@@ -6,6 +6,10 @@ artifacts:
   story: {store: board, write: replace}
   plan: {store: board}
 pickup_from: plan
+parts: separate
+checks:
+  ignore: []
+  fix_base: all
 language:
   docs: English
 transitions:

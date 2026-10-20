@@ -55,7 +55,7 @@ Common split: strong models for `story`, `plan`, and `review`; a fast model for 
 
 ## 5. What each stage does — `stages/<name>.md`
 
-Large stories can merge in parts: the default `stages/plan.md` lets the plan stage split the work into ordered parts (`parts` in its result), one pull request each, merged one after another. Mention this when the user describes large stories; to turn it off, remove that line from `stages/plan.md`.
+Large stories can merge in parts: the default `stages/plan.md` lets the plan stage split the work into ordered parts (`parts` in its result). Mention this when the user describes large stories; to turn it off, remove that line from `stages/plan.md`. `parts` in `config.yaml` decides how parts reach the base branch: `separate` (default: one pull request per part, merged one after another, each reviewed) or `together` (all parts collect in one draft pull request per repository; one review and one merge after the last part; better when humans review). Set it with `conveyor config set parts together`.
 
 Go through every stage in the chain. For each, read its file and tell the user its state: described, a stub, or missing (`conveyor config list` marks stages without a description with ⚠). Offer:
 
@@ -76,6 +76,8 @@ A description can use `{{ issue.id }}`, `{{ issue.title }}`, `{{ issue.body }}`,
 | `ai` | The conveyor merges without a human, after blockers are closed and CI is green. `review.approvals` is not used. If branch protection on the base branch requires approvals the token cannot bypass, the merge fails and the task goes to needs-input; choose `human` there. |
 
 `review.count_own_approvals` (default `true`): when the conveyor runs as a separate bot account, set it to `false`, so a harness cannot approve its own work with `/approve` from that account. Keep `true` when the conveyor runs as your own account and you approve with it.
+
+`checks` (edit `config.yaml`): `checks.ignore` lists CI jobs that never count for the base or for pull requests, for example a deploy job that needs secrets the pipeline of a pull request lacks (`*` matches any text); `checks.fix_base` (`conveyor config set checks.fix_base own`) chooses which red base the conveyor repairs: `all` (default), `own` (only a base its own merge turned red; recommended in teams where others merge too), or `none`.
 
 `merge_method`: `merge` (merge commit), `squash` (one commit per task), or `rebase`. Ask about `review.approvals` only for `human` and `smart`. Branch protection on the board still applies on top.
 
@@ -112,7 +114,9 @@ Personal and never committed:
 - `limits.subscription.five_hour_reserve`, `seven_day_reserve`: percent of the subscription windows kept for your own work (claude and codex report their windows; command harnesses do not);
 - `language.chat`: the language of `conveyor new` and `conveyor attach`;
 - `live.harness`, `live.model`, `live.effort`: the harness and model of my live sessions (`new`, `attach`, `h` on a task, `a` in help); empty takes `defaults`. Offer a strong interactive model here; `claude`, `codex`, `opencode`, and `kilocode` support live sessions;
-- `poll_interval`, `pickup.include_unassigned`.
+- `poll_interval`, `pickup.include_unassigned`;
+- `session_logs`: record what the harness does, to watch it with `w` or `conveyor watch`;
+- `repo_paths` (with `repos` in `config.yaml`): existing clones of the repositories, for example submodules of a parent repository; a path is absolute, starts with `~`, or is relative to the project folder.
 
 ## 10. The board view
 
@@ -120,6 +124,7 @@ Columns: Backlog, Needs input, Queued, In progress, Review, Done. `conveyor init
 
 - GitHub: `init` sets up the board: the project linked to the repository, or a new one it creates and links, with the `Conveyor` field (one option per state) and `board.github_project` written. With several linked projects, help the user choose, run `conveyor config set board.github_project <number>`, then `conveyor board update` to add the `Conveyor` field. Then the user picks the Board layout and "Column by: Conveyor" once in the project (GitHub has no API for views).
 - GitLab: the user opens Plan → Issue boards (in the group for a group board) and adds one list per label in this order: `conveyor::backlog`, `needs-input`, `queued`, `in-progress`, `review`, `done`.
+- GitLab group board (`board.group`): the board covers every project of the group, and `board.project` is the project for new tasks. When a task can change several repositories, set `repos` in `config.yaml` (`group`, or `projects` with full paths from any groups) and, per person, `repo_paths` in `local.yaml`; then every changed repository gets its own merge request, and the feature merges as a whole.
 - After an update of the conveyor or a new stage, `conveyor board check` lists what the board lacks and `conveyor board update` (or `k`, Enter on the control screen) adds it (never changes or deletes); offer this when the start log or the control screen reports a board difference.
 
 ## Finish
