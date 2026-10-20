@@ -1152,6 +1152,7 @@ export class Engine {
     const failed = await board.failedChecks(verify.sha, repo).catch(() => [])
     if (!verify.head || failed.length === 0) return { ours: true, failed }
     const passed = new Set(await board.passedChecks(verify.head, repo).catch(() => []))
+    if (passed.size === 0) return { ours: true, failed }
     const before = new Set(verify.before ? await board.failedChecks(verify.before, repo).catch(() => []) : [])
     return { ours: failed.some((name) => passed.has(name) && !before.has(name)), failed }
   }

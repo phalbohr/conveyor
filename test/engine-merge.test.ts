@@ -727,6 +727,10 @@ describe('a red base branch', () => {
       expect((await board.listTasks()).some((task) => task.title.startsWith('Fix the CI'))).toBe(false)
     })
 
+    it('is ours when the merge request has no pipeline of its own to compare with', async () => {
+      expect((await run(['update_parent_repo'], [], [])).state).toBe('needs-input')
+    })
+
     it('is not ours when the failing job already failed before the merge', async () => {
       expect((await run(['lint'], ['lint'], ['lint'])).state).toBe('done')
     })
