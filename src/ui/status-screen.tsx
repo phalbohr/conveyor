@@ -13,6 +13,7 @@ import { taskRef, taskSlug } from '../board/board.js'
 const COLORS: Record<NonNullable<Line['tone']>, string> = { muted: 'gray', warning: 'yellow', error: 'red', ok: 'green', title: 'cyan' }
 const LOG_LINES = 30
 const FLASH_MS = 250
+const TASK_PAGE = 5
 const WATCH_LINES = 2_000
 
 export type RunnerControl = {
@@ -168,6 +169,10 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
           if (shown.current.next >= shown.current.last) setWatched({ ...watched, follow: true })
           else setScroll(shown.current.next)
         }
+        return
+      }
+      if (panel === 'status' && view.focus === 'tasks' && paging) {
+        setView((now) => ({ ...now, task: Math.max(0, Math.min(tasks.length - 1, now.task + paging * TASK_PAGE)) }))
         return
       }
       if (panel !== 'status' && paging) {
@@ -358,7 +363,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
   const room = Math.max(3, rows - 1 - heightOf(footer, columns) - heightOf(message?.text ?? '', columns) - (input ? 4 : 0) - (error ? 1 : 0) - 1)
   const focusLine = panel === 'status' && view.focus === 'tasks' ? lines.findIndex((line) => line.text.startsWith('›')) : -1
   const pinned = panel === 'watch' ? lines.slice(0, 1) : []
-  const body = viewport(lines.slice(pinned.length), focusLine >= 0 ? Math.max(0, focusLine - room + 4) : panel === 'watch' && watched?.follow ? Number.MAX_SAFE_INTEGER : scroll, room - pinned.length, columns)
+  const body = viewport(lines.slice(pinned.length), focusLine >= 0 ? pageBefore(lines.slice(pinned.length), Math.min(lines.length - pinned.length, focusLine - pinned.length + 2), room - pinned.length, columns) : panel === 'watch' && watched?.follow ? Number.MAX_SAFE_INTEGER : scroll, room - pinned.length, columns)
   const page = { ...body, lines: [...pinned, ...body.lines] }
   shown.current = { start: body.start, last: body.last, next: body.start + Math.max(1, body.lines.length - 1), previous: pageBefore(lines.slice(pinned.length), body.start, room - pinned.length, columns) }
   return (

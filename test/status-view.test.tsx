@@ -365,6 +365,34 @@ describe('StatusScreen as a control panel', () => {
     await vi.waitFor(() => expect(actions).toEqual([{ kind: 'idea', title: 'Dark mode' }]), { timeout: 5_000 })
   })
 
+  it('keeps the selected task visible in a long column and pages through tasks with PgDn and PgUp', async () => {
+    const many = {
+      ...snapshot,
+      mine: Array.from({ length: 9 }, (_, index) => ({
+        id: String(250 + index),
+        title: `Long task title number ${index} that wraps on a narrow terminal window`,
+        url: `https://example.test/issues/${250 + index}`,
+        state: 'in-progress' as const,
+        stage: 'land',
+        attempt: 0,
+        parked: 'waits: task #282 fixes the CI first',
+      })),
+    }
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => many} refreshMs={60_000} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    for (const key of [RIGHT, RIGHT, RIGHT, DOWN, ...Array.from({ length: 8 }, () => DOWN)]) {
+      await settle()
+      stdin.write(key)
+    }
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #258'), { timeout: 5_000 })
+    await settle()
+    stdin.write('\u001B[5~')
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #253'), { timeout: 5_000 })
+    await settle()
+    stdin.write('\u001B[6~')
+    await vi.waitFor(() => expect(lastFrame()).toContain('› #258'), { timeout: 5_000 })
+  })
+
   it('resets a task in progress after the form is chosen', async () => {
     const { value, calls } = control()
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
