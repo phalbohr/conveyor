@@ -772,6 +772,9 @@ describe('liveness of tasks in progress', () => {
     expect(columnTasks(frozen, 3)[0]?.detail).toContain(`○ ${held}`)
     expect(columnTasks(frozen, 2)[0]?.detail).toBe(held)
     expect(columnTasks(frozen, 1)[0]?.detail).toBe(`answered, ${held}`)
+    const answered = { ...frozen, freeze: { ...frozen.freeze, answered: true } }
+    expect(statusLines(answered).map((line) => line.text).join('\n')).toContain('fixes the CI (@alice, answered, resumes next cycle, private artifact)')
+    expect(statusLines({ ...answered, runner: { running: false } }).map((line) => line.text).join('\n')).toContain('answered, resumes on start')
   })
 
   it('shows why a parked task waits instead of the next attempt', () => {

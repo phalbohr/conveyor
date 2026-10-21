@@ -35,7 +35,7 @@ export type BacklogTask = { id: string; title: string; url: string; form?: NonNu
 
 type Limit = { used: number; limit: number }
 
-export type Freeze = { id: string; title: string; base: boolean; owner?: string; stage?: string; waitingSince?: string; private?: boolean }
+export type Freeze = { id: string; title: string; base: boolean; owner?: string; stage?: string; waitingSince?: string; answered?: boolean; private?: boolean }
 
 export type StatusSnapshot = {
   settings: string
@@ -77,8 +77,10 @@ export async function collectStatus(options: { board: Board; config: Config; set
   let freeze: Freeze | undefined
   for (const task of tasks) {
     if (!task.fixing || task.closed || task.state === 'done' || !(await board.canWrite(task.author))) continue
-    const pad = findWorkpad(await board.listComments(task.id))?.state
+    const comments = await board.listComments(task.id)
+    const pad = findWorkpad(comments)?.state
     const waiting = task.state === 'needs-input' ? pad?.waiting?.since : undefined
+    const answered = waiting !== undefined && repliesSince(comments, pad?.waiting?.commentId).length > 0
     freeze = {
       id: task.id,
       title: task.title,
@@ -86,6 +88,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
       ...(task.owner ? { owner: task.owner } : {}),
       ...(task.stage ? { stage: task.stage } : {}),
       ...(waiting ? { waitingSince: waiting } : {}),
+      ...(answered ? { answered: true } : {}),
       ...(pad?.private ? { private: true } : {}),
     }
     break

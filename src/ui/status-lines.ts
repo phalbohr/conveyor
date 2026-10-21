@@ -116,8 +116,9 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   ]
   if (blocked.length) lines.push({ text: `no new tasks: ${blocked.join(' and ')} reached · [u] usage`, tone: 'warning' })
   if (status.freeze) {
-    const { id, title, base, owner, stage, waitingSince } = status.freeze
-    const where = [owner ? `@${owner}` : 'not claimed yet', waitingSince ? `waits for an answer since ${time(waitingSince)}` : stage ? `stage::${stage}` : '', status.freeze.private ? 'private artifact' : ''].filter(Boolean).join(', ')
+    const { id, title, base, owner, stage, waitingSince, answered } = status.freeze
+    const waits = answered ? `answered, resumes ${status.runner.running ? 'next cycle' : 'on start'}` : waitingSince ? `waits for an answer since ${time(waitingSince)}` : undefined
+    const where = [owner ? `@${owner}` : 'not claimed yet', waits ?? (stage ? `stage::${stage}` : ''), status.freeze.private ? 'private artifact' : ''].filter(Boolean).join(', ')
     const handOver = owner && owner !== status.me ? ` · stuck? \`conveyor release ${id}${status.freeze.private ? ' --force' : ''}\` hands it to another workstation` : ''
     lines.push({ text: `CI freeze: ${taskRef(id)} ${title} fixes the CI (${where}) · ${base ? 'new tasks and merges wait' : 'merges wait'}${handOver}`, tone: 'warning' })
   }

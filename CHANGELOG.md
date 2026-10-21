@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The CI freeze line says `answered, resumes next cycle` (or `on start` while the conveyor is stopped) when the fix task got its answer; before, it kept saying `waits for an answer since …`.
 - `h` on the main screen of the control screen asks the harness: a live session with the `conveyor-help` skill, which now also answers questions about the state of the board (why tasks wait, what to do with stuck ones) from `conveyor --json` and the conveyor log. Help moved to `?` only; on the help screen `h` (before: `a`) opens the same session.
 - Development: `vite` 8.3.4 for the test runner, which fixes three advisories in `launch-editor` of 8.3.2 (development only; the npm package does not include it).
 - In a long task list of the control screen the selected task stays visible, also when tasks take several lines, and PgUp/PgDn (Shift+↑↓) move the selection by five tasks; before, the list could not be scrolled to its last tasks.
