@@ -117,6 +117,10 @@ describe('collectStatus', () => {
     await fake.setStage(fix.id, 'plan')
     await fake.addComment(fix.id, renderWorkpad({ attempt: 0, private: true, waiting: { kind: 'questions', stage: 'plan', since: '2026-10-13T09:12:00.000Z' } }, ''))
     expect((await collect()).freeze).toEqual({ id: fix.id, title: 'Fix the CI of the base branch main', base: true, owner: 'alice', stage: 'plan', waitingSince: '2026-10-13T09:12:00.000Z', private: true })
+    const question = await fake.addComment(fix.id, '<!-- conveyor:questions -->\nWhich branch?')
+    const pad = (await fake.listComments(fix.id)).find((comment) => comment.body.includes('conveyor:workpad'))
+    if (pad) await fake.updateComment(pad.id, renderWorkpad({ attempt: 0, private: true, waiting: { kind: 'questions', stage: 'plan', since: '2026-10-13T09:12:00.000Z', commentId: question.id } }, ''))
+    expect((await collect()).freeze?.answered).toBeUndefined()
     await fake.addCommentAs('alice', fix.id, 'go on')
     expect((await collect()).freeze?.answered).toBe(true)
 
