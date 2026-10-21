@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it } from 'vitest'
-import { clearOnShrink } from '../src/ui/terminal.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { clearOnShrink, repaintOnDisturbance } from '../src/ui/terminal.js'
 
 function fakeStdout(columns: number) {
   const writes: string[] = []
@@ -33,5 +33,33 @@ describe('clearOnShrink', () => {
     stream.columns = 40
     stream.emit('resize')
     expect(writes).toHaveLength(1)
+  })
+})
+
+describe('repaintOnDisturbance', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('clears and repaints the screen after a resize and after the computer slept', () => {
+    vi.useFakeTimers()
+    const { stream, writes } = fakeStdout(80)
+    const repaint = vi.fn()
+    const stop = repaintOnDisturbance(stream, repaint, { every: 1_000, gap: 5_000 })
+
+    stream.emit('resize')
+    expect(repaint).toHaveBeenCalledTimes(1)
+    expect(writes).toEqual(['\u001B[2J\u001B[H'])
+
+    vi.advanceTimersByTime(3_000)
+    expect(repaint).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(Date.now() + 60_000)
+    vi.advanceTimersByTime(1_000)
+    expect(repaint).toHaveBeenCalledTimes(2)
+
+    stop()
+    stream.emit('resize')
+    expect(repaint).toHaveBeenCalledTimes(2)
   })
 })

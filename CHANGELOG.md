@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The control screen clears and draws itself again after the terminal window changes size and after the computer slept; before, parts of an old frame could stay above the current one.
 - After every stage the conveyor stops the processes that still run from the task workspace (dev servers, applications started for tests) and removes the Docker containers named `conveyor-<task>-…`; the stage prompt asks the harness to name its containers so and to stop what it started. Before, such servers and databases kept running until someone stopped them, and they could hold ports that later tasks needed. The log names what was stopped.
 
 ## 0.3.1 — 2026-10-20

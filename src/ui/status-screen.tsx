@@ -5,6 +5,7 @@ import type { Activity } from '../engine/engine.js'
 import type { RunnerEvent } from '../runner.js'
 import type { StatusSnapshot } from '../status.js'
 import { BACKLOG, CELL_WIDTH, arrivedColumns, STATUS_COLUMNS, boardLines, columnTasks, helpLines, statusLines, usageLines, type Line, type StatusView } from './status-lines.js'
+import { repaintOnDisturbance } from './terminal.js'
 import { clock } from './time.js'
 import { taskLines, type SessionView, type Target, type TaskControl, type TaskDetail } from './task-lines.js'
 import { taskRef, taskSlug } from '../board/board.js'
@@ -44,6 +45,7 @@ type Props = {
   control?: TaskControl
   notice?: string
   onAction?: (action: HubAction) => void
+  repaint?: number
 }
 
 type Panel = 'status' | 'help' | 'usage' | 'log' | 'task' | 'board' | 'watch'
@@ -566,7 +568,7 @@ export async function showStatus(
   options: { runner?: RunnerControl; control?: TaskControl; notice?: string; refreshMs?: number } = {},
 ): Promise<HubAction> {
   let next: HubAction = { kind: 'quit' }
-  const app = render(
+  const screen = (repaint: number) => (
     <StatusScreen
       load={load}
       refreshMs={options.refreshMs ?? 30_000}
@@ -574,9 +576,16 @@ export async function showStatus(
       {...(options.control ? { control: options.control } : {})}
       {...(options.notice ? { notice: options.notice } : {})}
       onAction={(action) => (next = action)}
-    />,
-    { alternateScreen: true },
+      repaint={repaint}
+    />
   )
+  let repaints = 0
+  const app = render(screen(repaints), { alternateScreen: true })
+  const stop = repaintOnDisturbance(process.stdout, () => {
+    app.clear()
+    app.rerender(screen(++repaints))
+  })
   await app.waitUntilExit()
+  stop()
   return next
 }
