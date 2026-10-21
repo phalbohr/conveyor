@@ -123,11 +123,11 @@ describe('StatusScreen', () => {
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2), { timeout: 5_000 })
   })
 
-  it('toggles the help with h and scrolls it within the window', async () => {
+  it('toggles the help with ? and scrolls it within the window', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await new Promise((resolve) => setTimeout(resolve, 100))
-    stdin.write('h')
+    stdin.write('?')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
     expect(lastFrame()).toContain('↑↓ PgUp PgDn scroll')
     const frame = lastFrame()?.split('\n') ?? []
@@ -144,7 +144,7 @@ describe('StatusScreen', () => {
     expect(lastFrame()).not.toContain('conveyor help')
     expect((lastFrame() ?? '').split('\n').length).toBeLessThanOrEqual(24)
     await new Promise((resolve) => setTimeout(resolve, 100))
-    stdin.write('h')
+    stdin.write('?')
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
   })
 
@@ -153,7 +153,7 @@ describe('StatusScreen', () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
-    stdin.write('h')
+    stdin.write('?')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
     const first = () => Number(lastFrame()?.match(/lines (\d+)–/)?.[1])
     expect(first()).toBe(1)
@@ -598,7 +598,7 @@ describe('StatusScreen as the hub', () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
     await settle()
-    stdin.write('h')
+    stdin.write('?')
     await vi.waitFor(() => expect(lastFrame()).toContain('conveyor help'), { timeout: 5_000 })
     for (let step = 0; step < 40 && !lastFrame()?.includes('this screen'); step++) {
       stdin.write('\u001B[B')
@@ -611,22 +611,28 @@ describe('StatusScreen as the hub', () => {
     expect(lines[row + 1]?.trim().length).toBeGreaterThan(0)
   })
 
-  it('asks the conveyor-help skill from the help screen with a', async () => {
+  it('asks the harness with the conveyor-help skill with h, from the main screen and from the help screen', async () => {
     const actions: HubAction[] = []
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
-    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[h] ask the harness · [?] help'), { timeout: 5_000 })
     await settle()
-    stdin.write('?')
-    await vi.waitFor(() => expect(lastFrame()).toContain('[a] ask the conveyor-help skill'), { timeout: 5_000 })
-    await settle()
-    stdin.write('a')
+    stdin.write('h')
     await vi.waitFor(() => expect(actions).toEqual([{ kind: 'help' }]), { timeout: 5_000 })
+
+    const help = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} onAction={(action) => actions.push(action)} />)
+    await vi.waitFor(() => expect(help.lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    await settle()
+    help.stdin.write('?')
+    await vi.waitFor(() => expect(help.lastFrame()).toContain('[h] ask the harness with the conveyor-help skill'), { timeout: 5_000 })
+    await settle()
+    help.stdin.write('h')
+    await vi.waitFor(() => expect(actions).toEqual([{ kind: 'help' }, { kind: 'help' }]), { timeout: 5_000 })
   })
 
   it('closes help, usage, and log with Esc and names the way back', async () => {
     const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} />)
     await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
-    for (const [key, title] of [['h', 'conveyor help · [h] or [Esc] back'], ['u', 'Usage · [u] or [Esc] back'], ['o', '[o] or [Esc] back']] as const) {
+    for (const [key, title] of [['?', 'conveyor help · [?] or [Esc] back'], ['u', 'Usage · [u] or [Esc] back'], ['o', '[o] or [Esc] back']] as const) {
       await settle()
       stdin.write(key)
       await vi.waitFor(() => expect(lastFrame()).toContain(title), { timeout: 5_000 })

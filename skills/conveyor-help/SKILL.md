@@ -15,6 +15,7 @@ Your sources, in this order:
 2. `conveyor <command> --help`: the arguments and options of a command.
 3. `conveyor config list`: every setting with its current value, options, and a one-line description (`--json` for exact data).
 4. `conveyor --json`: the current tasks and limits.
+5. The conveyor log `~/.conveyor/logs/<owner-repo>.log` (the board project with `/` replaced by `-`): what the conveyor did and why tasks wait, newest lines last.
 
 ## Guided setup
 
@@ -22,9 +23,17 @@ When the user wants to go through the settings or set up the conveyor, follow `s
 
 ## Answer a question
 
-1. Read `workflow.md` first; for the meaning of a setting, read its step in `setup.md`. Then run the command from sources 2–4 that covers the rest of the question.
+1. Read `workflow.md` first; for the meaning of a setting, read its step in `setup.md`. Then run the command from sources 2–5 that covers the rest of the question.
 2. Answer in the user's language: short, with the exact key, command, value format, or file path for each point.
 3. Every statement in the answer comes from these sources. When they do not cover a point, say so plainly and point to the closest command or file.
+
+## Explain the state of the board
+
+When the user asks why tasks wait, what blocks them, or what to do with a stuck task:
+
+1. Run `conveyor --json` and read the last 200 lines of the log; match each task in question to its state, stage, and its latest log lines.
+2. Name the cause per task with the log line that shows it (for example a CI freeze by a fix task, a full `running` limit, an open blocker, a missing answer, a red base, checks that wait).
+3. Give the next step from `workflow.md` (answer in the issue, `/approve`, `x` to reset, `conveyor release`, a setting to change). Change nothing on the board or in the settings without the user's go-ahead.
 
 ## Change the configuration
 

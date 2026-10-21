@@ -1,3 +1,4 @@
+import { logFile } from '../runner.js'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -145,7 +146,7 @@ export async function helpSessionCommand(context: Context): Promise<number> {
   const folder = config.live.harness === 'claude' ? '.claude' : '.agents'
   const installed = [context.cwd, context.home].some((base) => existsSync(join(base, folder, 'skills', 'conveyor-help', 'SKILL.md')))
   if (!installed) skillInstall({ ...context, stdout: () => undefined }, {}, false)
-  const prompt = 'Use the conveyor-help skill. Help me with the conveyor of this project: answer my questions about the workflow, the board, and the settings, or walk me through the setup.'
+  const prompt = `Use the conveyor-help skill. Help me with the conveyor of this project: answer my questions about the workflow, the settings, and the current state of the board (why tasks wait, what blocks them, what to do with stuck tasks), or walk me through the setup. For the state, read \`conveyor --json\` and the conveyor log ${logFile(context.home, config.board.project)}; change nothing on the board without my go-ahead.`
   const command = liveCommand(context, config, prompt)
   if (!command.ok) return fail(context, command.error)
   const code = await context.interact(command.command, command.args, { cwd: context.cwd, env: { ...childEnv(process.env), ...command.env } })

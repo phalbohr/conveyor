@@ -98,7 +98,7 @@ Keys on the main screen:
 - `b`: open the board in the browser.
 - `n`: new task: `e` in your editor, `i` one-line idea, `h` live harness session.
 - `a`: attach to a waiting task; `l`: release a task; `e`: settings editor.
-- `h` or `?`: help. On the help screen, `a` opens a live session with the `conveyor-help` skill and installs the skill first when it is missing.
+- `h`: ask the harness: a live session with the `conveyor-help` skill (installed first when it is missing) for questions about the workflow, the settings, and the state of the board, for example why tasks wait or what to do with a stuck one; it reads `conveyor --json` and the log. `?`: help; `h` there opens the same session.
 
 Keys on a task:
 
@@ -141,7 +141,7 @@ A stop at once aborts the running stages. They restart from their beginning on t
 | how a harness is started, its endpoint | `config.yaml`, `local.yaml` | `harnesses` |
 | where idea, story, and plan are stored | `config.yaml`, `local.yaml` | `artifacts` (`board`, `repo`, `path`) |
 | the documentation language / my chat language | `config.yaml` / `local.yaml` | `language.docs` / `language.chat` |
-| the harness and model of my live sessions (`new`, `attach`, `h` on a task, `a` in help) | `local.yaml` | `live.harness`, `live.model`, `live.effort` (empty: `defaults`) |
+| the harness and model of my live sessions (`new`, `attach`, `h` on a task or on the main screen to ask the harness) | `local.yaml` | `live.harness`, `live.model`, `live.effort` (empty: `defaults`) |
 | approvals needed for merge, merge method, closing done issues | `config.yaml` | `review.approvals`, `review.count_own_approvals` (default `false`: approvals of the account the conveyor runs as do not count; `true` when you run it as your own account and approve with it), `merge_method`, `close_on_done` |
 | a plan in parts: one pull request per part, or all parts in one | `config.yaml` | `parts` (`separate`, `together`) |
 | timeouts and retries | `config.yaml` | `timeouts`, `retry` |

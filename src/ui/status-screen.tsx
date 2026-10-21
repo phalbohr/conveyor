@@ -207,8 +207,8 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         act({ kind: 'quit' })
         return
       }
-      if (key === '?' || (key === 'h' && panel === 'help')) toggle('help')
-      if (key === 'a' && panel === 'help') {
+      if (key === '?') toggle('help')
+      if (key === 'h' && panel === 'help') {
         act({ kind: 'help' })
         return
       }
@@ -280,7 +280,10 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
       }
       if (special.return) setView((now) => ({ ...now, open: !now.open }))
       if (special.downArrow && tasks.length > 0) setView((now) => ({ ...now, open: true, focus: 'tasks', task: 0 }))
-      if (key === 'h') toggle('help')
+      if (key === 'h') {
+        act({ kind: 'help' })
+        return
+      }
       if (key === 'b' && control) void control.openBoard().catch(fail)
       if (key === 'e') act({ kind: 'settings' })
       if (key === 'n') setInput({ kind: 'new' })
@@ -494,12 +497,12 @@ function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefine
     return `[↑↓ PgUp PgDn] scroll · [c] comment · [b] browser · [h] harness · [w] watch · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
   }
   if (panel === 'board') return `[Enter] add what is missing · [↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
-  if (panel === 'help') return `[a] ask the conveyor-help skill in a live session · [↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
+  if (panel === 'help') return `[h] ask the harness (conveyor-help skill) · [↑↓ PgUp PgDn] scroll · [?] or [Esc] back · [q] quit`
   if (panel !== 'status') return `[↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
   if (view.focus === 'tasks') {
     return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness · [w] watch${view.column === BACKLOG ? ' · [i] form::idea on/off' : ' · [x] reset'} · [Esc] columns · [?] help · [q] quit${time}`
   }
-  return `${runner ? `[s] ${runner.running ? (runner.finishing ? 'stop now' : 'stop') : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [k] board check · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] help · [q] quit${time}`
+  return `${runner ? `[s] ${runner.running ? (runner.finishing ? 'stop now' : 'stop') : 'start'} conveyor · ` : ''}[←→] column · [Enter] list · [↓] tasks · [b] board in browser · [k] board check · [u] usage · [o] log · [n] new · [a] attach · [l] release · [e] settings · [r] refresh · [h] ask the harness · [?] help · [q] quit${time}`
 }
 
 function heightOf(text: string, columns: number) {

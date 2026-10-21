@@ -113,7 +113,7 @@ Personal and never committed:
 - `limits.daily_tokens`: no new tasks after this many tokens a day (0 = off);
 - `limits.subscription.five_hour_reserve`, `seven_day_reserve`: percent of the subscription windows kept for your own work (claude and codex report their windows; command harnesses do not);
 - `language.chat`: the language of `conveyor new` and `conveyor attach`;
-- `live.harness`, `live.model`, `live.effort`: the harness and model of my live sessions (`new`, `attach`, `h` on a task, `a` in help); empty takes `defaults`. Offer a strong interactive model here; `claude`, `codex`, `opencode`, and `kilocode` support live sessions;
+- `live.harness`, `live.model`, `live.effort`: the harness and model of my live sessions (`new`, `attach`, `h` on a task or on the main screen to ask the harness); empty takes `defaults`. Offer a strong interactive model here; `claude`, `codex`, `opencode`, and `kilocode` support live sessions;
 - `poll_interval`, `pickup.include_unassigned`;
 - `session_logs`: record what the harness does, to watch it with `w` or `conveyor watch`;
 - `repo_paths` (with `repos` in `config.yaml`): existing clones of the repositories, for example submodules of a parent repository; a path is absolute, starts with `~`, or is relative to the project folder.
