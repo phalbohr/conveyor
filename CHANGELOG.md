@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Development: `vite` 8.3.4 for the test runner, which fixes three advisories in `launch-editor` of 8.3.2 (development only; the npm package does not include it).
 - In a long task list of the control screen the selected task stays visible, also when tasks take several lines, and PgUp/PgDn (Shift+↑↓) move the selection by five tasks; before, the list could not be scrolled to its last tasks.
 - The control screen clears and draws itself again after the terminal window changes size and after the computer slept; before, parts of an old frame could stay above the current one.
 - After every stage the conveyor stops the processes that still run from the task workspace (dev servers, applications started for tests) and removes the Docker containers named `conveyor-<task>-…`; the stage prompt asks the harness to name its containers so and to stop what it started. Before, such servers and databases kept running until someone stopped them, and they could hold ports that later tasks needed. The log names what was stopped.
