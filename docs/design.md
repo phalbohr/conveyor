@@ -47,6 +47,10 @@ Commands:
 | `conveyor watch <issue> [-f]` | show the session log of a task (`session_logs: true`); `-f` follows it |
 | `conveyor reset <issue> [--form \| --close \| --delete]` | start a task over: stop it, close its PR/MR, delete its branch and workspace, clear the workpad, return it to Backlog with a form; or end it: `--close` closes the issue, `--delete` deletes it (falls back to closing it without the right to delete) |
 
+## Leftovers of a stage
+
+After every stage, also after an aborted one, the runner stops each process whose command line contains the path of the task workspace (SIGTERM, then SIGKILL after 5 s) and removes the Docker containers whose name starts with `conveyor-<task slug>-`. The stage prompt tells the harness to name the containers it starts that way and to stop what it started. Containers with other names are not touched. The log says `task N: stopped what the <stage> stage left running: …`.
+
 ## Language and formats
 
 - `language.docs` in `config.yaml` is the team language for everything the team sees: artifacts, issue bodies, questions and approval requests on the board, the workpad, and the results of live sessions. Default: English.

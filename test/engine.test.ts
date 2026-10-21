@@ -11,7 +11,7 @@ import type { StageResult } from '../src/harness/harness.js'
 import { FakeWorkspaces, deferred, stageHarness, stageRuns } from './fakes.js'
 import { tempDir } from './helpers.js'
 
-type Setup = { config?: string; local?: string; script?: Script; instructions?: Record<string, string>; wake?: () => void }
+type Setup = { config?: string; local?: string; script?: Script; instructions?: Record<string, string>; wake?: () => void; leftovers?: (workspace: string, slug: string) => Promise<string[]> }
 
 function setup(options: Setup = {}) {
   const settings = tempDir('conveyor-settings-')
@@ -37,6 +37,7 @@ function setup(options: Setup = {}) {
     home,
     loadConfig: () => loadConfig(settings),
     ...(options.wake ? { wake: options.wake } : {}),
+    ...(options.leftovers ? { leftovers: options.leftovers } : {}),
   })
   const cycle = async () => {
     await engine.tick()
@@ -351,6 +352,21 @@ describe('Engine scheduling', () => {
     await engine.idle()
     expect(runs()).toContain('1:review')
     expect(runs().filter((entry) => entry === '1:implement')).toHaveLength(1)
+  })
+
+  it('cleans up what each stage left running and logs it', async () => {
+    const calls: string[] = []
+    const { board, cycle, workspaces, runs } = setup({
+      leftovers: async (workspace, slug) => {
+        calls.push(`${workspace} ${slug}`)
+        return calls.length === 1 ? ['process 4242'] : []
+      },
+    })
+    await board.createTask('Clean', 'p', { form: 'plan' })
+    await cycle()
+    const path = (await workspaces.prepare('1')).path
+    expect(calls.length).toBe(runs().length)
+    expect(new Set(calls)).toEqual(new Set([`${path} 1`]))
   })
 
   it('skips a task claimed by another workstation', async () => {

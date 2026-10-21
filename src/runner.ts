@@ -22,6 +22,7 @@ import { QuotaStore, UsageLedger } from './usage.js'
 import { GitWorkspaces, type Workspaces } from './workspaces.js'
 import { MultiWorkspaces } from './multi-workspaces.js'
 import { repoClones, repoProjects } from './repos.js'
+import { stopLeftovers } from './engine/leftovers.js'
 
 export type RunnerEvent = { time: string; level: 'info' | 'warning' | 'error'; text: string }
 export type RunnerSetup = { settings: string; config: Config; board: Board; secrets: () => string[] }
@@ -130,6 +131,7 @@ export class Runner {
       loadConfig: () => loadConfig(settings),
       log,
       redact: (text) => redactSecrets(text, this.setup.secrets()),
+      leftovers: (workspace, slug) => stopLeftovers(this.context.run, workspace, slug),
       wake: () => this.cycle(),
     }))
 

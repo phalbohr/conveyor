@@ -1,4 +1,5 @@
-import { taskRef, type Task } from '../board/board.js'
+import { containerPrefix } from './leftovers.js'
+import { taskRef, taskSlug, type Task } from '../board/board.js'
 
 export type GateMode = 'interactive' | 'autonomous' | 'smart'
 
@@ -50,6 +51,7 @@ export function buildPrompt(input: PromptInput): string {
     `You run the "${input.stage}" stage of the development conveyor for task ${taskRef(input.task.id)}: ${input.task.title}`,
     `## Stage instructions\n\n${input.instructions.trim() || 'No extra instructions.'}`,
     BOUNDARIES,
+    `## Services\n\nWhen a check needs a service such as a database, name every Docker container you start \`${containerPrefix(taskSlug(input.task.id))}<service>\`, and stop the servers and containers you started before you finish. After the stage the conveyor stops every process that still runs from this workspace and removes the containers with this prefix.`,
   ]
   if (input.gate) {
     const criteria = input.gate.mode === 'smart' && input.gate.criteria.trim() ? `\n\n${input.gate.criteria.trim()}` : ''

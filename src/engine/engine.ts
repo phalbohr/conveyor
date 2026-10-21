@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import { join } from 'node:path'
-import { compareIds, onBoard, taskRef, type Board, type Where, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
+import { compareIds, onBoard, taskRef, taskSlug, type Board, type Where, type Comment, type PullRequest, type Task, type TaskForm } from '../board/board.js'
 import type { Config, Harness as HarnessName, LoadResult, Stage } from '../config.js'
 import type { Harness, QuotaWindow, StageOutput, StageResult } from '../harness/harness.js'
 import { LENGTH_LIMIT, NO_USAGE, failed, usageLimitUntil } from '../harness/harness.js'
@@ -45,6 +45,7 @@ export type EngineOptions = {
   log?: (message: string) => void
   redact?: (text: string) => string
   wake?: () => void
+  leftovers?: (workspace: string, slug: string) => Promise<string[]>
 }
 
 type Running = { controller: AbortController; promise: Promise<void> }
@@ -1604,6 +1605,8 @@ export class Engine {
       clearTimeout(watchdog)
       context.signal.removeEventListener('abort', stop)
       if (!context.signal.aborted) await this.options.workspaces.runHook('after_run', context.workspace)
+      const left = await this.options.leftovers?.(context.workspace, taskSlug(task.id)).catch(() => [])
+      if (left?.length) this.log(`task ${task.id}: stopped what the ${stage.name} stage left running: ${left.join(', ')}`)
     }
   }
 

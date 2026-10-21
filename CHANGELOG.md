@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- After every stage the conveyor stops the processes that still run from the task workspace (dev servers, applications started for tests) and removes the Docker containers named `conveyor-<task>-…`; the stage prompt asks the harness to name its containers so and to stop what it started. Before, such servers and databases kept running until someone stopped them, and they could hold ports that later tasks needed. The log names what was stopped.
+
 ## 0.3.1 — 2026-10-20
 
 The first published version of this line. The tag `v0.3.0` was set but never published to npm; 0.3.1 contains all of it and the fixes of its review.
