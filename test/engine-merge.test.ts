@@ -316,6 +316,16 @@ describe('merge mode ai', () => {
     expect(board.merges).toEqual([])
     expect((await board.getTask('1'))?.state).toBe('in-progress')
 
+    const states: string[] = []
+    const setState = board.setState.bind(board)
+    board.setState = async (id, state) => {
+      states.push(state)
+      return setState(id, state)
+    }
+    await expireRetry()
+    await cycle()
+    expect(states).toEqual([])
+
     board.updatePullRequest('1', { checks: 'success' })
     await expireRetry()
     await cycle()

@@ -452,7 +452,7 @@ export class Engine {
       await this.stopWithError(run, state.stage ?? waiting?.stage ?? 'start', `**This task cannot run here:** ${wrong}`)
       return
     }
-    if (initial.state !== 'queued' || state.stage !== LAND) await board.setState(id, 'in-progress')
+    if (initial.state !== 'in-progress' && (initial.state !== 'queued' || state.stage !== LAND)) await board.setState(id, 'in-progress')
     if (initial.form) {
       state.form = initial.form
       await board.setForm(id, undefined)
