@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Tasks with green checks wait in a merge queue: priority first, then the time their checks turned green. Only the first task is rebased onto the latest base branch and tested again; the others wait on their old base and show `merge waits: queued behind task #N`. Before, every waiting task was rebased after each merge and ran its CI again, so with several ready tasks the CI runs grew with the square of their number, the runners slowed down, and a task could lose the race many times.
+- Tasks with green checks wait in a merge queue: priority first, then the time their checks turned green. Only the first task is rebased onto the latest base branch and tested again; the others wait on their old base in the Queued column and show `merge waits: queued behind task #N`; a task goes back to In progress when its turn comes. Before, every waiting task was rebased after each merge and ran its CI again, so with several ready tasks the CI runs grew with the square of their number, the runners slowed down, and a task could lose the race many times.
 - A merge commit whose CI a newer commit of the base branch cancelled (for example `concurrency: cancel-in-progress` in a GitHub workflow, or an auto-cancelled GitLab pipeline) counts as passed, because the CI of the newer commit tests this merge too. Before, the cancellation counted as a red base branch and could start a fix task.
 - The reserve warning of a subscription window goes away when the window resets; before, it stayed until the next probe, although the conveyor already took tasks again.
 - In `conveyor config`, the right arrow on a triage setting without its own value goes through every option; before, it stopped at the value inherited from `defaults`.

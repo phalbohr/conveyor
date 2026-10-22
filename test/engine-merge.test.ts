@@ -509,6 +509,12 @@ describe('merge against the latest base branch', () => {
       events.push(`merge:${id}`)
       return merge(id, ...rest)
     }
+    const states: string[] = []
+    const setState = board.setState.bind(board)
+    board.setState = async (id, state) => {
+      if (id === '2') states.push(state)
+      return setState(id, state)
+    }
     workspaces.taskSyncs.set('1', ['rebased', 'current'])
     workspaces.taskSyncs.set('2', ['rebased', 'current'])
     await board.createTask('Add login', 'p', { form: 'plan' })
@@ -517,6 +523,11 @@ describe('merge against the latest base branch', () => {
     await cycle()
     expect(logs.join('\n')).toContain('task 2: merge waits: queued behind task #1')
     expect(workspaces.synced.filter((id) => id === '2')).toEqual([])
+    expect((await board.getTask('2'))?.state).toBe('queued')
+    const changes = states.length
+    await expireRetry('2')
+    await cycle()
+    expect(states).toHaveLength(changes)
 
     for (let round = 0; round < 6 && board.merges.length < 2; round++) {
       await expireRetry('1')
@@ -526,6 +537,7 @@ describe('merge against the latest base branch', () => {
     }
     expect(board.merges).toHaveLength(2)
     expect(events.indexOf('sync:2')).toBeGreaterThan(events.indexOf('merge:1'))
+    expect(states.slice(states.indexOf('queued')).filter((state, index, all) => state !== all[index - 1])).toEqual(['queued', 'in-progress', 'done'])
   })
 
   it('rebases a branch with failed checks onto a newer base before it repairs anything', async () => {

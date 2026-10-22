@@ -51,7 +51,7 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
         else if (status.runner.here) details.push(`○ waits for its next attempt${heartbeat}`)
         else details.push(`runs in conveyor pid ${status.runner.pid ?? '?'}${heartbeat}`)
       }
-      if (task.state === 'queued') details.push(task.held ?? 'waits for a free slot')
+      if (task.state === 'queued') details.push(task.held ?? task.parked ?? 'waits for a free slot')
       if (task.attempt > 0 && !task.activity) details.push(`attempt ${task.attempt + 1}`)
       if (task.retryAt && !task.activity) details.push(Date.parse(task.retryAt) > now ? `retry ${time(task.retryAt)}` : status.runner.running ? 'resumes next cycle' : 'resumes on start')
       if (task.state === 'needs-input') details.push(task.answered ? (task.held ? `answered, ${task.held}` : 'answered, resumes next cycle') : `waits for your answer since ${task.waitingSince ? time(task.waitingSince) : '?'}`)
@@ -197,7 +197,7 @@ export function helpLines(): Line[] {
     row('backlog 8|4|6|2', 'tasks of the whole board in Backlog: no form | form::idea | form::story | form::plan'),
     row('+3 released', 'started tasks nobody owns (after release): listed first in Backlog; the conveyor resumes them at their stage before new tasks'),
     row('in progress 1/3', 'my tasks in this column against my limit; needs input and review the same'),
-    row('queued 2', 'my answered tasks that wait for a free slot; they start before new tasks'),
+    row('queued 2', 'my tasks that wait for a free slot (they start before new tasks) or for their turn in the merge queue'),
     row('at a limit', 'the conveyor takes no new tasks until one moves on; [u] shows tokens and subscription windows'),
     row('CI freeze', 'one task fixes the CI (label fix::ci, on any workstation); merges wait until it is done, and while the base is red no new task starts · stuck: answer it, reset it, or hand it over with `conveyor release N` (`--force` when it has a private artifact of another member)'),
     row('←→ Enter ↓', 'select a column, list its tasks with stage or form, move down into the tasks'),

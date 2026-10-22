@@ -452,7 +452,7 @@ export class Engine {
       await this.stopWithError(run, state.stage ?? waiting?.stage ?? 'start', `**This task cannot run here:** ${wrong}`)
       return
     }
-    await board.setState(id, 'in-progress')
+    if (initial.state !== 'queued' || state.stage !== LAND) await board.setState(id, 'in-progress')
     if (initial.form) {
       state.form = initial.form
       await board.setForm(id, undefined)
@@ -838,7 +838,14 @@ export class Engine {
   private async landTask(run: TaskRun, turn: { keep: boolean }): Promise<'success' | 'failure' | 'stop'> {
     const { board } = this.options
     const { id, config, state } = run
+    let onBoard: Task['state']
+    let behind = false
     const wait = async (reason: string) => {
+      const column = behind ? 'queued' : onBoard === 'queued' ? 'in-progress' : undefined
+      if (column && column !== onBoard) {
+        await board.setState(id, column)
+        onBoard = column
+      }
       state.stage = LAND
       state.parked = `merge waits: ${reason}`
       state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
@@ -848,6 +855,7 @@ export class Engine {
     }
 
     const task = await this.mustGetTask(id)
+    onBoard = task.state
     if (task.openBlockers > 0) return wait('open blockers')
     if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; ${this.baseRed.fix ? `task ${taskRef(this.baseRed.fix)} fixes it first` : 'a fix task is chosen first'}`)
     const held = this.heldBy(id)
@@ -858,9 +866,17 @@ export class Engine {
       return wait(reason)
     }
     const pending = (reason: string) => (this.mergeQueue.has(id) ? queued(reason) : wait(reason))
-    const inLine = () => {
+    const inLine = async () => {
       const ahead = this.aheadInMergeQueue(id, task.priority)
-      return ahead ? queued(`queued behind task ${taskRef(ahead)}`) : undefined
+      if (ahead) {
+        behind = true
+        return queued(`queued behind task ${taskRef(ahead)}`)
+      }
+      if (onBoard === 'queued') {
+        await board.setState(id, 'in-progress')
+        onBoard = 'in-progress'
+      }
+      return undefined
     }
     if (multi && state.repos) return this.landRepos(run, multi, wait, { queued, pending, inLine })
     const pull = await board.pullRequest(id)
@@ -904,7 +920,7 @@ export class Engine {
     }
     else if (pull.mergeable === 'no') error = 'the branch has conflicts with the base branch'
     else {
-      const line = inLine()
+      const line = await inLine()
       if (line) return line
       if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return queued('another workstation merges')
       let synced: 'current' | 'rebased' | 'conflict' | 'unknown' = 'unknown'
@@ -946,7 +962,7 @@ export class Engine {
     run: TaskRun,
     multi: RepoWorkspaces,
     wait: (reason: string) => Promise<'stop'>,
-    queue: { queued: (reason: string) => Promise<'stop'>; pending: (reason: string) => Promise<'stop'>; inLine: () => Promise<'stop'> | undefined },
+    queue: { queued: (reason: string) => Promise<'stop'>; pending: (reason: string) => Promise<'stop'>; inLine: () => Promise<'stop' | undefined> },
   ): Promise<'success' | 'failure' | 'stop'> {
     const { board } = this.options
     const { id, config, state } = run
@@ -1031,7 +1047,7 @@ export class Engine {
       delete state.mergeError
       return 'success'
     }
-    const line = queue.inLine()
+    const line = await queue.inLine()
     if (line) return line
     if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return queue.queued('another workstation merges')
     let error: string | undefined

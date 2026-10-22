@@ -795,6 +795,13 @@ describe('liveness of tasks in progress', () => {
     expect(login(parked)?.detail).toContain('stage::land · ○ merge waits: the base branch CI is red; task #9 fixes it first')
     expect(login(parked)?.detail).not.toContain('waits for its next attempt')
   })
+
+  it('shows a task queued for merge with its place instead of a free slot', () => {
+    const queued = { ...snapshot, runner: { running: true, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, state: 'queued' as const, stage: 'land', parked: 'merge waits: queued behind task #3' } : task)) }
+    const detail = columnTasks(queued, 2).find((task) => task.id === '4')?.detail
+    expect(detail).toContain('merge waits: queued behind task #3')
+    expect(detail).not.toContain('free slot')
+  })
 })
 
 describe('released tasks in the backlog', () => {
