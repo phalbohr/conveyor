@@ -3,6 +3,7 @@ import { undescribedNotice } from '../stage-catalog.js'
 import { boardCheckLines, needsAttention, type BoardCheck } from '../board-check.js'
 import { dateTime } from './time.js'
 import type { StatusSnapshot } from '../status.js'
+import type { QuotaWindow } from '../harness/harness.js'
 import { taskRef } from '../board/board.js'
 
 export type Line = { text: string; tone?: 'muted' | 'warning' | 'error' | 'ok' | 'title'; segments?: { text: string; selected?: boolean; marked?: boolean; flash?: boolean }[]; cells?: [string, string]; cellWidth?: number; selected?: boolean }
@@ -178,10 +179,9 @@ export function usageLines(status: StatusSnapshot): Line[] {
 }
 
 function reserveReached(quota: StatusSnapshot['limits']['subscription'][string]) {
-  return Boolean(
-    (quota.fiveHour && quota.fiveHourReserve > 0 && quota.fiveHour.utilization * 100 >= 100 - quota.fiveHourReserve) ||
-      (quota.sevenDay && quota.sevenDayReserve > 0 && quota.sevenDay.utilization * 100 >= 100 - quota.sevenDayReserve),
-  )
+  const reached = (window: QuotaWindow | undefined, reserve: number) =>
+    window && reserve > 0 && Date.parse(window.resetsAt) > Date.now() && window.utilization * 100 >= 100 - reserve
+  return Boolean(reached(quota.fiveHour, quota.fiveHourReserve) || reached(quota.sevenDay, quota.sevenDayReserve))
 }
 
 export function helpLines(): Line[] {

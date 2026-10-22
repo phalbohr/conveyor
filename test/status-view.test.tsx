@@ -92,7 +92,19 @@ describe('statusLines', () => {
     expect(lines[2]?.text).toContain('Squash merges')
   })
 
+  it('drops the reserve warning once its window has reset', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-05T14:01:00.000Z'))
+    const text = statusLines(snapshot).map((line) => line.text).join('\n')
+    const usage = usageLines(snapshot)
+    vi.useRealTimers()
+    expect(text).not.toContain('subscription reserve reached')
+    expect(usage.find((line) => line.text.startsWith('claude: 5h'))?.tone).toBeUndefined()
+  })
+
   it('shows the runner, limits, subscription windows, my tasks, and the team queue', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-05T12:00:00.000Z'))
     const lines = statusLines(snapshot)
     const text = lines.map((line) => line.text).join('\n')
     expect(text).toContain('acme/app (github) · @me · stopped')
@@ -110,6 +122,7 @@ describe('statusLines', () => {
     expect(text).toContain('Team: 2 unclaimed · 1 claimed by others')
     expect(lines.find((line) => line.text.includes('#4'))?.tone).toBe('error')
     expect(usageLines(snapshot).find((line) => line.text.startsWith('claude'))?.tone).toBe('warning')
+    vi.useRealTimers()
   })
 })
 
