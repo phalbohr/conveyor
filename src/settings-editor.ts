@@ -393,7 +393,7 @@ export class SettingsDocument {
   private field(group: Field['group'], file: keyof typeof FILES, spec: Spec): Field {
     const path = spec.key.split('.')
     const raw = this.docs[file].getIn(path)
-    const effective = group === 'Stages' ? undefined : (spec.fallback ?? pick(this.config, spec.key))
+    const effective = group === 'Stages' || path[0] === 'triage' ? undefined :(spec.fallback ?? pick(this.config, spec.key))
     const value = raw ?? effective
     const text = value === undefined || value === null ? '' : String(value)
     const options = spec.options && text && !spec.options.includes(text) ? [text, ...spec.options] : spec.options

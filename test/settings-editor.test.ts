@@ -117,6 +117,13 @@ describe('SettingsDocument', () => {
     expect(doc.fields().find((f) => f.key === 'stages.implement.permission_mode')).toMatchObject({ value: '', inherited: 'bypassPermissions', help: 'every tool without asking' })
   })
 
+  it('shows a triage value taken from the defaults as inherited', () => {
+    const doc = new SettingsDocument(settings(`${CONFIG}defaults: {harness: codex}\n`))
+    expect(doc.fields().find((f) => f.key === 'triage.harness')).toMatchObject({ value: '', inherited: 'codex' })
+    doc.set('triage.harness', 'claude')
+    expect(doc.fields().find((f) => f.key === 'triage.harness')).toMatchObject({ value: 'claude' })
+  })
+
   it('shows and saves timeouts and retries', () => {
     const doc = new SettingsDocument(settings(CONFIG))
     expect(doc.fields().find((f) => f.key === 'timeouts.heartbeat')).toMatchObject({ group: 'Team', value: '30m' })
