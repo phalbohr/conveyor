@@ -148,6 +148,8 @@ export class Engine {
   private baseRed?: { sha: string; fix?: string; failed: string[]; repairing?: boolean }
   private fixer?: string
   private readonly verifying = new Map<string, string>()
+  private readonly mergeQueue = new Map<string, { priority: number; since: number }>()
+  private mergeTurn: string | undefined
   private readonly limited = new Map<string, string>()
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
@@ -192,6 +194,7 @@ export class Engine {
     let awaitingReview = 0
     let backingOff = 0
     const parked = new Set<string>()
+    const landing = new Set<string>()
     let labeled: string | undefined
     const now = Date.now()
 
@@ -244,6 +247,7 @@ export class Engine {
             if (!pad?.state.retryAt || Date.parse(pad.state.retryAt) <= now) resumable.push(task)
             else if (task.state === 'in-progress' && !pad.state.parked) backingOff++
             if (pad?.state.parked) parked.add(task.id)
+            if (pad?.state.stage === LAND) landing.add(task.id)
           }
           break
         }
@@ -259,6 +263,7 @@ export class Engine {
     }
 
     if (this.halt.signal.aborted || this.draining) return
+    for (const id of this.mergeQueue.keys()) if (!landing.has(id) && !this.running.has(id) && !this.held.has(id)) this.leaveMergeQueue(id)
     const previous = this.fixer
     const fixer = (this.fixer = this.baseRed ? (this.baseRed.fix ?? '') : labeled)
     if (fixer && fixer !== previous) this.log(`CI freeze: task ${taskRef(fixer)} fixes the CI; ${this.baseRed ? 'new tasks and merges wait' : 'merges wait'}`)
@@ -813,6 +818,24 @@ export class Engine {
   }
 
   private async land(run: TaskRun): Promise<'success' | 'failure' | 'stop'> {
+    const turn = { keep: false }
+    return this.landTask(run, turn).finally(() => {
+      if (!turn.keep) this.leaveMergeQueue(run.id)
+    })
+  }
+
+  private aheadInMergeQueue(id: string, priority: number | undefined) {
+    if (!this.mergeQueue.has(id)) this.mergeQueue.set(id, { priority: priority ?? Number.MAX_SAFE_INTEGER, since: Date.now() })
+    this.mergeTurn ??= [...this.mergeQueue].sort(([, a], [, b]) => a.priority - b.priority || a.since - b.since)[0]?.[0]
+    return this.mergeTurn === id ? undefined : this.mergeTurn
+  }
+
+  private leaveMergeQueue(id: string) {
+    this.mergeQueue.delete(id)
+    if (this.mergeTurn === id) this.mergeTurn = undefined
+  }
+
+  private async landTask(run: TaskRun, turn: { keep: boolean }): Promise<'success' | 'failure' | 'stop'> {
     const { board } = this.options
     const { id, config, state } = run
     const wait = async (reason: string) => {
@@ -830,7 +853,16 @@ export class Engine {
     const held = this.heldBy(id)
     if (held) return wait(held)
     const multi = this.repoWorkspaces(config)
-    if (multi && state.repos) return this.landRepos(run, multi, wait)
+    const queued = (reason: string) => {
+      turn.keep = true
+      return wait(reason)
+    }
+    const pending = (reason: string) => (this.mergeQueue.has(id) ? queued(reason) : wait(reason))
+    const inLine = () => {
+      const ahead = this.aheadInMergeQueue(id, task.priority)
+      return ahead ? queued(`queued behind task ${taskRef(ahead)}`) : undefined
+    }
+    if (multi && state.repos) return this.landRepos(run, multi, wait, { queued, pending, inLine })
     const pull = await board.pullRequest(id)
     if (pull?.state === 'merged') return 'success'
     if (pull?.state === 'open' && pull.draft) return wait('the pull request is a draft; mark it ready for review')
@@ -860,7 +892,7 @@ export class Engine {
     }
     let error: string | undefined
     if (!pull || pull.state === 'closed') error = 'the pull request is closed'
-    else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait('checks are pending')
+    else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return pending('checks are pending')
     else if (pull.blocked && pull.checks !== 'failure') return wait(pull.blocked)
     else if (pull.checks === 'none' && this.checksMayStart(state, pull.headSha)) return wait('no checks yet; waiting for CI to start')
     else if (pull.checks === 'failure') {
@@ -872,7 +904,9 @@ export class Engine {
     }
     else if (pull.mergeable === 'no') error = 'the branch has conflicts with the base branch'
     else {
-      if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return wait('another workstation merges')
+      const line = inLine()
+      if (line) return line
+      if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return queued('another workstation merges')
       let synced: 'current' | 'rebased' | 'conflict' | 'unknown' = 'unknown'
       try {
         synced = await this.options.workspaces.syncBase(id).catch(() => 'unknown' as const)
@@ -890,8 +924,8 @@ export class Engine {
       } finally {
         await board.release(MERGE_LOCK)
       }
-      if (synced === 'unknown') return wait('the branch could not be compared with the latest base branch')
-      if (synced === 'rebased') return wait('the base branch moved; the branch is rebased onto it and waits for CI')
+      if (synced === 'unknown') return queued('the branch could not be compared with the latest base branch')
+      if (synced === 'rebased') return queued('the base branch moved; the branch is rebased onto it and waits for CI')
       if (synced === 'conflict') {
         state.stage = 'merge'
         state.reviewMode = 'fix'
@@ -908,7 +942,12 @@ export class Engine {
     return this.landFailed(run, error)
   }
 
-  private async landRepos(run: TaskRun, multi: RepoWorkspaces, wait: (reason: string) => Promise<'stop'>): Promise<'success' | 'failure' | 'stop'> {
+  private async landRepos(
+    run: TaskRun,
+    multi: RepoWorkspaces,
+    wait: (reason: string) => Promise<'stop'>,
+    queue: { queued: (reason: string) => Promise<'stop'>; pending: (reason: string) => Promise<'stop'>; inLine: () => Promise<'stop'> | undefined },
+  ): Promise<'success' | 'failure' | 'stop'> {
     const { board } = this.options
     const { id, config, state } = run
     const repos = (state.repos ??= {})
@@ -975,7 +1014,7 @@ export class Engine {
         entry.headSha = pushed
         return wait(`${repo} had commits that were not pushed; they are pushed now and the branch waits for CI`)
       }
-      if (pull.checks === 'pending' || pull.mergeable === 'unknown') return wait(`checks of ${repo} are pending`)
+      if (pull.checks === 'pending' || pull.mergeable === 'unknown') return queue.pending(`checks of ${repo} are pending`)
       if (pull.blocked && pull.checks !== 'failure') return wait(`${repo}: ${pull.blocked}`)
       if (pull.checks === 'none' && this.checksMayStart(entry, pull.headSha)) return wait(`no checks yet in ${repo}; waiting for CI to start`)
       if (pull.checks === 'failure') {
@@ -992,16 +1031,18 @@ export class Engine {
       delete state.mergeError
       return 'success'
     }
-    if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return wait('another workstation merges')
+    const line = queue.inLine()
+    if (line) return line
+    if (!(await this.lock(MERGE_LOCK, LOCK_TTL))) return queue.queued('another workstation merges')
     let error: string | undefined
     try {
       for (const { repo } of ready) {
         const entry = repos[repo] as RepoPull
         const synced = await multi.repoSync(id, repo).catch(() => 'unknown' as const)
-        if (synced === 'unknown') return wait(`${repo} could not be compared with its latest base branch`)
+        if (synced === 'unknown') return queue.queued(`${repo} could not be compared with its latest base branch`)
         if (synced === 'rebased') {
           entry.headSha = await multi.repoPush(id, repo)
-          return wait(`the base branch of ${repo} moved; the branch is rebased onto it and waits for CI`)
+          return queue.queued(`the base branch of ${repo} moved; the branch is rebased onto it and waits for CI`)
         }
         if (synced === 'conflict') {
           state.stage = 'merge'
@@ -1054,6 +1095,14 @@ export class Engine {
     return 'stop'
   }
 
+  private async verdict(sha: string, repo: string | undefined) {
+    const checks = await this.options.board.commitChecks(sha, repo).catch(() => 'pending' as const)
+    if (checks !== 'cancelled') return checks
+    if ((await this.options.board.baseHead(repo).catch(() => sha)) === sha) return 'failure'
+    this.log(`a newer commit of the base branch${repo ? ` of ${repo}` : ''} cancelled the CI at ${sha.slice(0, 7)}; the CI of the newer commit checks this merge too`)
+    return 'success'
+  }
+
   private async verifyBase(run: TaskRun): Promise<boolean> {
     const { board } = this.options
     const { id, config, state } = run
@@ -1061,7 +1110,7 @@ export class Engine {
       for (const [repo, entry] of Object.entries(state.repos)) {
         if (!entry.verify) continue
         this.deciding.add(entry.verify.sha)
-        const checks = await board.commitChecks(entry.verify.sha, repo).catch(() => 'pending' as const)
+        const checks = await this.verdict(entry.verify.sha, repo)
         if (checks === 'pending' || (checks === 'none' && Date.now() - Date.parse(entry.verify.since) < CHECKS_GRACE)) {
           state.parked = `merged; waits for the CI of ${repo} at ${entry.verify.sha.slice(0, 7)}`
           state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
@@ -1087,7 +1136,7 @@ export class Engine {
     if (!verify) return true
     this.verifying.set(verify.sha, id)
     this.deciding.add(verify.sha)
-    const checks = await board.commitChecks(verify.sha).catch(() => 'pending' as const)
+    const checks = await this.verdict(verify.sha, undefined)
     if (checks === 'pending' || (checks === 'none' && Date.now() - Date.parse(verify.since) < CHECKS_GRACE)) {
       state.parked = `merged; waits for the CI of the base branch at ${verify.sha.slice(0, 7)}`
       state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
@@ -1221,7 +1270,7 @@ export class Engine {
   private async guardRepo(repo: string | undefined, config: Config): Promise<'red' | 'pending' | 'green'> {
     const { board } = this.options
     const sha = await board.baseHead(repo)
-    const checks = await board.commitChecks(sha, repo)
+    const checks = (await board.commitChecks(sha, repo)).replace('cancelled', 'failure')
     if (checks === 'success') return 'green'
     if (checks !== 'failure') return 'pending'
     const mode = config.checks.fix_base

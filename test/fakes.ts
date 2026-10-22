@@ -68,8 +68,12 @@ export class FakeWorkspaces implements Workspaces {
     return this.containsRemote
   }
 
-  async syncBase() {
-    return this.syncs.shift() ?? 'current'
+  readonly taskSyncs = new Map<string, ('current' | 'rebased' | 'conflict')[]>()
+  readonly synced: string[] = []
+
+  async syncBase(taskId: string) {
+    this.synced.push(taskId)
+    return (this.taskSyncs.get(taskId) ?? this.syncs).shift() ?? 'current'
   }
 
   async deleteBranch(taskId: string) {

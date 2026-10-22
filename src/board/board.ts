@@ -31,6 +31,8 @@ export type Comment = {
   updatedAt: string
 }
 
+export type CommitChecks = PullRequest['checks'] | 'cancelled'
+
 export type PullRequest = {
   number: string
   url: string
@@ -95,7 +97,7 @@ export interface Board {
   mergePullRequest(id: string, method: MergeMethod, sha: string, repo?: string): Promise<{ ok: true } | { ok: false; error: string }>
   closePullRequest(id: string, repo?: string): Promise<void>
   mergeCommit(id: string, repo?: string): Promise<string | undefined>
-  commitChecks(sha: string, repo?: string): Promise<PullRequest['checks']>
+  commitChecks(sha: string, repo?: string): Promise<CommitChecks>
   failedChecks(sha: string, repo?: string): Promise<string[]>
   passedChecks(sha: string, repo?: string): Promise<string[]>
   baseHead(repo?: string): Promise<string>

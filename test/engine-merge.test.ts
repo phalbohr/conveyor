@@ -501,6 +501,33 @@ describe('merge against the latest base branch', () => {
     expect(board.merges).toHaveLength(1)
   })
 
+  it('rebases only the first task of the merge queue; the next waits on its old base until the first merged', async () => {
+    const { board, workspaces, cycle, expireRetry, logs } = setup({ mode: 'ai', limits: 'running: 3' })
+    const events: string[] = []
+    const merge = board.mergePullRequest.bind(board)
+    board.mergePullRequest = async (id, ...rest) => {
+      events.push(`merge:${id}`)
+      return merge(id, ...rest)
+    }
+    workspaces.taskSyncs.set('1', ['rebased', 'current'])
+    workspaces.taskSyncs.set('2', ['rebased', 'current'])
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    await board.createTask('Add logout', 'p', { form: 'plan' })
+    await cycle()
+    expect(logs.join('\n')).toContain('task 2: merge waits: queued behind task #1')
+    expect(workspaces.synced.filter((id) => id === '2')).toEqual([])
+
+    for (let round = 0; round < 6 && board.merges.length < 2; round++) {
+      await expireRetry('1')
+      await expireRetry('2')
+      await cycle()
+      events.push(...workspaces.synced.splice(0).map((id) => `sync:${id}`))
+    }
+    expect(board.merges).toHaveLength(2)
+    expect(events.indexOf('sync:2')).toBeGreaterThan(events.indexOf('merge:1'))
+  })
+
   it('rebases a branch with failed checks onto a newer base before it repairs anything', async () => {
     const { board, workspaces, cycle, expireRetry, runs } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
     board.checks = 'failure'
@@ -598,6 +625,19 @@ describe('the base branch after the merge', () => {
     await expireRetry()
     await cycle()
     expect((await board.getTask('1'))?.state).toBe('done')
+  })
+
+  it('takes a merge commit whose CI a newer commit cancelled as passed', async () => {
+    const { board, cycle, expireRetry, logs } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
+    board.baseChecks = ['pending', 'cancelled']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    await expireRetry()
+    await cycle()
+    expect((await board.getTask('1'))?.state).toBe('done')
+    expect(logs.join('\n')).toContain('a newer commit of the base branch cancelled the CI')
+    expect((await board.listTasks()).some((task) => task.fixing)).toBe(false)
   })
 
   it('asks a human when the base CI fails and no repair stage exists', async () => {

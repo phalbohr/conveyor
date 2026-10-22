@@ -19,6 +19,7 @@ import {
   type LinkedProject,
   type Comment,
   type MergeMethod,
+  type CommitChecks,
   type PullRequest,
   type Task,
   type TaskForm,
@@ -404,10 +405,13 @@ export class GitLabBoard implements Board {
     return jobs.filter((job) => job.status === 'success').map((job) => job.name).filter((name) => !ignoredCheck(name, this.options.ignoreChecks ?? []))
   }
 
-  async commitChecks(sha: string, repo?: string) {
+  async commitChecks(sha: string, repo?: string): Promise<CommitChecks> {
     const api = this.repoApi(repo)
     const commit = await this.json<{ last_pipeline: { id: number; status: string } | null }>([`${api}/repository/commits/${sha}`])
-    return this.pipelineChecks(api, commit.last_pipeline)
+    const checks = await this.pipelineChecks(api, commit.last_pipeline)
+    if (checks !== 'failure' || !commit.last_pipeline || !['canceled', 'canceling'].includes(commit.last_pipeline.status)) return checks
+    const jobs = await this.pipelineJobs(api, commit.last_pipeline.id)
+    return jobs.some((job) => job.status === 'failed' && !job.allow_failure && !ignoredCheck(job.name, this.options.ignoreChecks ?? [])) ? 'failure' : 'cancelled'
   }
 
   private async pipelineJobs(api: string, id: number) {

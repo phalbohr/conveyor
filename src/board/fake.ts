@@ -18,6 +18,7 @@ import {
   type LinkedProject,
   type Comment,
   type MergeMethod,
+  type CommitChecks,
   type PullRequest,
   type Task,
   type TaskForm,
@@ -83,7 +84,7 @@ export class FakeBoard implements Board {
 
   base = 'main'
 
-  baseChecks: PullRequest['checks'][] = []
+  baseChecks: CommitChecks[] = []
 
   async mergeCommit(id: string, repo?: string) {
     return this.pulls.get(pullKey(id, repo))?.state === 'merged' ? `merged-${repo ? `${repo}-` : ''}${id}`.padEnd(40, '0') : undefined

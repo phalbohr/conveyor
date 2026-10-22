@@ -140,6 +140,31 @@ describe('ignored checks', () => {
   })
 })
 
+describe('cancelled runs', () => {
+  it('tells a cancelled GitHub run from a failed one', async () => {
+    const runs = [{ name: 'test', status: 'completed', conclusion: 'cancelled' }, { name: 'lint', status: 'completed', conclusion: 'success' }]
+    const { run } = recorder((args) => (args.some((arg) => arg.includes('/check-runs')) ? JSON.stringify([{ check_runs: runs }]) : JSON.stringify({ statuses: [] })))
+    const board = new GitHubBoard('acme/app', run)
+    expect(await board.commitChecks('abc')).toBe('cancelled')
+    runs.push({ name: 'build', status: 'completed', conclusion: 'failure' })
+    expect(await board.commitChecks('abc')).toBe('failure')
+  })
+
+  it('tells a cancelled GitLab pipeline from one with a failed job', async () => {
+    const jobs: { name: string; status: string; allow_failure?: boolean }[] = [
+      { name: 'unit-test-job', status: 'canceled' },
+      { name: 'lint', status: 'failed', allow_failure: true },
+    ]
+    const { run } = recorder((args) =>
+      args.some((arg) => arg.includes('/jobs')) ? JSON.stringify(jobs) : args.some((arg) => arg.includes('/bridges')) ? '[]' : JSON.stringify({ last_pipeline: { id: 5, status: 'canceled' } }),
+    )
+    const board = new GitLabBoard('acme/app', run, { retryDelay: 0 })
+    expect(await board.commitChecks('abc')).toBe('cancelled')
+    jobs.push({ name: 'build', status: 'failed' })
+    expect(await board.commitChecks('abc')).toBe('failure')
+  })
+})
+
 describe('passed checks', () => {
   it('lists passed jobs without the ignored ones on GitLab and GitHub', async () => {
     const lab = recorder((args) =>

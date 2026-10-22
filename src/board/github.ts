@@ -22,6 +22,7 @@ import {
   type LinkedProject,
   type Comment,
   type MergeMethod,
+  type CommitChecks,
   type PullRequest,
   type Task,
   type TaskForm,
@@ -363,16 +364,17 @@ export class GitHubBoard implements Board {
     ].filter((name) => !ignoredCheck(name, this.options.ignoreChecks ?? []))
   }
 
-  async commitChecks(sha: string) {
+  async commitChecks(sha: string): Promise<CommitChecks> {
     const runs = (await this.api<{ check_runs: { name: string; status: string; conclusion: string | null }[] }[]>(['--paginate', '--slurp', `${this.repo}/commits/${sha}/check-runs?per_page=100`])).flatMap((page) => page.check_runs)
     const statuses = (await this.api<{ statuses: { context: string; state: string }[] }>([`${this.repo}/commits/${sha}/status`])).statuses
-    return checksOf(
-      [
-        ...runs.map((run) => ({ name: run.name, status: run.status.toUpperCase(), ...(run.conclusion ? { conclusion: run.conclusion.toUpperCase() } : {}) })),
-        ...statuses.map((status) => ({ context: status.context, state: status.state.toUpperCase() })),
-      ],
-      this.options.ignoreChecks ?? [],
-    )
+    const all: Check[] = [
+      ...runs.map((run) => ({ name: run.name, status: run.status.toUpperCase(), ...(run.conclusion ? { conclusion: run.conclusion.toUpperCase() } : {}) })),
+      ...statuses.map((status) => ({ context: status.context, state: status.state.toUpperCase() })),
+    ]
+    const ignore = this.options.ignoreChecks ?? []
+    const checks = checksOf(all, ignore)
+    if (checks !== 'failure') return checks
+    return checksOf(all.filter((check) => check.conclusion !== 'CANCELLED'), ignore) === 'failure' ? 'failure' : 'cancelled'
   }
 
   async closePullRequest(id: string) {
