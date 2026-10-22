@@ -18,6 +18,7 @@ type CodexWindow = { used_percent?: number; window_minutes?: number; resets_at?:
 const FIVE_HOURS = 300
 const SEVEN_DAYS = 10_080
 const DAY = 86_400_000
+const QUOTA_EVERY = 60_000
 
 export class CodexHarness implements Harness {
   constructor(private readonly options: HarnessOptions = {}) {}
@@ -36,6 +37,7 @@ export class CodexHarness implements Harness {
     let tokens: Usage = NO_USAGE
     let error: string | undefined
     let thread: string | undefined
+    let quotaAt = 0
     const args = [
       'exec',
       ...(run.model ? ['-m', run.model] : []),
@@ -58,6 +60,11 @@ export class CodexHarness implements Harness {
           run.onEvent?.(line)
           const event = parseLine(line)
           if (event?.type === 'thread.started') thread = event.thread_id
+          if (thread && run.onQuota && Date.now() - quotaAt >= QUOTA_EVERY) {
+            quotaAt = Date.now()
+            const quota = this.takeQuota(thread, true)
+            if (quota) run.onQuota(quota)
+          }
           if (event?.type === 'item.completed' && event.item?.type === 'agent_message') message = event.item.text
           if (event?.type === 'turn.completed' && event.usage) {
             tokens = { inputTokens: event.usage.input_tokens ?? 0, outputTokens: event.usage.output_tokens ?? 0 }
@@ -78,7 +85,7 @@ export class CodexHarness implements Harness {
     }
   }
 
-  private takeQuota(thread: string): Quota | undefined {
+  private takeQuota(thread: string, keep = false): Quota | undefined {
     const env = this.options.env ?? process.env
     const sessions = join(env.CODEX_HOME ?? join(homedir(), '.codex'), 'sessions')
     const days = [new Date(), new Date(Date.now() - DAY)].map((date) =>
@@ -94,7 +101,7 @@ export class CodexHarness implements Harness {
       .map((line) => findLimits(parseJson(line)))
       .filter((found): found is Record<string, CodexWindow> => found !== undefined)
       .at(-1)
-    rmSync(file, { force: true })
+    if (!keep) rmSync(file, { force: true })
     if (!limits) return undefined
     const windows = Object.values(limits).filter((value): value is CodexWindow => typeof value === 'object' && value !== null && 'window_minutes' in value)
     const window = (minutes: number): QuotaWindow | undefined => {

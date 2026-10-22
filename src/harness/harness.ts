@@ -23,6 +23,7 @@ export type StageRun = {
   cwd: string
   signal?: AbortSignal
   onEvent?: (line?: string) => void
+  onQuota?: (quota: Quota) => void
   skills?: ResolvedSkill[]
   sandbox?: 'workspace-write' | 'full-access'
   network?: boolean

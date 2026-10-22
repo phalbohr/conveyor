@@ -50,7 +50,7 @@ conveyor new
 4. The log shows `claimed task <number>` and each stage. The issue gets `conveyor::in-progress`, then a pull request opens and the issue gets `conveyor::review`.
 5. Review the pull request. Write `/approve` (or approve it) to merge, `/fix <notes>` to fix on the same branch, or `/rework <notes>` to start over.
 
-The task is not taken? Check that the issue has a `form::` label that `pickup_from` allows and the issue has no open blockers. The control screen shows your limits and the team queue with the owner of each task; its log (`o`) shows tasks skipped because their author has no write access. Every stage call costs tokens of the harness account; set `limits.daily_tokens` and the subscription reserves in `conveyor settings`. To stop, see [Control screen](#control-screen).
+The task is not taken? Check that the issue has a `form::` label that `pickup_from` allows and the issue has no open blockers. The control screen shows your limits and the team queue with the owner of each task; its log (`o`) shows tasks skipped because their author has no write access. Every stage call costs tokens of the harness account; set `limits.daily_tokens` and the subscription reserves in `conveyor settings`. A reserve stops new stages; it does not stop the stages that already run, and they can use the rest of the window. With several tasks in parallel (`limits.running` above 1) set the reserve to cover them: about 10 percent per stage that can run at the same time (`five_hour_reserve: 30` for 3). To stop, see [Control screen](#control-screen).
 
 ## Commands
 

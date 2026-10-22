@@ -59,6 +59,19 @@ describe('Engine subscription reserve', () => {
     expect(runs()).toEqual(['1:implement'])
   })
 
+  it('stops before the next stage on a reading that arrives while a stage runs', async () => {
+    const { board, cycle, runs } = setup({
+      local: 'limits: {subscription: {five_hour_reserve: 10}}\n',
+      script: (run) => {
+        if (run.stage === 'implement') run.onQuota?.({ fiveHour: { utilization: 0.92, resetsAt: later(30) } })
+        return { outcome: 'done', summary: 'ok' }
+      },
+    })
+    await board.createTask('First', 'p', { form: 'plan' })
+    await cycle()
+    expect(runs()).toEqual(['1:implement'])
+  })
+
   it('uses a separate reserve for the seven-day window', async () => {
     const { board, cycle, runs } = setup({
       local: 'limits: {subscription: {five_hour_reserve: 10, seven_day_reserve: 20}}\n',

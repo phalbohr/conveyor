@@ -107,6 +107,12 @@ describe('claude harness quota', () => {
     })
   })
 
+  it('reports the windows while the stage runs', async () => {
+    const seen: unknown[] = []
+    await new ClaudeHarness({ command: stub('claude-done.jsonl').command }).runStage(run({ onQuota: (quota) => seen.push(quota) }))
+    expect(seen.at(-1)).toMatchObject({ fiveHour: { utilization: 0.61 } })
+  })
+
   it('probes the quota with a cheap run', async () => {
     const s = stub('claude-done.jsonl')
     const quota = await new ClaudeHarness({ command: s.command }).probeQuota(tempDir())
@@ -176,6 +182,20 @@ describe('codex subscription windows', () => {
     expect(existsSync(session)).toBe(false)
     const { argv } = JSON.parse(readFileSync(s.argsFile, 'utf8')) as { argv: string[] }
     expect(argv).not.toContain('--ephemeral')
+  })
+
+  it('reports the windows from the session file while the stage runs', async () => {
+    const home = tempDir('conveyor-codex-home-')
+    const now = new Date()
+    const day = join(home, 'sessions', String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0'))
+    mkdirSync(day, { recursive: true })
+    const session = join(day, 'rollout-2026-10-08T10-00-00-01a10707-4d1c-75a3-b285-af43a340a572.jsonl')
+    const limits = { primary: { used_percent: 93, window_minutes: 300, resets_at: 1_791_470_433 } }
+    writeFileSync(session, `${JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', rate_limits: limits } })}\n`)
+    const seen: unknown[] = []
+    const s = stub('codex-done.jsonl')
+    await new CodexHarness({ command: s.command, env: { ...process.env, CODEX_HOME: home } }).runStage(run({ onQuota: (quota) => seen.push(quota) }))
+    expect(seen).toEqual([{ fiveHour: { utilization: 0.93, resetsAt: new Date(1_791_470_433_000).toISOString() } }])
   })
 
   it('probes with the cheapest model', async () => {

@@ -61,7 +61,10 @@ export class ClaudeHarness implements Harness {
         run.onEvent?.(line)
         const event = parseLine(line)
         if (event?.type === 'result') last = event as ResultEvent
-        if (event?.type === 'rate_limit_event') quota = toQuota(event as RateLimitEvent) ?? quota
+        if (event?.type === 'rate_limit_event') {
+          quota = toQuota(event as RateLimitEvent) ?? quota
+          if (quota) run.onQuota?.(quota)
+        }
       },
     })
 

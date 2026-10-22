@@ -1658,6 +1658,7 @@ export class Engine {
           arm()
           if (line && session) record(() => session?.event(line))
         },
+        onQuota: (quota) => this.quotas.set(stage.harness, quota),
         skills: skills.filter((skill) => skill.source !== 'project'),
         ...(stage.sandbox ? { sandbox: stage.sandbox } : {}),
         ...(stage.network !== undefined ? { network: stage.network } : {}),
