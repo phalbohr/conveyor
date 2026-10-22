@@ -492,13 +492,13 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
 
 function keyBar(panel: Panel, view: StatusView, runner: RunnerControl | undefined, opened: Opened | undefined, updated: Date | undefined) {
   const time = updated ? ` · updated ${clock(updated)}` : ''
-  if (panel === 'watch') return `[↑↓ PgUp PgDn] scroll (↓ at the end follows again) · [w] or [Esc] back · [q] quit`
+  if (panel === 'watch') return `[↑↓ ⇧↑↓ PgUp PgDn] scroll (↓ at the end follows again) · [w] or [Esc] back · [q] quit`
   if (panel === 'task') {
-    return `[↑↓ PgUp PgDn] scroll · [c] comment · [b] browser · [h] harness · [w] watch · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
+    return `[↑↓ ⇧↑↓ PgUp PgDn] scroll · [c] comment · [b] browser · [h] harness · [w] watch · [x] reset${opened?.detail?.pull ? ` · [p] ${opened.target === 'pull' ? 'issue' : 'pull request'}` : ''} · [r] reload · [Esc] back`
   }
-  if (panel === 'board') return `[Enter] add what is missing · [↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
-  if (panel === 'help') return `[h] ask the harness (conveyor-help skill) · [↑↓ PgUp PgDn] scroll · [?] or [Esc] back · [q] quit`
-  if (panel !== 'status') return `[↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
+  if (panel === 'board') return `[Enter] add what is missing · [↑↓ ⇧↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
+  if (panel === 'help') return `[h] ask the harness (conveyor-help skill) · [↑↓ ⇧↑↓ PgUp PgDn] scroll · [?] or [Esc] back · [q] quit`
+  if (panel !== 'status') return `[↑↓ ⇧↑↓ PgUp PgDn] scroll · [Esc] back · [q] quit`
   if (view.focus === 'tasks') {
     return `[↑↓] select · [←→] column · [Enter] open · [c] comment · [b] browser · [h] harness · [w] watch${view.column === BACKLOG ? ' · [i] form::idea on/off' : ' · [x] reset'} · [Esc] columns · [?] help · [q] quit${time}`
   }
@@ -536,7 +536,7 @@ function viewport(lines: Line[], scroll: number, room: number, columns: number):
     shown.push(line)
     used += height
   }
-  return { lines: shown, more: `lines ${start + 1}–${start + shown.length} of ${lines.length} · ↑↓ PgUp PgDn scroll`, start, last }
+  return { lines: shown, more: `lines ${start + 1}–${start + shown.length} of ${lines.length} · ↑↓ ⇧↑↓ PgUp PgDn scroll`, start, last }
 }
 
 function watchLines(id: string, session: SessionView, follow: boolean): Line[] {

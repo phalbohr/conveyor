@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The key bar of the control screen names Shift+↑↓ (`⇧↑↓`) next to PgUp PgDn for paging; on macOS, Terminal keeps PgUp PgDn for its own scrollback, so only Shift+↑↓ reaches the conveyor there.
 - A repair stage after a red base branch that changes nothing (for example because the failure was a cancelled run) finishes the task; the check of the base branch then decides whether the base still needs a fix task. Before, the conveyor tried to open an empty follow-up pull request, failed with `No commits between …`, and ran the repair stage again and again.
 - The subscription windows of claude and codex update while a stage runs (codex at most once a minute, from its session file); before, the conveyor saw the use of a stage only when it ended, so parallel stages could start on an old reading and run into the limit. The README explains that the reserve should grow with the number of parallel tasks.
 - Tasks with green checks wait in a merge queue: priority first, then the time their checks turned green. Only the first task is rebased onto the latest base branch and tested again; the others wait on their old base in the Queued column and show `merge waits: queued behind task #N`; a task goes back to In progress when its turn comes. Before, every waiting task was rebased after each merge and ran its CI again, so with several ready tasks the CI runs grew with the square of their number, the runners slowed down, and a task could lose the race many times.

@@ -102,7 +102,7 @@ Keys on the main screen:
 
 Keys on a task:
 
-- Enter: open its text, workpad, and comments; `p` switches to its pull request; `↑` `↓` scroll; PgUp PgDn or Shift+↑↓ scroll a page (also in watch, help, usage, log, and board check); in the task list of a column they move the selection by five tasks.
+- Enter: open its text, workpad, and comments; `p` switches to its pull request; `↑` `↓` scroll; PgUp PgDn or Shift+↑↓ scroll a page (also in watch, help, usage, log, and board check); in the task list of a column they move the selection by five tasks. The key bar writes Shift as `⇧`. On macOS, Terminal keeps PgUp PgDn (Fn+↑↓) for its own scrollback; use Shift+↑↓ there.
 - `c`: comment; `b`: open it in the browser.
 - `h`: live harness session on the task (`live.harness`, `live.model`, `live.effort` from `local.yaml`; instructions in `live/task.md`). When the session ends, it can post a comment on the issue.
 - `w`: watch the stage of the task live: commands, edited files, messages and errors of the harness. The harness keeps running; `↑` pauses and scrolls back, `↓` at the end follows again, `w` or Esc goes back. Needs `session_logs: true` in `local.yaml` (settings: Personal, "Session logs for watch"). The log is `~/.conveyor/sessions/<project>/<number>.log`, outside the repository; the conveyor deletes it when the task is done or reset.
