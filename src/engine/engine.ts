@@ -590,14 +590,20 @@ export class Engine {
         merge: `The base branch CI failed after this task was merged (commit ${state.broken.slice(0, 7)}). Fix the base branch in the task branch, which starts from the latest base branch. The conveyor opens a follow-up pull request and merges it after its checks pass.`,
       })
       if (fixed.status !== 'done') return
-      const task = (await board.getTask(id)) ?? initial
-      const opened = await board.openPullRequest(id, `Fix the base branch after: ${task.title}`, `Part of ${board.reference(id)}: the base branch CI failed after its merge.\n\n${fixed.summary}`)
-      state.pull = { number: opened.number, url: opened.url }
-      delete state.broken
-      delete state.landing
-      state.stage = LAND
-      await run.save()
-      return
+      if ((await workspaces.ahead(id).catch(() => 1)) === 0) {
+        this.log(`task ${id}: the repair of the base branch changed nothing; the task finishes, and the check of the base branch decides whether it still needs a fix`)
+        this.verifying.delete(state.broken)
+        delete state.broken
+      } else {
+        const task = (await board.getTask(id)) ?? initial
+        const opened = await board.openPullRequest(id, `Fix the base branch after: ${task.title}`, `Part of ${board.reference(id)}: the base branch CI failed after its merge.\n\n${fixed.summary}`)
+        state.pull = { number: opened.number, url: opened.url }
+        delete state.broken
+        delete state.landing
+        state.stage = LAND
+        await run.save()
+        return
+      }
     }
 
     const landing = state.landing ?? 'success'

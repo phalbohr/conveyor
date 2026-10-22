@@ -721,6 +721,30 @@ describe('the base branch after the merge', () => {
   })
 })
 
+describe('a repair of the base branch without changes', () => {
+  it('finishes the task instead of opening an empty follow-up pull request again and again', async () => {
+    const { board, workspaces, cycle, expireRetry, runs, logs } = setup({
+      mode: 'ai',
+      stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}',
+      script: (run) => {
+        if (run.stage === 'fix-ci') workspaces.aheadBy = 0
+        return done
+      },
+    })
+    board.baseChecks = ['failure']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    await expireRetry()
+    await cycle()
+
+    expect(runs().filter((run) => run === '1:fix-ci')).toHaveLength(1)
+    expect(board.pullTitles).toEqual(['Add login'])
+    expect((await board.getTask('1'))?.state).toBe('done')
+    expect(logs.join('\n')).toContain('task 1: the repair of the base branch changed nothing')
+  })
+})
+
 describe('a task without changes', () => {
   it('finishes without a pull request when the branch has no changes against the base', async () => {
     const { board, workspaces, cycle } = setup({ mode: 'ai' })
