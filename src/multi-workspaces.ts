@@ -118,6 +118,20 @@ export class MultiWorkspaces implements RepoWorkspaces {
     if (errors.length > 0) throw new Error(errors.join('; '))
   }
 
+  async mark(taskId: string) {
+    const heads: string[] = []
+    for (const { clone, workspaces } of await this.all()) {
+      const head = await workspaces.head(taskId)
+      if (head) heads.push(`${clone.name}@${head}`)
+    }
+    return heads.length > 0 ? heads.join(',') : undefined
+  }
+
+  async rewind(taskId: string, to?: string) {
+    const marks = new Map((to ?? '').split(',').filter(Boolean).map((entry) => [entry.slice(0, entry.lastIndexOf('@')), entry.slice(entry.lastIndexOf('@') + 1)]))
+    for (const { clone, workspaces } of await this.all()) await workspaces.rewind(taskId, marks.get(clone.name))
+  }
+
   async push(taskId: string) {
     const heads: string[] = []
     for (const { clone, workspaces } of await this.changedParts(taskId)) heads.push(`${clone.name}@${await workspaces.push(taskId)}`)

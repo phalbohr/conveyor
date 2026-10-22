@@ -65,6 +65,9 @@ export async function hub(context: Context, setup: RunnerSetup, options: { start
     async reset(id, form, end) {
       return runner.reset(id, form, end)
     },
+    async restart(id, scope) {
+      return runner.restart(id, scope)
+    },
     async updateBoard() {
       const { added, synced, project } = await applyBoardUpdate(context, setup.settings)
       forgetBoardCheck()

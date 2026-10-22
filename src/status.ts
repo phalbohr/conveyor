@@ -19,6 +19,7 @@ export type MyTask = {
   priority?: number
   stage?: string
   attempt: number
+  runs?: number
   retryAt?: string
   lastError?: string
   waitingSince?: string
@@ -102,6 +103,7 @@ export async function collectStatus(options: { board: Board; config: Config; set
     if (task.priority !== undefined) entry.priority = task.priority
     const stage = state?.stage ?? state?.waiting?.stage
     if (stage) entry.stage = stage
+    if (stage && state?.runs?.[stage]) entry.runs = state.runs[stage]
     if (state?.parts) entry.part = `${(state.part ?? 0) + 1}/${state.parts.length}`
     if (state?.retryAt) entry.retryAt = state.retryAt
     if (state?.heartbeat) entry.heartbeat = state.heartbeat

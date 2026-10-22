@@ -129,6 +129,21 @@ describe('conveyor reset', () => {
   })
 })
 
+describe('conveyor reset --stage and --part', () => {
+  it('restarts the current stage or part from the command line and keeps the task', async () => {
+    const init = await runCli(['init', '--provider', 'github', '--project', 'acme/app'])
+    const board = new FakeBoard('me')
+    const id = await started(board)
+    const stage = await runCli(['reset', id, '--stage'], { cwd: init.context.cwd, home: init.context.home, board })
+    expect(stage.code).toBe(0)
+    expect(stage.stdout).toContain(`Stage implement of #${id} restarted by @me`)
+    const part = await runCli(['reset', id, '--part'], { cwd: init.context.cwd, home: init.context.home, board })
+    expect(part.stdout).toContain(`Part 1 of 2 of #${id} restarted by @me`)
+    expect(await board.getTask(id)).toMatchObject({ state: 'in-progress', stage: 'implement' })
+    expect((await runCli(['reset', id, '--stage', '--form', 'idea'], { cwd: init.context.cwd, home: init.context.home, board })).code).not.toBe(0)
+  })
+})
+
 describe('release', () => {
   it('removes the conveyor user from the assignees and keeps a human assignee', async () => {
     const board = new FakeBoard('me')

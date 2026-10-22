@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Loop guard: the conveyor counts the runs of each stage since the last answer of a human. The control screen shows `run 2`, `run 3`, … next to the task, yellow from the third run, and after `retry.max_attempts` runs without an answer the task stops in needs-input with the last result instead of running the stage again. Before, a stage that ended without an error but came back every cycle ran without limit.
+- `x` then `r` (or `conveyor reset N --stage`) restarts the current stage of a task: it stops a running stage, drops what its last run left, and runs it again with the current settings, for example after a model change. `x` then `t` (`--part`) restarts the current part of a plan with parts from the first stage after `plan`. Other tasks are not touched.
 - The key bar of the control screen names Shift+↑↓ (`⇧↑↓`) next to PgUp PgDn for paging; on macOS, Terminal keeps PgUp PgDn for its own scrollback, so only Shift+↑↓ reaches the conveyor there.
 - A repair stage after a red base branch that changes nothing (for example because the failure was a cancelled run) finishes the task; the check of the base branch then decides whether the base still needs a fix task. Before, the conveyor tried to open an empty follow-up pull request, failed with `No commits between …`, and ran the repair stage again and again.
 - The subscription windows of claude and codex update while a stage runs (codex at most once a minute, from its session file); before, the conveyor saw the use of a stage only when it ended, so parallel stages could start on an old reading and run into the limit. The README explains that the reserve should grow with the number of parallel tasks.

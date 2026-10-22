@@ -7,6 +7,7 @@ import { checkStages, cleanupWorkspaces, quotaFile, usageFile } from './commands
 import { loadConfig, type Config } from './config.js'
 import { Engine, type Activity } from './engine/engine.js'
 import { resetTask, type ResetEnd, type ResetForm } from './engine/reset.js'
+import { restartTask, type RestartScope } from './engine/restart.js'
 import { sessionFile } from './session-log.js'
 import { ClaudeHarness } from './harness/claude.js'
 import { CodexHarness } from './harness/codex.js'
@@ -233,6 +234,17 @@ export class Runner {
     const work = () => resetTask(board, taskWorkspaces(this.context, settings, config, board), id, form, sessionFile(this.context.home, config.board.project, id), config.parts, end)
     const summary = await (this.loop && this.engine ? this.engine.hold(id, work) : work())
     this.emit('info', `task ${id}: ${summary}`)
+    return summary
+  }
+
+  async restart(id: string, scope: RestartScope) {
+    const { settings, config, board } = this.setup
+    const pid = this.loop ? undefined : runningPid(this.context.home, config.board.project)
+    if (pid) throw new Error(`the conveyor runs in another terminal (pid ${pid}); restart ${taskRef(id)} there`)
+    const work = () => restartTask(board, taskWorkspaces(this.context, settings, config, board), id, scope, config.stages.map((stage) => stage.name))
+    const summary = await (this.loop && this.engine ? this.engine.hold(id, work) : work())
+    this.emit('info', `task ${id}: ${summary}`)
+    this.cycle()
     return summary
   }
 

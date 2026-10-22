@@ -23,6 +23,8 @@ export interface Workspaces {
   push(taskId: string): Promise<string>
   remove(taskId: string): Promise<void>
   list(): Promise<string[]>
+  mark(taskId: string): Promise<string | undefined>
+  rewind(taskId: string, to?: string): Promise<void>
 }
 
 export async function runHookScript(hooks: Hooks, name: HookName, path: string) {
@@ -149,6 +151,22 @@ export class GitWorkspaces implements Workspaces {
     if (result.code !== 0 && !/remote ref does not exist|unable to delete .*: remote ref/i.test(result.stderr)) {
       throw new Error(`git push origin --delete ${taskBranch(taskId)} failed in ${this.options.repo}: ${result.stderr.trim() || `exit code ${result.code}`}`)
     }
+  }
+
+  async mark(taskId: string) {
+    return this.head(taskId)
+  }
+
+  async rewind(taskId: string, to?: string) {
+    const path = this.path(taskId)
+    if (!existsSync(path)) {
+      if (to) throw new Error(`the workspace of task ${taskId} is not on this computer`)
+      return
+    }
+    const head = await this.git(path, 'rev-parse', 'HEAD')
+    await this.git(path, 'reset', '--quiet', '--hard', to ?? 'HEAD')
+    await this.git(path, 'clean', '-fdq')
+    if (to && to !== head) await this.push(taskId)
   }
 
   async push(taskId: string) {

@@ -52,12 +52,13 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
         else details.push(`runs in conveyor pid ${status.runner.pid ?? '?'}${heartbeat}`)
       }
       if (task.state === 'queued') details.push(task.held ?? task.parked ?? 'waits for a free slot')
+      if (task.runs && task.state !== 'needs-input') details.push(`run ${task.runs + 1}`)
       if (task.attempt > 0 && !task.activity) details.push(`attempt ${task.attempt + 1}`)
       if (task.retryAt && !task.activity) details.push(Date.parse(task.retryAt) > now ? `retry ${time(task.retryAt)}` : status.runner.running ? 'resumes next cycle' : 'resumes on start')
       if (task.state === 'needs-input') details.push(task.answered ? (task.held ? `answered, ${task.held}` : 'answered, resumes next cycle') : `waits for your answer since ${task.waitingSince ? time(task.waitingSince) : '?'}`)
       if (task.state === 'review' && task.pullRequest) details.push(task.pullRequest)
       if (task.lastError && !task.activity) details.push(`last error: ${task.lastError}`)
-      const tone = task.lastError && !task.activity ? 'error' : (task.state === 'needs-input' && !task.answered) || quiet >= QUIET ? 'warning' : task.activity ? 'ok' : undefined
+      const tone = task.lastError && !task.activity ? 'error' : (task.state === 'needs-input' && !task.answered) || quiet >= QUIET || (task.runs ?? 0) >= 2 ? 'warning' : task.activity ? 'ok' : undefined
       return { id: task.id, title: task.title, url: task.url, detail: details.join(' · '), ...(tone ? { tone } : {}) }
     })
 }
@@ -205,6 +206,7 @@ export function helpLines(): Line[] {
     row('s while running', 'first s: running stages finish, nothing new starts, then the conveyor stops · second s: stop at once · q twice: stop at once and quit'),
     row('live sessions', 'n, a, and h (on a task, on the main screen, and in help) use live.harness and live.model from local.yaml (settings: Personal)'),
     row('on a task', 'Enter opens its text, workpad, and comments · c comment · b browser · h harness · w watch its stage (session_logs) · x reset, close, or delete · i form::idea on/off (backlog) · Esc back'),
+    row('run 3', 'the stage runs again since the last answer of a human (yellow from the third run); after retry.max_attempts runs the conveyor stops it and asks you'),
     row('part::2/3', 'the plan split the story into parts, one pull request each; the story is done after the last part merges'),
     row('an opened task', 'p switches between the issue and its pull request · c comments where you are · ↑↓ scroll · PgUp PgDn or Shift+↑↓ scroll a page'),
     { text: '' },
@@ -215,7 +217,7 @@ export function helpLines(): Line[] {
     row('small fixes', '`/fix <notes>`, or `/fix_from: <stage> <notes>` to start later'),
     row('start over', '`/rework <notes>`'),
     row('hand a task over', '`conveyor release <number>`'),
-    row('start a task over', 'x on my task: stops it, closes its pull request, deletes its branch and workspace, back to Backlog as idea, story, plan, or draft; or c closes, D deletes the issue'),
+    row('start a task over', 'x on my task: stops it, closes its pull request, deletes its branch and workspace, back to Backlog as idea, story, plan, or draft; or c closes, D deletes the issue; or r restarts only its current stage, t its current part'),
     row('<number>', 'the issue number on the board: issues/51 → `conveyor attach 51`'),
     { text: '' },
     { text: 'Screens and commands', tone: 'title' },

@@ -721,6 +721,27 @@ describe('the base branch after the merge', () => {
   })
 })
 
+describe('a stage that runs again and again', () => {
+  it('stops the task after retry.max_attempts runs of one stage without a human and runs it again after an answer', async () => {
+    const { board, workspaces, cycle, runs } = setup({ mode: 'ai', config: 'retry: {max_attempts: 2}' })
+    workspaces.syncs = ['conflict', 'conflict', 'conflict', 'conflict']
+    await board.createTask('Add login', 'p', { form: 'plan' })
+
+    await cycle()
+    await cycle()
+    await cycle()
+    expect(runs().filter((run) => run === '1:merge')).toHaveLength(2)
+    expect((await board.getTask('1'))?.state).toBe('needs-input')
+    const stop = (await board.listComments('1')).at(-1)?.body ?? ''
+    expect(stop).toContain('Stage `merge` ran 2 times without an answer from a human')
+    expect(stop).toContain('Its last result: done: ok')
+
+    await board.addComment('1', 'try once more')
+    await cycle()
+    expect(runs().filter((run) => run === '1:merge')).toHaveLength(3)
+  })
+})
+
 describe('a repair of the base branch without changes', () => {
   it('finishes the task instead of opening an empty follow-up pull request again and again', async () => {
     const { board, workspaces, cycle, expireRetry, runs, logs } = setup({

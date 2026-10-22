@@ -64,6 +64,7 @@ The task is not taken? Check that the issue has a `form::` label that `pickup_fr
 | `conveyor attach <number>` | Live session to answer the questions of a waiting task; `<number>` is the issue number on the board, e.g. `51` (`project#number` on a GitLab group board, e.g. `frontend#12`) |
 | `conveyor release <number>` | Releases the claim of a task (`--force` for private tasks of others) |
 | `conveyor watch <number> [-f]` | Shows what the harness does in the stages of a task: commands, edited files, its messages and errors. `-f` keeps showing new lines until Ctrl+C. Needs `session_logs: true` in `local.yaml` |
+| `conveyor reset <number> --stage \| --part` | Keeps the task and repeats a piece of it: `--stage` stops the current stage, drops what its last run left (also its commits), and runs it again with the current settings; `--part` drops the commits of the current part and starts it again at the first stage after `plan`. Only the owner; while the conveyor runs, use `x` on its control screen |
 | `conveyor reset <number> [--form idea\|story\|plan\|none \| --close \| --delete]` | Starts a task over: stops its stage, closes its open pull request, deletes the branch `conveyor/<number>` and the workspace, clears the workpad and the `stage::` and `part::` labels, releases the claim, and returns the task to Backlog with a form you choose (default: the form the conveyor took it with; `none` leaves a draft). Merged parts stay in the base branch. Only the owner resets; while the conveyor runs, use `x` on its control screen |
 | `conveyor config list` | Every setting with value, options, and description (`--json` for scripts) |
 | `conveyor config get/set <key> [value]` | Reads or changes one setting; validates before saving |
@@ -107,7 +108,7 @@ Keys on a task:
 - `h`: live harness session on the task (`live.harness`, `live.model`, `live.effort` from `local.yaml`; instructions in `live/task.md`). When the session ends, it can post a comment on the issue.
 - `w`: watch the stage of the task live: commands, edited files, messages and errors of the harness. The harness keeps running; `↑` pauses and scrolls back, `↓` at the end follows again, `w` or Esc goes back. Needs `session_logs: true` in `local.yaml` (settings: Personal, "Session logs for watch"). The log is `~/.conveyor/sessions/<project>/<number>.log`, outside the repository; the conveyor deletes it when the task is done or reset.
 - `i`: set or remove `form::idea` (Backlog only).
-- `x`: reset one of my tasks; choose the form to start again with: `i` idea, `s` story, `p` plan, `d` draft; or end it: `c` closes the issue, `D` deletes it after you type its number (GitLab needs the Owner role, GitHub admin rights; without them the issue is closed). Esc cancels.
+- `x`: reset one of my tasks; choose the form to start again with: `i` idea, `s` story, `p` plan, `d` draft; or end it: `c` closes the issue, `D` deletes it after you type its number (GitLab needs the Owner role, GitHub admin rights; without them the issue is closed); or keep it: `r` restarts its current stage with the current settings, `t` restarts its current part. Esc cancels.
 - Esc: back to the columns.
 
 A stop at once aborts the running stages. They restart from their beginning on the next start; the workspace keeps their files.

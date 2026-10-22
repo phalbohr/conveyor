@@ -106,6 +106,24 @@ describe('MultiWorkspaces', () => {
     await expect(workspaces.commitFile('frontend#12', 'docs/plan.md', 'plan\n', 'plan')).rejects.toThrow('starts with the name of one of the repositories')
   })
 
+  it('rewinds every repository of the task to a mark', async () => {
+    const { workspaces, clones } = await setup()
+    const { path } = await workspaces.prepare('frontend#12')
+    const mark = await workspaces.mark('frontend#12')
+    expect(mark).toMatch(/^frontend@[0-9a-f]{40},user-service@[0-9a-f]{40}$/)
+    writeFileSync(join(path, 'user-service', 'api.txt'), 'endpoint\n')
+    await workspaces.commitAll('frontend#12', 'implement: endpoint')
+    await workspaces.push('frontend#12')
+    writeFileSync(join(path, 'frontend', 'half.txt'), 'unfinished\n')
+
+    await workspaces.rewind('frontend#12', mark)
+
+    expect(existsSync(join(path, 'user-service', 'api.txt'))).toBe(false)
+    expect(existsSync(join(path, 'frontend', 'half.txt'))).toBe(false)
+    const remote = git(clones.find((clone) => clone.name === 'user-service')?.path ?? '', 'ls-remote', '--heads', 'origin', 'conveyor/frontend-12')
+    expect(remote.split('\t')[0]).toBe(mark?.split(',')[1]?.split('@')[1])
+  })
+
   it('removes a task folder left by another setup whose repository folders are no worktrees', async () => {
     const { workspaces, root } = await setup()
     mkdirSync(join(root, 'frontend-12', 'frontend'), { recursive: true })

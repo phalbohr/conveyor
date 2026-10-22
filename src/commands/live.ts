@@ -243,4 +243,6 @@ const unavailableWorkspaces = {
   push: () => Promise.reject(new Error('no workspace in a live session')),
   remove: () => Promise.resolve(),
   list: () => Promise.resolve([]),
+  mark: () => Promise.resolve(undefined),
+  rewind: () => Promise.reject(new Error('no workspace in a live session')),
 }

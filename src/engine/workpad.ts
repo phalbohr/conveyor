@@ -37,6 +37,10 @@ export type WorkpadState = {
   parked?: string
   repos?: Record<string, RepoPull>
   mergeOrder?: string[]
+  runs?: Record<string, number>
+  stageBase?: string
+  partBase?: string
+  lastResult?: string
 }
 
 export type RepoPull = { number: string; url: string; headSha?: string; merged?: boolean; verify?: { sha: string; since: string; head?: string; before?: string }; checksWait?: { sha: string; since: string } }
@@ -91,6 +95,10 @@ const stateSchema = z.object({
     )
     .optional(),
   mergeOrder: z.array(z.string()).optional(),
+  runs: z.record(z.string(), z.int().nonnegative()).optional(),
+  stageBase: z.string().optional(),
+  partBase: z.string().optional(),
+  lastResult: z.string().optional(),
 })
 
 const AGENT_MARKER = '<!-- conveyor'

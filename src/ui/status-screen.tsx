@@ -324,6 +324,20 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         setInput({ kind: 'delete', id: input.id })
         return
       }
+      if (input?.kind === 'reset' && (key === 'r' || key === 't') && control) {
+        const { id } = input
+        const scope = key === 'r' ? 'stage' : 'part'
+        setInput(undefined)
+        setMessage({ text: `Restarting the current ${scope} of ${taskRef(id)}…` })
+        void control
+          .restart(id, scope)
+          .then((text) => {
+            setMessage({ text })
+            refresh(true)
+          })
+          .catch(fail)
+        return
+      }
       const form = input?.kind === 'reset' && key === 'c' ? 'none' : RESET_FORMS[key]
       if (input?.kind === 'reset' && form && control) {
         const { id } = input
@@ -434,6 +448,7 @@ export function StatusScreen({ load, refreshMs, runner, control, notice, onActio
         <Box flexDirection="column" marginTop={1}>
           <Text color="yellow">{`Reset ${taskRef(input.id)}: stop its stage, close its pull request, delete the branch conveyor/${taskSlug(input.id)} and its workspace, clear the workpad, and return it to Backlog.`}</Text>
           <Text color="cyan">Start again as: [i] idea · [s] story · [p] plan · [d] draft without a form · or [c] close the issue · [D] delete the issue · [Esc] cancel</Text>
+          <Text color="cyan">Or keep the task: [r] restart the stage (drop what its last run left, run it again with the current settings) · [t] restart the part (drop the commits of the current part)</Text>
         </Box>
       )}
       {input?.kind === 'delete' && control && (

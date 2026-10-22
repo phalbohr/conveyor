@@ -375,6 +375,8 @@ If the board read fails, running stages continue; the next cycle tries again.
 - A retry also follows a `failed` outcome and a harness crash.
 - Delay: `min(10s * 2^(attempt - 1), retry.max_backoff)`.
 - After `retry.max_attempts` the task gets `conveyor::needs-input` with the error in the workpad.
+- Loop guard: the workpad counts the finished runs of each stage (`runs`) and keeps the first line of the last result (`lastResult`, redacted). A stage that finished `retry.max_attempts` times since the last human answer does not start again; the task gets `conveyor::needs-input` with an error comment. Any answer clears the counts; so do a new part and the end of the task.
+- Restart (`x` then `r`/`t`, `conveyor reset N --stage|--part`): before every stage the workpad records the workspace head (`stageBase`; with several repositories one head per repository), and at the first stage after `plan` of a part also `partBase`. A stage restart stops the running stage, resets the workspace to `stageBase` (pushing the task branch when it moved), clears attempts, runs, waiting, and retry, and sets the task to `in-progress` at the same stage. A part restart resets to `partBase` and starts at the first stage after `plan`, without review notes. The pull request stays open.
 - The attempt number is available to the stage template as `attempt`.
 - A harness at its subscription limit (`usage limit`, `hit your limit`, `limit reached` in the error, with `try again at 5:30 AM` or `resets 1am` when given) is no failed attempt: the stage waits until that time (an hour when none is given), and no stage of that harness starts and no task is claimed meanwhile.
 

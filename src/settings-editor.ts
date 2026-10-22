@@ -110,7 +110,7 @@ const TEAM: Spec[] = [
     help: 'a running task writes a heartbeat every third of this; a claim without one for this long is released. At least 1m: a shorter value lets other workstations take over running tasks',
   },
   { key: 'timeouts.waiting', label: 'Waiting timeout', kind: 'text', fallback: '4d', help: 'a task that waits this long for its owner is released; 4d calendar days, 2wd working days' },
-  { key: 'retry.max_attempts', label: 'Attempts before a human', kind: 'number', fallback: '5', help: 'failed attempts of a stage before it asks a human' },
+  { key: 'retry.max_attempts', label: 'Attempts before a human', kind: 'number', fallback: '5', help: 'failed attempts of a stage before it asks a human; also the runs of one stage without a human answer before the conveyor stops a loop' },
   { key: 'retry.max_backoff', label: 'Longest retry pause', kind: 'text', fallback: '5m', help: 'pauses between attempts double up to this' },
   { key: 'board.github_project', label: 'GitHub project number', kind: 'number', help: 'GitHub only: the project whose Conveyor field shows the task state as columns' },
   { key: 'board.group', label: 'Board group (GitLab)', kind: 'text', help: 'GitLab: the board and its labels cover every project of this group, and tasks are named project#number; empty = only board.project' },

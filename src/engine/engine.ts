@@ -425,6 +425,7 @@ export class Engine {
     const approvalStage = waiting?.kind === 'approval' ? waiting.stage : undefined
     const conversation = waiting && waiting.kind !== 'review' && waiting.stage !== SOURCE_STAGE ? this.conversation(comments, waiting) : undefined
     if (waiting?.kind === 'error' && waiting.stage === LAND) state.landAttempts = 0
+    if (waiting) delete state.runs
     delete state.waiting
     delete state.retryAt
     delete state.parked
@@ -483,6 +484,7 @@ export class Engine {
         delete state.pull
         await workspaces.reset(id)
         run.text = ''
+        delete state.partBase
         state.reviewMode = 'rework'
         state.stage = names[names.indexOf('plan') + 1] ?? 'merge'
         if (config.parts === 'together' && state.parts) {
@@ -637,7 +639,7 @@ export class Engine {
     }
 
     if (state.parts && (state.part ?? 0) < state.parts.length - 1) {
-      for (const key of ['landing', 'mergeError', 'landAttempts', 'review', 'reviewMode', 'lastError'] as const) delete state[key]
+      for (const key of ['landing', 'mergeError', 'landAttempts', 'review', 'reviewMode', 'lastError', 'runs', 'partBase'] as const) delete state[key]
       state.attempt = 0
       state.part = (state.part ?? 0) + 1
       if (initial.fixing || this.fixer === id) await board.setFixing(id, false)
@@ -649,7 +651,7 @@ export class Engine {
       return
     }
 
-    for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError', 'checksWait', 'repairs'] as const) delete state[key]
+    for (const key of ['stage', 'landing', 'mergeError', 'landAttempts', 'review', 'lastError', 'checksWait', 'repairs', 'runs', 'stageBase', 'partBase', 'lastResult'] as const) delete state[key]
     state.attempt = 0
     await board.setState(id, 'done')
     await board.setStage(id, undefined)
@@ -722,6 +724,13 @@ export class Engine {
         this.log(`task ${id}: stage ${stage.name} waits for the ${stage.harness} subscription window until ${blockedUntil}`)
         return { status: 'stopped', summary }
       }
+      const runs = state.runs?.[stage.name] ?? 0
+      if (runs >= config.retry.max_attempts) {
+        await this.stopWithError(run, stage.name, `**Stage \`${stage.name}\` ran ${runs} times without an answer from a human**, so the conveyor stops it here instead of running it again in a loop. Its last result: ${state.lastResult ?? 'unknown'}`)
+        return { status: 'stopped', summary }
+      }
+      state.stageBase = await workspaces.mark(id).catch(() => undefined)
+      if (state.parts && !state.partBase && stage.name === config.stages[config.stages.findIndex((entry) => entry.name === 'plan') + 1]?.name) state.partBase = state.stageBase
       await run.save()
       this.log(`task ${id}: stage ${stage.name} started (${stage.harness}${stage.model ? `, ${stage.model}` : ''})`)
       const task = (await board.getTask(id)) ?? (await this.mustGetTask(id))
@@ -761,6 +770,8 @@ export class Engine {
         return { status: 'stopped', summary }
       }
       this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
+      state.runs = { ...state.runs, [stage.name]: runs + 1 }
+      state.lastResult = `${output.result.outcome}: ${publicText(output.result.summary.split('\n')[0] ?? '', this.options.home).slice(0, 300)}`
       conversation = undefined
       await workspaces
         .commitAll(id, `${stage.name}: ${((this.options.redact ?? ((text: string) => redactSecrets(text)))(output.result.summary).split('\n')[0] ?? '').slice(0, 72)}`)
@@ -1722,7 +1733,7 @@ export class Engine {
     if (opened.length > 0) {
       await board.addComment(id, agentComment('note', `**Draft ${multi ? 'merge requests' : 'pull request'} for all parts of this task:**\n\n${opened.join('\n')}\n\nEvery part adds its commits there. After the last part the conveyor rebases the branch, waits for the checks, and marks it ready for review.`))
     }
-    for (const key of ['landing', 'mergeError', 'landAttempts', 'lastError'] as const) delete state[key]
+    for (const key of ['landing', 'mergeError', 'landAttempts', 'lastError', 'runs', 'partBase'] as const) delete state[key]
     state.attempt = 0
     state.part = done
     state.stage = config.stages[config.stages.findIndex((stage) => stage.name === 'plan') + 1]?.name ?? 'merge'

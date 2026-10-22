@@ -9,7 +9,7 @@ import { attachCommand, createTaskCommand, newCommand, writeCommand, type NewFor
 import { modelsCommand } from './commands/models.js'
 import { type ClaudeModel, type Probes } from './models.js'
 import { skillInstall } from './commands/skill.js'
-import { prepare, releaseCommand, resetCommand, runCommand } from './commands/run.js'
+import { prepare, releaseCommand, resetCommand, restartCommand, runCommand } from './commands/run.js'
 import { watchCommand } from './commands/watch.js'
 import { loadConfig, type Config } from './config.js'
 import { boardTarget, detectBoard, initProject, type Board, type InitResult, type Target } from './init.js'
@@ -241,9 +241,19 @@ export async function main(argv: string[], context: Context): Promise<number> {
     .addOption(new Option('--form <form>', 'form to start again with; default: the form the conveyor took it with').choices(['idea', 'story', 'plan', 'none']))
     .addOption(new Option('--close', 'close the issue after the reset').conflicts(['delete', 'form']))
     .addOption(new Option('--delete', 'delete the issue after the reset; GitLab needs the Owner role, GitHub admin rights; without them the issue is closed').conflicts('form'))
-    .action(async (issue: string, options: { form?: 'idea' | 'story' | 'plan' | 'none'; close?: boolean; delete?: boolean }) => {
+    .addOption(new Option('--stage', 'keep the task and restart only its current stage: drop what the last run left and run it again with the current settings').conflicts(['form', 'close', 'delete', 'part']))
+    .addOption(new Option('--part', 'keep the task and restart only its current part: drop the commits of the part and start it at the first stage after plan').conflicts(['form', 'close', 'delete']))
+    .action(async (issue: string, options: { form?: 'idea' | 'story' | 'plan' | 'none'; close?: boolean; delete?: boolean; stage?: boolean; part?: boolean }) => {
+      if (!validIssue(context, issue)) {
+        exitCode = 1
+        return
+      }
+      if (options.stage || options.part) {
+        exitCode = await restartCommand(context, issue, options.stage ? 'stage' : 'part')
+        return
+      }
       const end = options.delete ? 'delete' : options.close ? 'close' : 'backlog'
-      exitCode = validIssue(context, issue) ? await resetCommand(context, issue, end === 'backlog' ? options.form : 'none', end) : 1
+      exitCode = await resetCommand(context, issue, end === 'backlog' ? options.form : 'none', end)
     })
 
   try {

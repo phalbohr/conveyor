@@ -253,6 +253,29 @@ describe('GitWorkspaces', () => {
     expect(git(origin, 'rev-parse', 'conveyor/8')).toBe(git(origin, 'rev-parse', 'main'))
   })
 
+  it('discards the changes of a stage and rewinds the task branch to a mark', async () => {
+    const { project, origin } = repository()
+    const manager = workspaces(project)
+    const { path } = await manager.prepare('9')
+    writeFileSync(join(path, 'part1.txt'), 'part 1\n')
+    await manager.commitAll('9', 'implement: part 1')
+    await manager.push('9')
+    const mark = await manager.mark('9')
+    writeFileSync(join(path, 'part2.txt'), 'part 2\n')
+    await manager.commitAll('9', 'implement: part 2')
+    await manager.push('9')
+    writeFileSync(join(path, 'half.txt'), 'unfinished\n')
+
+    await manager.rewind('9')
+    expect(existsSync(join(path, 'half.txt'))).toBe(false)
+    expect(existsSync(join(path, 'part2.txt'))).toBe(true)
+
+    await manager.rewind('9', mark)
+    expect(existsSync(join(path, 'part2.txt'))).toBe(false)
+    expect(existsSync(join(path, 'part1.txt'))).toBe(true)
+    expect(git(origin, 'rev-parse', 'conveyor/9')).toBe(mark)
+  })
+
   it('deletes the remote task branch and ignores a missing one', async () => {
     const { project, origin } = repository()
     const manager = workspaces(project)

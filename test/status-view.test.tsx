@@ -269,6 +269,10 @@ describe('StatusScreen as a control panel', () => {
         calls.push(`reset ${id} ${form}${end && end !== 'backlog' ? ` ${end}` : ''}`)
         return `Reset #${id}.`
       },
+      restart: async (id, scope) => {
+        calls.push(`restart ${id} ${scope}`)
+        return `Restarted the ${scope} of #${id}.`
+      },
     }
     return { value, calls }
   }
@@ -446,6 +450,26 @@ describe('StatusScreen as a control panel', () => {
     stdin.write('s')
     await vi.waitFor(() => expect(calls).toContain('reset 4 story'), { timeout: 5_000 })
     await vi.waitFor(() => expect(lastFrame()).toContain('Reset #4.'), { timeout: 5_000 })
+  })
+
+  it('restarts the current stage with r and the current part with t', async () => {
+    const { value, calls } = control()
+    const { lastFrame, stdin } = render(<StatusScreen load={async () => snapshot} refreshMs={60_000} control={value} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('my board:'), { timeout: 5_000 })
+    for (const key of [RIGHT, RIGHT, RIGHT, DOWN, 'x']) {
+      await settle()
+      stdin.write(key)
+    }
+    await vi.waitFor(() => expect(lastFrame()?.replace(/\s+/g, ' ')).toContain('[r] restart the stage (drop'), { timeout: 5_000 })
+    await settle()
+    stdin.write('r')
+    await vi.waitFor(() => expect(calls).toContain('restart 4 stage'), { timeout: 5_000 })
+    await vi.waitFor(() => expect(lastFrame()).toContain('Restarted the stage of #4.'), { timeout: 5_000 })
+    for (const key of ['x', 't']) {
+      await settle()
+      stdin.write(key)
+    }
+    await vi.waitFor(() => expect(calls).toContain('restart 4 part'), { timeout: 5_000 })
   })
 
   it('closes a task with c and deletes one with D only after its number is typed', async () => {
@@ -816,6 +840,14 @@ describe('liveness of tasks in progress', () => {
     const parked = { ...snapshot, runner: { running: true, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, stage: 'land', parked: 'merge waits: the base branch CI is red; task #9 fixes it first' } : task)) }
     expect(login(parked)?.detail).toContain('stage::land · ○ merge waits: the base branch CI is red; task #9 fixes it first')
     expect(login(parked)?.detail).not.toContain('waits for its next attempt')
+  })
+
+  it('counts the runs of a stage that runs again and marks a third run', () => {
+    const again = (runs: number) => ({ ...snapshot, runner: { running: true, here: true }, mine: snapshot.mine.map((task) => (task.id === '4' ? { ...task, attempt: 0, lastError: undefined, runs } : task)) })
+    expect(login(again(0))?.detail).not.toContain('run ')
+    expect(login(again(1))?.detail).toContain('run 2')
+    expect(login(again(1))?.tone).toBeUndefined()
+    expect(login(again(2))).toMatchObject({ detail: expect.stringContaining('run 3'), tone: 'warning' })
   })
 
   it('shows a task queued for merge with its place instead of a free slot', () => {

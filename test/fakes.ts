@@ -93,6 +93,17 @@ export class FakeWorkspaces implements Workspaces {
   async list() {
     return readdirSync(this.root)
   }
+
+  marks = 0
+  readonly rewinds: { taskId: string; to?: string }[] = []
+
+  async mark() {
+    return `mark-${++this.marks}`
+  }
+
+  async rewind(taskId: string, to?: string) {
+    this.rewinds.push({ taskId, ...(to ? { to } : {}) })
+  }
 }
 
 export function deferred<T>() {
