@@ -550,6 +550,23 @@ describe('merge against the latest base branch', () => {
     expect(states.slice(states.indexOf('queued')).filter((state, index, all) => state !== all[index - 1])).toEqual(['queued', 'in-progress', 'done'])
   })
 
+  it('keeps a queued task in the queued column while the board checks whether its branch merges cleanly', async () => {
+    const { board, workspaces, cycle, expireRetry, logs } = setup({ mode: 'ai', limits: 'running: 3' })
+    workspaces.taskSyncs.set('1', ['rebased', 'rebased', 'rebased'])
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    await board.createTask('Add logout', 'p', { form: 'plan' })
+    await cycle()
+    expect((await board.getTask('2'))?.state).toBe('queued')
+
+    board.updatePullRequest('2', { mergeable: 'unknown' })
+    await expireRetry('1')
+    await expireRetry('2')
+    await cycle()
+    expect(logs).toContain('task 2: merge waits: the board checks whether the branch merges cleanly')
+    expect((await board.getTask('2'))?.state).toBe('queued')
+  })
+
   it('rebases a branch with failed checks onto a newer base before it repairs anything', async () => {
     const { board, workspaces, cycle, expireRetry, runs } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
     board.checks = 'failure'
@@ -915,12 +932,14 @@ describe('a red base branch', () => {
     await engine.tick()
     await vi.waitFor(() => expect(logs).toContain('task 1: waits for a free running slot before stage merge'))
     expect(runs()).not.toContain('1:merge')
+    await vi.waitFor(async () => expect((await board.getTask('1'))?.state).toBe('queued'))
     gate.resolve(done)
     await engine.idle()
     await expireRetry('1')
     await engine.tick()
     await engine.idle()
     expect(runs()).toContain('1:merge')
+    expect((await board.getTask('1'))?.state).not.toBe('queued')
   })
 
   it('starts and merges nothing in a cycle whose base branch check fails', async () => {

@@ -76,6 +76,7 @@ type TaskRun = {
   workspace: string
   artifacts: Artifacts
   save: () => Promise<void>
+  column: Task['state']
 }
 
 const TRIAGE_LOCK = 'triage'
@@ -439,6 +440,7 @@ export class Engine {
       text: pad?.text ?? '',
       padId: pad?.id,
       workspace: '',
+      column: initial.state,
       artifacts: new Artifacts(board, workspaces, config, this.options.home, this.options.redact ?? ((text) => redactSecrets(text))),
       save: async () => {
         state.heartbeat = new Date().toISOString()
@@ -453,7 +455,10 @@ export class Engine {
       await this.stopWithError(run, state.stage ?? waiting?.stage ?? 'start', `**This task cannot run here:** ${wrong}`)
       return
     }
-    if (initial.state !== 'in-progress' && (initial.state !== 'queued' || state.stage !== LAND)) await board.setState(id, 'in-progress')
+    if (initial.state !== 'in-progress' && (initial.state !== 'queued' || !pad?.state.parked)) {
+      await board.setState(id, 'in-progress')
+      run.column = 'in-progress'
+    }
     if (initial.form) {
       state.form = initial.form
       await board.setForm(id, undefined)
@@ -684,6 +689,7 @@ export class Engine {
           state.stage = stage.name
           state.parked = 'waits for a free running slot'
           state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
+          await this.column(run, 'queued')
           await run.save()
           this.log(`task ${id}: waits for a free running slot before stage ${stage.name}`)
           return { status: 'stopped', summary }
@@ -729,6 +735,7 @@ export class Engine {
         await this.stopWithError(run, stage.name, `**Stage \`${stage.name}\` ran ${runs} times without an answer from a human**, so the conveyor stops it here instead of running it again in a loop. Its last result: ${state.lastResult ?? 'unknown'}`)
         return { status: 'stopped', summary }
       }
+      await this.column(run, 'in-progress')
       state.stageBase = await workspaces.mark(id).catch(() => undefined)
       if (state.parts && !state.partBase && stage.name === config.stages[config.stages.findIndex((entry) => entry.name === 'plan') + 1]?.name) state.partBase = state.stageBase
       await run.save()
@@ -847,6 +854,12 @@ export class Engine {
     return this.mergeTurn === id ? undefined : this.mergeTurn
   }
 
+  private async column(run: TaskRun, column: 'queued' | 'in-progress') {
+    if (run.column === column || (column === 'in-progress' && run.column !== 'queued')) return
+    await this.options.board.setState(run.id, column)
+    run.column = column
+  }
+
   private leaveMergeQueue(id: string) {
     this.mergeQueue.delete(id)
     if (this.mergeTurn === id) this.mergeTurn = undefined
@@ -855,14 +868,11 @@ export class Engine {
   private async landTask(run: TaskRun, turn: { keep: boolean }): Promise<'success' | 'failure' | 'stop'> {
     const { board } = this.options
     const { id, config, state } = run
-    let onBoard: Task['state']
     let behind = false
+    let inQueue = false
     const wait = async (reason: string) => {
-      const column = behind ? 'queued' : onBoard === 'queued' ? 'in-progress' : undefined
-      if (column && column !== onBoard) {
-        await board.setState(id, column)
-        onBoard = column
-      }
+      if (behind) await this.column(run, 'queued')
+      else if (!inQueue) await this.column(run, 'in-progress')
       state.stage = LAND
       state.parked = `merge waits: ${reason}`
       state.retryAt = new Date(Date.now() + LAND_WAIT).toISOString()
@@ -872,7 +882,6 @@ export class Engine {
     }
 
     const task = await this.mustGetTask(id)
-    onBoard = task.state
     if (task.openBlockers > 0) return wait('open blockers')
     if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; ${this.baseRed.fix ? `task ${taskRef(this.baseRed.fix)} fixes it first` : 'a fix task is chosen first'}`)
     const held = this.heldBy(id)
@@ -882,17 +891,18 @@ export class Engine {
       turn.keep = true
       return wait(reason)
     }
-    const pending = (reason: string) => (this.mergeQueue.has(id) ? queued(reason) : wait(reason))
+    const pending = (reason: string) => {
+      if (!this.mergeQueue.has(id)) return wait(reason)
+      inQueue = this.mergeTurn !== id
+      return queued(reason)
+    }
     const inLine = async () => {
       const ahead = this.aheadInMergeQueue(id, task.priority)
       if (ahead) {
         behind = true
         return queued(`queued behind task ${taskRef(ahead)}`)
       }
-      if (onBoard === 'queued') {
-        await board.setState(id, 'in-progress')
-        onBoard = 'in-progress'
-      }
+      await this.column(run, 'in-progress')
       return undefined
     }
     if (multi && state.repos) return this.landRepos(run, multi, wait, { queued, pending, inLine })
@@ -925,7 +935,8 @@ export class Engine {
     }
     let error: string | undefined
     if (!pull || pull.state === 'closed') error = 'the pull request is closed'
-    else if (pull.checks === 'pending' || pull.mergeable === 'unknown') return pending('checks are pending')
+    else if (pull.checks === 'pending') return pending('checks are pending')
+    else if (pull.mergeable === 'unknown') return pending('the board checks whether the branch merges cleanly')
     else if (pull.blocked && pull.checks !== 'failure') return wait(pull.blocked)
     else if (pull.checks === 'none' && this.checksMayStart(state, pull.headSha)) return wait('no checks yet; waiting for CI to start')
     else if (pull.checks === 'failure') {
@@ -1047,7 +1058,8 @@ export class Engine {
         entry.headSha = pushed
         return wait(`${repo} had commits that were not pushed; they are pushed now and the branch waits for CI`)
       }
-      if (pull.checks === 'pending' || pull.mergeable === 'unknown') return queue.pending(`checks of ${repo} are pending`)
+      if (pull.checks === 'pending') return queue.pending(`checks of ${repo} are pending`)
+      if (pull.mergeable === 'unknown') return queue.pending(`the board checks whether the branch of ${repo} merges cleanly`)
       if (pull.blocked && pull.checks !== 'failure') return wait(`${repo}: ${pull.blocked}`)
       if (pull.checks === 'none' && this.checksMayStart(entry, pull.headSha)) return wait(`no checks yet in ${repo}; waiting for CI to start`)
       if (pull.checks === 'failure') {
