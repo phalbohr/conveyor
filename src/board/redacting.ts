@@ -139,6 +139,10 @@ export class RedactingBoard implements Board {
     return this.board.updateComment(commentId, this.clean(body))
   }
 
+  blockers(id: string) {
+    return this.board.blockers(id)
+  }
+
   addBlocker(id: string, blockerId: string) {
     return this.board.addBlocker(id, blockerId)
   }

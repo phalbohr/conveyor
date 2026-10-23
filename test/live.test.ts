@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { FakeBoard } from '../src/board/fake.js'
 import type { Context, Interact } from '../src/cli.js'
@@ -142,8 +142,27 @@ describe('help session', () => {
 
     expect(existsSync(join(paths.home, '.claude', 'skills', 'conveyor-help', 'SKILL.md'))).toBe(true)
     expect(sessions[0]?.command).toBe('claude')
-    expect(sessions[0]?.args.at(-1)).toContain('Use the conveyor-help skill')
+    expect(sessions[0]?.args.at(-1)).toContain('wait for my question')
+    expect(sessions[0]?.args.at(-1)).toContain('comes from the conveyor-help skill')
     expect(output).toContain('Installed the conveyor-help skill')
+  })
+
+  it('updates an old copy of the conveyor-help skill in the home directory', async () => {
+    const paths = await project()
+    mkdirSync(join(paths.home, '.claude', 'skills', 'conveyor-help'), { recursive: true })
+    writeFileSync(join(paths.home, '.claude', 'skills', 'conveyor-help', 'SKILL.md'), 'old skill\n')
+    const { interact } = agent()
+    let output = ''
+    const context: Context = { ...paths, stdout: (text) => (output += text), stderr: (text) => (output += text), interactive: true, interact, run: async () => ({ code: 0, stdout: '', stderr: '' }) }
+
+    expect(await helpSessionCommand(context)).toBe(0)
+
+    expect(readFileSync(join(paths.home, '.claude', 'skills', 'conveyor-help', 'SKILL.md'), 'utf8')).toContain('conveyor-help')
+    expect(existsSync(join(paths.home, '.claude', 'skills', 'conveyor-help', 'workflow.md'))).toBe(true)
+    expect(output).toContain('Updated the conveyor-help skill in your home directory')
+    output = ''
+    expect(await helpSessionCommand(context)).toBe(0)
+    expect(output).not.toContain('conveyor-help skill')
   })
 
   it('starts opencode in its interactive mode with the live model', async () => {
@@ -156,7 +175,7 @@ describe('help session', () => {
 
     expect(sessions[0]?.command).toBe('opencode')
     expect(sessions[0]?.args.slice(0, 3)).toEqual(['--model', 'litellm/local-model', '--prompt'])
-    expect(sessions[0]?.args.at(-1)).toContain('Use the conveyor-help skill')
+    expect(sessions[0]?.args.at(-1)).toContain('conveyor-help skill')
     expect(existsSync(join(paths.home, '.agents', 'skills', 'conveyor-help', 'SKILL.md'))).toBe(true)
   })
 

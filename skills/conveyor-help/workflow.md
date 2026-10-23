@@ -25,6 +25,18 @@ The board (GitHub or GitLab issues) holds every task and its state. Each team me
 
 Any task in `conveyor::needs-input` (a gate question or approval, a stage question, or an error) that gets an answer moves to `conveyor::queued` when the owner's workstation has no free slot, and to `conveyor::in-progress` when the next cycle starts it. A started task between two stages (for example the next part of a multi-part plan) also moves to `conveyor::queued` while all `limits.running` slots are taken; a task that waits for its merge checks or the base CI stays in `conveyor::in-progress`. Between two stages, my running task gives its slot to my waiting started task with a higher priority (a lower `priority::` number): it moves to `conveyor::queued`, continues at its next stage later, and the log says `task N: gives its slot to task #M with a higher priority`. Equal priorities do not give way, and the fix task of a red base never does. Questions, approvals, and errors always go to the issue as comments. Any reply without the conveyor marker from a user with write access to the repository is the answer; the next cycle continues the stage (cycles run every `poll_interval`, default 5m; `r` on the control screen starts one at once). The log records `task N: stage S started (harness, model)` and the end of every stage. `conveyor attach <number>` answers in a live session instead.
 
+## Which tasks the conveyor takes
+
+A task in Backlog is a candidate when all of these hold:
+
+1. Its `form::` label is one that `pickup_from` takes. `pickup_from` names the earliest form, not the only one: `idea` takes `form::idea`, `form::story`, and `form::plan`; `story` takes `form::story` and `form::plan`; `plan` takes `form::plan` only. A task without a form is a draft and is never taken.
+2. It has no open blockers: GitHub "blocked by" relations, GitLab "is blocked by" links, or a `Blocked by: #7, #9` line in the issue text. A task can have several blockers; it starts after the last one is closed. A blocker in `conveyor::done` that is still open (`close_on_done: false`, the default) keeps blocking until someone closes it. The control screen lists such a task in Backlog as `form::story · blocked by #279, #281` and counts it in `backlog 0|0|2|0 (2 blocked)`.
+3. It is assigned to `pickup.assignee` (default: me); an unassigned task only with `pickup.include_unassigned: true`.
+4. Its author has write access to the repository (with `repos`: to every repository of the feature); the log says `skipped: its author … has no write access` otherwise.
+5. On a GitLab group board without `repos`, its project is the project of this checkout; the log says `skipped: …` otherwise.
+
+The conveyor claims a candidate only while it has room: `limits.running`, `limits.awaiting_me`, and `limits.awaiting_review` are below their limits, no started task waits for a slot, the daily token limit and the subscription reserves are not reached, and the base branch CI is not red (the fix task of a red base starts anyway). It takes candidates in this order: the fix task, tasks assigned to me, then by `priority::` (1 first), then the oldest.
+
 ## Task numbers
 
 A task is an issue on the board, and the conveyor names it by the issue number: GitHub `github.com/owner/repo/issues/51` and GitLab issue `#51` are task `51`.

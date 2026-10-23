@@ -13,7 +13,7 @@ import { Trust } from '../engine/trust.js'
 import { commentText, findWorkpad } from '../engine/workpad.js'
 import { childEnv } from '../harness/harness.js'
 import { prepare } from './run.js'
-import { skillInstall } from './skill.js'
+import { skillInstall, skillState } from './skill.js'
 
 const TEMPLATES = fileURLToPath(new URL('../../templates/live/', import.meta.url))
 const FRONTMATTER = /^---\n([\s\S]*?)\n---\n?/
@@ -143,15 +143,28 @@ export async function helpSessionCommand(context: Context): Promise<number> {
   const prepared = prepare(context)
   if (!prepared) return 1
   const { config } = prepared
-  const folder = config.live.harness === 'claude' ? '.claude' : '.agents'
-  const installed = [context.cwd, context.home].some((base) => existsSync(join(base, folder, 'skills', 'conveyor-help', 'SKILL.md')))
-  if (!installed) skillInstall({ ...context, stdout: () => undefined }, {}, false)
-  const prompt = `Use the conveyor-help skill. Help me with the conveyor of this project: answer my questions about the workflow, the settings, and the current state of the board (why tasks wait, what blocks them, what to do with stuck tasks), or walk me through the setup. For the state, read \`conveyor --json\` and the conveyor log ${logFile(context.home, config.board.project)}; change nothing on the board without my go-ahead.`
+  const local = skillState(context.cwd)
+  const home = local === 'missing' ? skillState(context.home) : 'current'
+  if (home !== 'current') skillInstall({ ...context, stdout: () => undefined }, {}, false)
+  const note =
+    local === 'old'
+      ? 'The conveyor-help skill in this project is older than this conveyor; `conveyor skill install --project` updates it. '
+      : home === 'missing'
+        ? 'Installed the conveyor-help skill in your home directory; '
+        : home === 'old'
+          ? 'Updated the conveyor-help skill in your home directory; '
+          : ''
+  const prompt = [
+    'You help me with the conveyor of this project (the `conveyor` CLI). Say in one short line that you are ready, then wait for my question.',
+    'Answer only what I ask, briefly. Do not analyse the board or load anything before a question needs it.',
+    'Every statement about how the conveyor works (which tasks it takes, what a setting or label means, why a task waits) comes from the conveyor-help skill or from `conveyor <command> --help`: load the skill when a question needs such a rule, and never derive a rule from the name of a setting or a label. When the skill does not cover a point, say so.',
+    `For the state of the board read \`conveyor --json\` and the conveyor log ${logFile(context.home, config.board.project)}. Change nothing on the board or in the settings without my go-ahead.`,
+  ].join('\n\n')
   const command = liveCommand(context, config, prompt)
   if (!command.ok) return fail(context, command.error)
   const code = await context.interact(command.command, command.args, { cwd: context.cwd, env: { ...childEnv(process.env), ...command.env } })
   const ended = code === 0 ? 'the help session ended.' : `the help session ended with exit code ${code} (${command.command} with model ${config.live.model}; check live.harness and live.model in the settings).`
-  context.stdout(installed ? `${ended[0]?.toUpperCase()}${ended.slice(1)}\n` : `Installed the conveyor-help skill in your home directory; ${ended}\n`)
+  context.stdout(note.endsWith('; ') ? `${note}${ended}\n` : `${note}${ended[0]?.toUpperCase()}${ended.slice(1)}\n`)
   return code === 0 ? 0 : 1
 }
 

@@ -250,6 +250,10 @@ export class FakeBoard implements Board {
     Object.assign(comment, { body, updatedAt: this.now().toISOString() })
   }
 
+  async blockers(id: string) {
+    return [...this.issue(id).blockers].filter((blocker) => !this.issue(blocker).closed)
+  }
+
   async addBlocker(id: string, blockerId: string) {
     this.issue(blockerId)
     this.issue(id).blockers.add(blockerId)

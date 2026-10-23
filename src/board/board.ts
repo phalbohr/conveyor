@@ -88,6 +88,7 @@ export interface Board {
   addComment(id: string, body: string): Promise<Comment>
   updateComment(commentId: string, body: string): Promise<void>
   addBlocker(id: string, blockerId: string): Promise<void>
+  blockers(id: string): Promise<string[]>
   claim(id: string): Promise<boolean>
   release(id: string): Promise<void>
   setPriority(id: string, priority: number): Promise<void>

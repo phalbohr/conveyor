@@ -31,7 +31,13 @@ export function columnTasks(status: StatusSnapshot, column: number): ColumnTask[
     return status.backlog.map((task) =>
       task.released
         ? { id: task.id, title: task.title, url: task.url, detail: `released · resumes${task.released.stage ? ` at stage::${task.released.stage}` : ''} (conveyor::${task.released.state}) before new tasks · x resets it`, tone: 'warning' as const, released: true }
-        : { id: task.id, title: task.title, url: task.url, detail: task.form ? `form::${task.form}` : 'no form', ...(task.form ? { form: task.form } : {}) },
+        : {
+            id: task.id,
+            title: task.title,
+            url: task.url,
+            detail: [task.form ? `form::${task.form}` : 'no form', ...(task.blockedBy ? [task.blockedBy.length ? `blocked by ${task.blockedBy.map(taskRef).join(', ')}` : 'blocked'] : [])].join(' · '),
+            ...(task.form ? { form: task.form } : {}),
+          },
     )
   }
   const states = [['needs-input'], ['queued'], ['in-progress'], ['review']][column - 1] ?? []
@@ -82,11 +88,12 @@ export function statusLines(status: StatusSnapshot, here?: string, view?: Status
   ]
   const waiting = status.backlog.filter((task) => !task.released)
   const released = status.backlog.length - waiting.length
+  const blockedTasks = waiting.filter((task) => task.blockedBy).length
   const forms = [waiting.filter((task) => !task.form), ...(['idea', 'story', 'plan'] as const).map((form) => waiting.filter((task) => task.form === form))]
   const queued = status.mine.filter((task) => task.state === 'queued').length
   const counts = [`${limits.awaitingMe.used}/${limits.awaitingMe.limit}`, `${queued}`, `${limits.running.used}/${limits.running.limit}`, `${limits.awaitingReview.used}/${limits.awaitingReview.limit}`]
   const columns = STATUS_COLUMNS.map((label, index) =>
-    index === BACKLOG ? `${label} ${forms.map((group) => group.length).join('|')}${released ? ` +${released} released` : ''}` : `${label} ${counts[index - 1]}`,
+    index === BACKLOG ? `${label} ${forms.map((group) => group.length).join('|')}${blockedTasks ? ` (${blockedTasks} blocked)` : ''}${released ? ` +${released} released` : ''}` : `${label} ${counts[index - 1]}`,
   )
   lines.push({
     text: `my board: ${columns.join(' · ')}`,

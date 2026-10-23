@@ -53,6 +53,25 @@ describe('collectStatus', () => {
     ])
   })
 
+  it('names the open blockers of a backlog task', async () => {
+    const settings = tempDir('conveyor-settings-')
+    writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')
+    const loaded = loadConfig(settings)
+    if (!loaded.ok) throw new Error(loaded.errors.join('\n'))
+    const fake = new FakeBoard('me')
+    const first = await fake.createTask('First', 'body', { form: 'plan' })
+    const second = await fake.createTask('Second', 'body', { form: 'plan' })
+    const done = await fake.createTask('Done', 'body', { form: 'plan' })
+    const audit = await fake.createTask('Audit', 'body', { form: 'story' })
+    for (const blocker of [first, second, done]) await fake.addBlocker(audit.id, blocker.id)
+    await fake.closeTask(done.id)
+
+    const status = await collectStatus({ board: fake, config: loaded.config, settings, home: tempDir() })
+
+    expect(status.backlog.find((task) => task.id === audit.id)?.blockedBy).toEqual([first.id, second.id])
+    expect(status.backlog.find((task) => task.id === first.id)?.blockedBy).toBeUndefined()
+  })
+
   it('summarizes my tasks, the team queue, and my limits', async () => {
     const settings = tempDir('conveyor-settings-')
     writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\n')

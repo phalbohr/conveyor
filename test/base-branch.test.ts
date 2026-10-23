@@ -140,6 +140,27 @@ describe('ignored checks', () => {
   })
 })
 
+describe('open blockers', () => {
+  it('lists the open blockers of a GitHub issue', async () => {
+    const { run } = recorder(() => JSON.stringify([[{ number: 279, state: 'open' }, { number: 255, state: 'closed' }], [{ number: 281, state: 'open' }]]))
+    expect(await new GitHubBoard('acme/app', run).blockers('285')).toEqual(['279', '281'])
+  })
+
+  it('lists the open blockers of a GitLab issue from links and the Blocked by line', async () => {
+    const { run } = recorder((args) => {
+      const path = args.find((arg) => arg.startsWith('projects/')) ?? ''
+      if (path.endsWith('/links')) return JSON.stringify([
+        { state: 'opened', link_type: 'is_blocked_by', references: { full: 'acme/app#5' } },
+        { state: 'closed', link_type: 'is_blocked_by', references: { full: 'acme/app#6' } },
+        { state: 'opened', link_type: 'blocks', references: { full: 'acme/app#8' } },
+      ])
+      if (path.endsWith('/issues/9')) return JSON.stringify({ description: 'Story\n\nBlocked by: #7, #4', references: { full: 'acme/app#9' } })
+      return JSON.stringify({ state: path.endsWith('/issues/7') ? 'opened' : 'closed' })
+    })
+    expect(await new GitLabBoard('acme/app', run, { retryDelay: 0 }).blockers('9')).toEqual(['5', '7'])
+  })
+})
+
 describe('cancelled runs', () => {
   it('tells a cancelled GitHub run from a failed one', async () => {
     const runs = [{ name: 'test', status: 'completed', conclusion: 'cancelled' }, { name: 'lint', status: 'completed', conclusion: 'success' }]

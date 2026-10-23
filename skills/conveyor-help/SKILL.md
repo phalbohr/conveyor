@@ -32,7 +32,7 @@ When the user wants to go through the settings or set up the conveyor, follow `s
 When the user asks why tasks wait, what blocks them, or what to do with a stuck task:
 
 1. Run `conveyor --json` and read the last 200 lines of the log; match each task in question to its state, stage, and its latest log lines.
-2. Name the cause per task with the log line that shows it (for example a CI freeze by a fix task, a full `running` limit, an open blocker, a missing answer, a red base, checks that wait).
+2. Name the cause per task with the log line or the snapshot field that shows it (for example a CI freeze by a fix task, a full `running` limit, `blockedBy` of a backlog task, a missing answer, a red base, checks that wait). For a task that is not taken, check the rules of "Which tasks the conveyor takes" in `workflow.md` one by one.
 3. Give the next step from `workflow.md` (answer in the issue, `/approve`, `x` to reset, `conveyor release`, a setting to change). Change nothing on the board or in the settings without the user's go-ahead.
 
 ## Change the configuration

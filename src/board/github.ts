@@ -250,6 +250,11 @@ export class GitHubBoard implements Board {
     await this.api(['-X', 'PATCH', `${this.repo}/issues/comments/${commentId}`, '-f', `body=${body}`])
   }
 
+  async blockers(id: string) {
+    const pages = await this.api<{ number: number; state: string }[][]>(['--paginate', '--slurp', `${this.repo}/issues/${id}/dependencies/blocked_by?per_page=100`])
+    return pages.flat().filter((issue) => issue.state === 'open').map((issue) => String(issue.number))
+  }
+
   async addBlocker(id: string, blockerId: string) {
     const blocker = await this.api<Issue>([`${this.repo}/issues/${blockerId}`])
     const result = await this.call(['-X', 'POST', `${this.repo}/issues/${id}/dependencies/blocked_by`, '-F', `issue_id=${blocker.id}`])

@@ -460,7 +460,19 @@ export class GitLabBoard implements Board {
     }))
   }
 
-  private fallbackBlockers(issue: GraphIssue) {
+  async blockers(id: string) {
+    const links = await this.json<{ state: string; link_type: string; references?: { full: string } }[]>([`${this.issuePath(id)}/links`])
+    const linked = links.filter((link) => link.link_type === 'is_blocked_by' && link.state === 'opened' && link.references).map((link) => this.idOf(link.references?.full ?? ''))
+    const issue = await this.json<{ description: string | null; references: { full: string } }>([this.issuePath(id)])
+    const written: string[] = []
+    for (const blocker of this.fallbackBlockers({ reference: issue.references.full, description: issue.description })) {
+      const state = await this.json<{ state: string }>([`projects/${encodeURIComponent(blocker.project)}/issues/${blocker.iid}`]).catch(() => undefined)
+      if (state?.state === 'opened') written.push(this.idOf(`${blocker.project}#${blocker.iid}`))
+    }
+    return [...new Set([...linked, ...written])]
+  }
+
+  private fallbackBlockers(issue: Pick<GraphIssue, 'reference' | 'description'>) {
     const home = issue.reference.slice(0, issue.reference.lastIndexOf('#'))
     const group = this.options.group
     return [...(issue.description?.match(BLOCKED_BY)?.[1]?.matchAll(/([\w./-]*)#(\d+)/g) ?? [])].map((match) => {

@@ -32,7 +32,7 @@ export type MyTask = {
   activity?: Activity
 }
 
-export type BacklogTask = { id: string; title: string; url: string; form?: NonNullable<Task['form']>; priority?: number; released?: { state: NonNullable<Task['state']>; stage?: string } }
+export type BacklogTask = { id: string; title: string; url: string; form?: NonNullable<Task['form']>; priority?: number; blockedBy?: string[]; released?: { state: NonNullable<Task['state']>; stage?: string } }
 
 type Limit = { used: number; limit: number }
 
@@ -133,6 +133,9 @@ export async function collectStatus(options: { board: Board; config: Config; set
       }),
     )
     .sort((a, b) => Number(!a.released) - Number(!b.released) || (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) || compareIds(a.id, b.id))
+  for (const entry of backlog) {
+    if ((tasks.find((task) => task.id === entry.id)?.openBlockers ?? 0) > 0) entry.blockedBy = await board.blockers(entry.id).catch(() => [])
+  }
 
   const pid = runningPid(home, project)
   const fetch = Date.now() - lastFetch >= FETCH_EVERY
