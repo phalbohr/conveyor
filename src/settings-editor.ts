@@ -103,7 +103,10 @@ const TEAM: Spec[] = [
     kind: 'select',
     options: ['closed', 'done'],
     help: 'when a blocking issue stops blocking; only while done issues stay open',
-    optionHelp: { closed: 'when the blocking issue is closed', done: 'when the blocking issue is done (conveyor::done), even while it stays open' },
+    optionHelp: {
+      closed: 'blockers are resolved when the blocking issue is closed',
+      done: 'blockers are resolved when the blocking issue gets the label conveyor::done, even while it stays open',
+    },
   },
   { key: 'review.approvals', label: 'Approvals for merge', kind: 'number', help: 'distinct people who approve before the conveyor merges' },
   { key: 'review.count_own_approvals', label: 'Count own approvals', kind: 'boolean', options: BOOLEAN, help: 'false (default): approvals of the account the conveyor runs as do not count, so a harness cannot approve its own work; true when you run the conveyor as your own account and approve with it' },
@@ -174,6 +177,7 @@ export class SettingsDocument {
   private readonly saved: Record<keyof typeof FILES, string>
   private config: Config | undefined
   private changed = false
+  private savedConfig = ''
   private readonly added = new Set<string>()
 
   private catalogs: Record<string, Catalog>
@@ -194,6 +198,7 @@ export class SettingsDocument {
     this.docs = { config: parseDocument(this.saved.config), local: parseDocument(this.saved.local) }
     const loaded = this.validateText()
     if (loaded.ok) this.config = loaded.config
+    this.savedConfig = loaded.ok ? JSON.stringify(loaded.config) : ''
   }
 
   setCatalogs(catalogs: Record<string, Catalog>) {
@@ -353,11 +358,12 @@ export class SettingsDocument {
     }
     this.added.clear()
     this.changed = false
+    this.savedConfig = JSON.stringify(this.config)
     return created.length > 0 ? { ok: true, created } : { ok: true }
   }
 
   dirty() {
-    return this.changed
+    return this.changed || this.added.size > 0
   }
 
   private text(name: keyof typeof FILES) {
@@ -441,9 +447,9 @@ export class SettingsDocument {
   }
 
   private refresh() {
-    this.changed = true
     const loaded = this.validateText()
     if (loaded.ok) this.config = loaded.config
+    this.changed = !loaded.ok || JSON.stringify(loaded.config) !== this.savedConfig
   }
 
   private validateText() {
