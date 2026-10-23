@@ -134,7 +134,10 @@ export async function collectStatus(options: { board: Board; config: Config; set
     )
     .sort((a, b) => Number(!a.released) - Number(!b.released) || (a.priority ?? Number.MAX_SAFE_INTEGER) - (b.priority ?? Number.MAX_SAFE_INTEGER) || compareIds(a.id, b.id))
   for (const entry of backlog) {
-    if ((tasks.find((task) => task.id === entry.id)?.openBlockers ?? 0) > 0) entry.blockedBy = await board.blockers(entry.id).catch(() => [])
+    if ((tasks.find((task) => task.id === entry.id)?.openBlockers ?? 0) === 0) continue
+    const open = await board.blockers(entry.id).catch(() => [])
+    const blocking = config.close_on_done || config.unblock_on === 'closed' ? open : open.filter((id) => tasks.find((task) => task.id === id)?.state !== 'done')
+    if (open.length === 0 || blocking.length > 0) entry.blockedBy = blocking
   }
 
   const pid = runningPid(home, project)

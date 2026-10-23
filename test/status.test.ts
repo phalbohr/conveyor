@@ -70,6 +70,14 @@ describe('collectStatus', () => {
 
     expect(status.backlog.find((task) => task.id === audit.id)?.blockedBy).toEqual([first.id, second.id])
     expect(status.backlog.find((task) => task.id === first.id)?.blockedBy).toBeUndefined()
+
+    writeFileSync(join(settings, 'config.yaml'), 'board: {provider: github, project: acme/app}\nunblock_on: done\n')
+    const doneConfig = loadConfig(settings)
+    if (!doneConfig.ok) throw new Error(doneConfig.errors.join('\n'))
+    await fake.setState(first.id, 'done')
+    await fake.setState(second.id, 'done')
+    const unblocked = await collectStatus({ board: fake, config: doneConfig.config, settings, home: tempDir() })
+    expect(unblocked.backlog.find((task) => task.id === audit.id)?.blockedBy).toBeUndefined()
   })
 
   it('summarizes my tasks, the team queue, and my limits', async () => {

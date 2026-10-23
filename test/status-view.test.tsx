@@ -45,9 +45,9 @@ const snapshot: StatusSnapshot = {
 }
 
 describe('statusLines', () => {
-  it('marks blocked backlog tasks with their open blockers and counts them', () => {
+  it('marks blocked backlog tasks with their open blockers', () => {
     const blocked = { ...snapshot, backlog: snapshot.backlog.map((task) => (task.id === '9' ? { ...task, blockedBy: ['279', '281'] } : task)) }
-    expect(statusLines(blocked).find((line) => line.text.startsWith('my board:'))?.text).toContain('backlog 1|1|0|1 (1 blocked)')
+    expect(statusLines(blocked).find((line) => line.text.startsWith('my board:'))?.text).toContain('backlog 1|1|0|1 · ')
     expect(columnTasks(blocked, 0).find((task) => task.id === '9')?.detail).toBe('form::plan · blocked by #279, #281')
   })
 

@@ -148,6 +148,13 @@ describe('SettingsDocument', () => {
     expect(doc.problems().join('\n')).toContain('review.approvals')
   })
 
+  it('offers unblock_on only while done issues stay open', () => {
+    const doc = new SettingsDocument(settings(CONFIG))
+    expect(doc.fields().find((f) => f.key === 'unblock_on')).toMatchObject({ value: 'closed', options: ['closed', 'done'] })
+    doc.set('close_on_done', 'true')
+    expect(doc.fields().find((f) => f.key === 'unblock_on')).toBeUndefined()
+  })
+
   it('lists team, stage, and personal fields with current values', () => {
     const doc = new SettingsDocument(settings(CONFIG))
     const fields = doc.fields()

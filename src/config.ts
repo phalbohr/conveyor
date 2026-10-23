@@ -130,6 +130,7 @@ const teamSchema = z.strictObject({
   language: z.strictObject({ docs: name.default('English') }).prefault({}),
   merge_method: z.enum(['merge', 'squash', 'rebase']).default('merge'),
   close_on_done: z.boolean().default(false),
+  unblock_on: z.enum(['closed', 'done']).default('closed'),
   review: z.strictObject({ approvals: count.default(1), count_own_approvals: z.boolean().default(false) }).prefault({}),
   harnesses: z.record(harness, harnessOverride).default({}),
 })

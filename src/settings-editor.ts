@@ -97,6 +97,14 @@ const TEAM: Spec[] = [
     help: 'who closes a finished issue',
     optionHelp: { false: 'done issues stay open until a human closes them, e.g. after a sprint review', true: 'the conveyor closes the issue when the task is done' },
   },
+  {
+    key: 'unblock_on',
+    label: 'Blockers resolved when',
+    kind: 'select',
+    options: ['closed', 'done'],
+    help: 'when a blocking issue stops blocking; only while done issues stay open',
+    optionHelp: { closed: 'when the blocking issue is closed', done: 'when the blocking issue is done (conveyor::done), even while it stays open' },
+  },
   { key: 'review.approvals', label: 'Approvals for merge', kind: 'number', help: 'distinct people who approve before the conveyor merges' },
   { key: 'review.count_own_approvals', label: 'Count own approvals', kind: 'boolean', options: BOOLEAN, help: 'false (default): approvals of the account the conveyor runs as do not count, so a harness cannot approve its own work; true when you run the conveyor as your own account and approve with it' },
   { key: 'language.docs', label: 'Documentation language', kind: 'text', help: 'language of everything the team sees' },
@@ -195,7 +203,7 @@ export class SettingsDocument {
   fields(): Field[] {
     const config = this.config
     const harnesses = ['claude', 'codex', ...Object.keys(config?.harnesses ?? {})]
-    const fields: Field[] = TEAM.map((spec) => this.field('Team', 'config', spec))
+    const fields: Field[] = TEAM.filter((spec) => spec.key !== 'unblock_on' || !config?.close_on_done).map((spec) => this.field('Team', 'config', spec))
     for (const prefix of ['defaults', 'triage']) {
       const help = PREFIX_HELP[prefix] ?? ''
       const harness = prefix === 'triage' ? (config?.triage.harness ?? 'claude') : String(this.docs.config.getIn(['defaults', 'harness']) ?? 'claude')

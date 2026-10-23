@@ -398,6 +398,17 @@ describe('Engine scheduling', () => {
     expect(runs().filter((run) => run.endsWith(':implement'))).toEqual(['3:implement', '2:implement', '1:implement', '5:implement'])
   })
 
+  it('takes a task whose blocker is done but open only with unblock_on: done', async () => {
+    for (const [config, taken] of [['', false], ['unblock_on: done\n', true], ['unblock_on: done\nclose_on_done: true\n', false]] as const) {
+      const { board, cycle, runs } = setup({ config })
+      await board.createTask('Foundation', 'p', { state: 'done' })
+      await board.createTask('Feature', 'p', { form: 'plan' })
+      await board.addBlocker('2', '1')
+      await cycle()
+      expect(runs().includes('2:implement')).toBe(taken)
+    }
+  })
+
   it('takes only assigned tasks when unassigned tasks are excluded', async () => {
     const { board, cycle, runs } = setup({ local: 'pickup: {include_unassigned: false}\n' })
     await board.createTask('unassigned', 'p', { form: 'plan' })

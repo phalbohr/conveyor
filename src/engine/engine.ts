@@ -256,7 +256,7 @@ export class Engine {
         case 'backlog':
           if (!task.form) break
           if (owned) resumable.push(task)
-          else if (PICKUP[config.pickup_from].includes(task.form) && task.openBlockers === 0 && this.pickable(task, config, me)) {
+          else if (PICKUP[config.pickup_from].includes(task.form) && !(await this.blocked(task, config, listedTasks)) && this.pickable(task, config, me)) {
             fresh.push(task)
           }
           break
@@ -882,7 +882,7 @@ export class Engine {
     }
 
     const task = await this.mustGetTask(id)
-    if (task.openBlockers > 0) return wait('open blockers')
+    if (await this.blocked(task, config)) return wait('open blockers')
     if (this.baseRed && this.baseRed.fix !== id) return wait(`the base branch CI is red; ${this.baseRed.fix ? `task ${taskRef(this.baseRed.fix)} fixes it first` : 'a fix task is chosen first'}`)
     const held = this.heldBy(id)
     if (held) return wait(held)
@@ -1907,6 +1907,15 @@ export class Engine {
     } finally {
       await this.options.board.release(FIX_LOCK)
     }
+  }
+
+  private async blocked(task: Task, config: Config, listed?: Task[]) {
+    if (task.openBlockers === 0) return false
+    if (config.close_on_done || config.unblock_on === 'closed') return true
+    const open = await this.options.board.blockers(task.id).catch(() => undefined)
+    if (!open) return true
+    const tasks = listed ?? (await this.options.board.listTasks())
+    return open.some((id) => tasks.find((candidate) => candidate.id === id)?.state !== 'done')
   }
 
   private pickable(task: Task, config: Config, me: string) {
