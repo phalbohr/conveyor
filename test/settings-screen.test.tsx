@@ -44,6 +44,25 @@ describe('SettingsScreen', () => {
     expect(rendered.lastFrame()).toContain('Saved.')
   })
 
+  it('sets a stage field back to its default with d', async () => {
+    const dir = tempDir('conveyor-settings-')
+    writeFileSync(join(dir, 'config.yaml'), 'board:\n  provider: github\n  project: acme/app\ndefaults: {model: sonnet}\nstages:\n  implement: {model: opus}\n  merge: {}\n')
+    writeFileSync(join(dir, 'local.yaml'), 'limits:\n  running: 3\n')
+    const doc = new SettingsDocument(dir, { catalogs: {} })
+    const rendered = render(<SettingsScreen doc={doc} />)
+    await until(() => expect(rendered.lastFrame()).toContain('Merge mode'))
+    const steps = doc.fields().findIndex((field) => field.key === 'stages.implement.model')
+    for (let step = 0; step < steps; step++) {
+      await settle()
+      rendered.stdin.write(DOWN)
+    }
+    await until(() => expect(rendered.lastFrame()).toMatch(/› implement: model\s+opus/))
+    await settle()
+    rendered.stdin.write('d')
+    await until(() => expect(rendered.lastFrame()).toMatch(/› implement: model\s+\(defaults: sonnet\)/))
+    expect(rendered.lastFrame()).toContain('[d] default')
+  })
+
   it('cycles the options of a field with the arrow keys', async () => {
     const { dir, rendered, press } = setup()
     await until(() => expect(rendered.lastFrame()).toContain('Merge mode'))

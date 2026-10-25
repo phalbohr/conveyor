@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `d` in `conveyor settings` sets a stage or triage value back to its default, the value from `defaults`.
 - `conveyor settings` reports unsaved changes only when the settings differ from the saved ones; before, changing a value and setting it back still asked to discard or save on quit.
 - Backlog on the control screen marks a blocked task with its open blockers (`form::story · blocked by #279, #281`); `conveyor --json` lists them in `blockedBy`.
 - New team setting `unblock_on: closed | done` (default `closed`): with `done`, a blocking issue that reached `conveyor::done` no longer blocks, even while it stays open. It applies only with `close_on_done: false`, and the settings screen shows it only then.
