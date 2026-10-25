@@ -142,8 +142,13 @@ describe('ignored checks', () => {
 
 describe('open blockers', () => {
   it('lists the open blockers of a GitHub issue', async () => {
-    const { run } = recorder(() => JSON.stringify([[{ number: 279, state: 'open' }, { number: 255, state: 'closed' }], [{ number: 281, state: 'open' }]]))
-    expect(await new GitHubBoard('acme/app', run).blockers('285')).toEqual(['279', '281'])
+    const { run } = recorder(() =>
+      JSON.stringify([
+        [{ number: 279, state: 'open', repository_url: 'https://api.github.com/repos/acme/app' }, { number: 255, state: 'closed' }],
+        [{ number: 281, state: 'open' }, { number: 12, state: 'open', repository_url: 'https://api.github.com/repos/acme/lib' }],
+      ]),
+    )
+    expect(await new GitHubBoard('acme/app', run).blockers('285')).toEqual(['279', '281', 'acme/lib#12'])
   })
 
   it('lists the open blockers of a GitLab issue from links and the Blocked by line', async () => {
@@ -167,6 +172,8 @@ describe('cancelled runs', () => {
     const { run } = recorder((args) => (args.some((arg) => arg.includes('/check-runs')) ? JSON.stringify([{ check_runs: runs }]) : JSON.stringify({ statuses: [] })))
     const board = new GitHubBoard('acme/app', run)
     expect(await board.commitChecks('abc')).toBe('cancelled')
+    runs.push({ name: 'e2e', status: 'in_progress', conclusion: null as unknown as string })
+    expect(await board.commitChecks('abc')).toBe('pending')
     runs.push({ name: 'build', status: 'completed', conclusion: 'failure' })
     expect(await board.commitChecks('abc')).toBe('failure')
   })

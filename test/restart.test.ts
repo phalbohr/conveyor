@@ -44,6 +44,24 @@ describe('restartTask', () => {
     expect(await board.getTask(id)).toMatchObject({ state: 'in-progress', stage: 'implement' })
   })
 
+  it('says that commits stay when the stage started before marks were recorded', async () => {
+    const board = new FakeBoard('me')
+    const workspaces = new FakeWorkspaces()
+    const id = await started(board, { attempt: 0, stage: 'implement' }, 'in-progress')
+    expect(await restartTask(board, workspaces, id, 'stage', STAGES)).toContain('drops the changes it did not commit; its commits stay')
+    expect(workspaces.rewinds).toEqual([{ taskId: id }])
+  })
+
+  it('refuses a part without a recorded start or with a merged repository', async () => {
+    const board = new FakeBoard('me')
+    const workspaces = new FakeWorkspaces()
+    const old = await started(board, { attempt: 0, stage: 'review', parts: ['api', 'ui'], part: 0 }, 'in-progress')
+    await expect(restartTask(board, workspaces, old, 'part', STAGES)).rejects.toThrow('no start of part 1 is recorded')
+    const merged = await started(board, { attempt: 0, stage: 'merge', parts: ['api', 'ui'], part: 1, partBase: 'p1', repos: { frontend: { number: '3', url: 'u', merged: true } } }, 'in-progress')
+    await expect(restartTask(board, workspaces, merged, 'part', STAGES)).rejects.toThrow('is merged already')
+    expect(workspaces.rewinds).toEqual([])
+  })
+
   it('refuses a task without a stage, without parts, or of another owner', async () => {
     const board = new FakeBoard('me')
     const workspaces = new FakeWorkspaces()

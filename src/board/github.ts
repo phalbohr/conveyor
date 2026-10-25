@@ -251,8 +251,14 @@ export class GitHubBoard implements Board {
   }
 
   async blockers(id: string) {
-    const pages = await this.api<{ number: number; state: string }[][]>(['--paginate', '--slurp', `${this.repo}/issues/${id}/dependencies/blocked_by?per_page=100`])
-    return pages.flat().filter((issue) => issue.state === 'open').map((issue) => String(issue.number))
+    const pages = await this.api<{ number: number; state: string; repository_url?: string }[][]>(['--paginate', '--slurp', `${this.repo}/issues/${id}/dependencies/blocked_by?per_page=100`])
+    return pages
+      .flat()
+      .filter((issue) => issue.state === 'open')
+      .map((issue) => {
+        const repo = issue.repository_url?.replace(/^.*\/repos\//, '')
+        return repo && repo !== this.repo.replace(/^repos\//, '') ? `${repo}#${issue.number}` : String(issue.number)
+      })
   }
 
   async addBlocker(id: string, blockerId: string) {
@@ -379,7 +385,8 @@ export class GitHubBoard implements Board {
     const ignore = this.options.ignoreChecks ?? []
     const checks = checksOf(all, ignore)
     if (checks !== 'failure') return checks
-    return checksOf(all.filter((check) => check.conclusion !== 'CANCELLED'), ignore) === 'failure' ? 'failure' : 'cancelled'
+    const rest = checksOf(all.filter((check) => check.conclusion !== 'CANCELLED'), ignore)
+    return rest === 'failure' || rest === 'pending' ? rest : 'cancelled'
   }
 
   async closePullRequest(id: string) {

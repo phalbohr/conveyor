@@ -567,6 +567,28 @@ describe('merge against the latest base branch', () => {
     expect((await board.getTask('2'))?.state).toBe('queued')
   })
 
+  it('gives the merge turn to the next task when the checks of the first one pend for over two hours', async () => {
+    const { board, workspaces, cycle, expireRetry, logs } = setup({ mode: 'ai', limits: 'running: 3' })
+    workspaces.taskSyncs.set('1', ['rebased'])
+    await board.createTask('Add login', 'p', { form: 'plan' })
+    await cycle()
+    board.updatePullRequest('1', { checks: 'pending' })
+    await board.createTask('Add logout', 'p', { form: 'plan' })
+    await cycle()
+    expect(logs).toContain('task 2: merge waits: queued behind task #1')
+
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + 3 * 3_600_000)
+    await expireRetry('1')
+    await expireRetry('2')
+    await cycle()
+    await expireRetry('2')
+    await cycle()
+    vi.useRealTimers()
+    expect(logs.join('\n')).toContain('task 1: merge waits: checks are pending for over 2 h; the next task of the merge queue goes first')
+    expect(board.merges.map((merge) => merge.id)).toEqual(['2'])
+  })
+
   it('rebases a branch with failed checks onto a newer base before it repairs anything', async () => {
     const { board, workspaces, cycle, expireRetry, runs } = setup({ mode: 'ai', stages: '  implement: {}\n  merge: {}\n  fix-ci: {when: failure}' })
     board.checks = 'failure'

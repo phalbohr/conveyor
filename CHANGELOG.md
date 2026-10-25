@@ -2,27 +2,45 @@
 
 ## Unreleased
 
-- `d` in `conveyor settings` sets a stage or triage value back to its default, the value from `defaults`.
-- `conveyor settings` reports unsaved changes only when the settings differ from the saved ones; before, changing a value and setting it back still asked to discard or save on quit.
+### Changes you may need to act on
+
+- `h` replaces the copy of the `conveyor-help` skill in your home directory (`~/.claude/skills`, `~/.agents/skills`) when it differs from the copy of this version, so edits there are lost; a copy in the project (`conveyor skill install --project`) is never replaced, only reported as old.
+- After every stage the conveyor stops the processes that still run from the task workspace (dev servers, applications started for tests) and removes the Docker containers named `conveyor-<task>-…`; the stage prompt asks the harness to name its containers so and to stop what it started. Before, such servers and databases kept running until someone stopped them, and they could hold ports that later tasks needed. The log names what was stopped. It stops every process whose command line contains the workspace path, so also an editor or a `tail -f` that you opened on a file of the workspace.
+- Loop guard: the conveyor counts the runs of each stage since the last answer of a human. The control screen shows `run 2`, `run 3`, … next to the task, yellow from the third run, and after `retry.max_attempts` runs without an answer the task stops in needs-input with the last result instead of running the stage again. Before, a stage that ended without an error but came back every cycle ran without limit.
+
+### Merge and CI
+
+- Tasks with green checks wait in a merge queue: priority first, then the time their checks turned green. Only the first task is rebased onto the latest base branch and tested again; the others wait on their old base in the Queued column and show `merge waits: queued behind task #N`; a task goes back to In progress when its turn comes. Before, every waiting task was rebased after each merge and ran its CI again, so with several ready tasks the CI runs grew with the square of their number, the runners slowed down, and a task could lose the race many times. A first task whose checks stay pending for over two hours gives the turn to the next one.
+- A task in the merge queue stays in the Queued column while GitHub computes whether its branch merges cleanly after a merge of another task; the wait says `the board checks whether the branch merges cleanly` instead of `checks are pending`. Before, every queued task jumped back to In progress after each merge. A waiting task that needs a running slot for a harness stage (for example `fix-ci` after a conflict) also moves to Queued and back to In progress when its stage starts.
+- A merge commit whose CI a newer commit of the base branch cancelled (for example `concurrency: cancel-in-progress` in a GitHub workflow, or an auto-cancelled GitLab pipeline) counts as passed, because the CI of the newer commit tests this merge too. Before, the cancellation counted as a red base branch and could start a fix task. On GitHub a run that was cancelled while other checks of the commit still run counts as pending.
+- A repair stage after a red base branch that changes nothing (for example because the failure was a cancelled run) finishes the task; the check of the base branch then decides whether the base still needs a fix task. Before, the conveyor tried to open an empty follow-up pull request, failed with `No commits between …`, and ran the repair stage again and again.
 - Backlog on the control screen marks a blocked task with its open blockers (`form::story · blocked by #279, #281`); `conveyor --json` lists them in `blockedBy`.
 - New team setting `unblock_on: closed | done` (default `closed`): with `done`, a blocking issue that reached `conveyor::done` no longer blocks, even while it stays open. It applies only with `close_on_done: false`, and the settings screen shows it only then.
-- `h` on the main screen starts the harness with a short instruction: it waits for your question, answers only that, and takes every rule about the conveyor from the `conveyor-help` skill instead of guessing it from setting names. It also updates an old copy of the skill in your home directory; before, the copy from the first install stayed. The skill now explains exactly which tasks the conveyor takes (`pickup_from` names the earliest form, blockers, assignees, limits).
-- A task in the merge queue stays in the Queued column while GitHub computes whether its branch merges cleanly after a merge of another task; the wait says `the board checks whether the branch merges cleanly` instead of `checks are pending`. Before, every queued task jumped back to In progress after each merge. A waiting task that needs a running slot for a harness stage (for example `fix-ci` after a conflict) also moves to Queued and back to In progress when its stage starts.
-- Loop guard: the conveyor counts the runs of each stage since the last answer of a human. The control screen shows `run 2`, `run 3`, … next to the task, yellow from the third run, and after `retry.max_attempts` runs without an answer the task stops in needs-input with the last result instead of running the stage again. Before, a stage that ended without an error but came back every cycle ran without limit.
-- `x` then `r` (or `conveyor reset N --stage`) restarts the current stage of a task: it stops a running stage, drops what its last run left, and runs it again with the current settings, for example after a model change. `x` then `t` (`--part`) restarts the current part of a plan with parts from the first stage after `plan`. Other tasks are not touched.
-- The key bar of the control screen names Shift+↑↓ (`⇧↑↓`) next to PgUp PgDn for paging; on macOS, Terminal keeps PgUp PgDn for its own scrollback, so only Shift+↑↓ reaches the conveyor there.
-- A repair stage after a red base branch that changes nothing (for example because the failure was a cancelled run) finishes the task; the check of the base branch then decides whether the base still needs a fix task. Before, the conveyor tried to open an empty follow-up pull request, failed with `No commits between …`, and ran the repair stage again and again.
+
+### Stages and harnesses
+
+- `x` then `r` (or `conveyor reset N --stage`) restarts the current stage of a task: it stops a running stage, drops what its last run left, and runs it again with the current settings, for example after a model change. `x` then `t` (`--part`) restarts the current part of a plan with parts from the first stage after `plan`. Other tasks are not touched. A part restart needs the start of the part, which this version records; for a stage that started before the update, a stage restart keeps the commits of that stage.
 - The subscription windows of claude and codex update while a stage runs (codex at most once a minute, from its session file); before, the conveyor saw the use of a stage only when it ended, so parallel stages could start on an old reading and run into the limit. The README explains that the reserve should grow with the number of parallel tasks.
-- Tasks with green checks wait in a merge queue: priority first, then the time their checks turned green. Only the first task is rebased onto the latest base branch and tested again; the others wait on their old base in the Queued column and show `merge waits: queued behind task #N`; a task goes back to In progress when its turn comes. Before, every waiting task was rebased after each merge and ran its CI again, so with several ready tasks the CI runs grew with the square of their number, the runners slowed down, and a task could lose the race many times.
-- A merge commit whose CI a newer commit of the base branch cancelled (for example `concurrency: cancel-in-progress` in a GitHub workflow, or an auto-cancelled GitLab pipeline) counts as passed, because the CI of the newer commit tests this merge too. Before, the cancellation counted as a red base branch and could start a fix task.
-- The reserve warning of a subscription window goes away when the window resets; before, it stayed until the next probe, although the conveyor already took tasks again.
-- In `conveyor config`, the right arrow on a triage setting without its own value goes through every option; before, it stopped at the value inherited from `defaults`.
+- Summaries in the workpad and in error comments hide the configured secret values (`KEY` and `TOKEN` variables of the harnesses) as the commit messages do; before, only tokens of known formats and the home path were hidden.
+
+### Control screen
+
+- `h` on the main screen asks the harness: a live session with the `conveyor-help` skill. The harness says it is ready, waits for your question, answers only that, and takes every rule about the conveyor from the skill instead of guessing it from setting names; the skill now explains which tasks the conveyor takes and how to read the state of the board from `conveyor --json` and the conveyor log. Help moved to `?` only; on the help screen `h` (before: `a`) opens the same session.
 - The CI freeze line says `answered, resumes next cycle` (or `on start` while the conveyor is stopped) when the fix task got its answer; before, it kept saying `waits for an answer since …`.
-- `h` on the main screen of the control screen asks the harness: a live session with the `conveyor-help` skill, which now also answers questions about the state of the board (why tasks wait, what to do with stuck ones) from `conveyor --json` and the conveyor log. Help moved to `?` only; on the help screen `h` (before: `a`) opens the same session.
-- Development: `vite` 8.3.4 for the test runner, which fixes three advisories in `launch-editor` of 8.3.2 (development only; the npm package does not include it).
 - In a long task list of the control screen the selected task stays visible, also when tasks take several lines, and PgUp/PgDn (Shift+↑↓) move the selection by five tasks; before, the list could not be scrolled to its last tasks.
 - The control screen clears and draws itself again after the terminal window changes size and after the computer slept; before, parts of an old frame could stay above the current one.
-- After every stage the conveyor stops the processes that still run from the task workspace (dev servers, applications started for tests) and removes the Docker containers named `conveyor-<task>-…`; the stage prompt asks the harness to name its containers so and to stop what it started. Before, such servers and databases kept running until someone stopped them, and they could hold ports that later tasks needed. The log names what was stopped.
+- The key bar of the control screen names Shift+↑↓ (`⇧↑↓`) next to PgUp PgDn for paging; on macOS, Terminal keeps PgUp PgDn for its own scrollback, so only Shift+↑↓ reaches the conveyor there.
+- The reserve warning of a subscription window goes away when the window resets; before, it stayed until the next probe, although the conveyor already took tasks again.
+
+### Settings
+
+- `d` in `conveyor settings` sets a stage or triage value back to its default, the value from `defaults`.
+- `conveyor settings` reports unsaved changes only when the settings differ from the saved ones; before, changing a value and setting it back still asked to discard or save on quit.
+- In `conveyor settings`, the right arrow on a triage setting without its own value goes through every option; before, it stopped at the value inherited from `defaults`.
+
+### Development
+
+- Development: `vite` 8.3.4 for the test runner, which fixes three advisories in `launch-editor` of 8.3.2 (development only; the npm package does not include it).
 
 ## 0.3.1 — 2026-10-20
 

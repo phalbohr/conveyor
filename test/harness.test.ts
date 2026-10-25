@@ -198,6 +198,16 @@ describe('codex subscription windows', () => {
     expect(seen).toEqual([{ fiveHour: { utilization: 0.93, resetsAt: new Date(1_791_470_433_000).toISOString() } }])
   })
 
+  it('finishes the stage when the session file cannot be read', async () => {
+    const home = tempDir('conveyor-codex-home-')
+    const now = new Date()
+    const day = join(home, 'sessions', String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0'))
+    mkdirSync(join(day, 'rollout-2026-10-08T10-00-00-01a10707-4d1c-75a3-b285-af43a340a572.jsonl'), { recursive: true })
+    const s = stub('codex-done.jsonl')
+    const output = await new CodexHarness({ command: s.command, env: { ...process.env, CODEX_HOME: home } }).runStage(run({ onQuota: () => undefined }))
+    expect(output.result.outcome).toBe('done')
+  })
+
   it('probes with the cheapest model', async () => {
     const s = stub('codex-done.jsonl')
     await new CodexHarness({ command: s.command, env: { ...process.env, CODEX_HOME: tempDir() } }).probeQuota(tempDir())

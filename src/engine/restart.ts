@@ -16,7 +16,8 @@ export async function restartTask(board: Board, workspaces: Pick<Workspaces, 're
   let summary: string
   if (scope === 'part') {
     if (!state.parts) throw new Error(`task ${id} has no parts; restart its stage instead`)
-    if (state.landing === 'success' || state.verify || state.broken) throw new Error(`part ${(state.part ?? 0) + 1} of task ${id} is merged already`)
+    if (state.landing === 'success' || state.verify || state.broken || Object.values(state.repos ?? {}).some((repo) => repo.merged || repo.verify)) throw new Error(`part ${(state.part ?? 0) + 1} of task ${id} is merged already`)
+    if (!state.partBase) throw new Error(`no start of part ${(state.part ?? 0) + 1} is recorded for task ${id} (it started before this version of the conveyor); restart its stage or reset the task instead`)
     await workspaces.rewind(id, state.partBase)
     stage = stages[stages.indexOf('plan') + 1] ?? 'merge'
     for (const key of ['review', 'reviewMode', 'landing', 'mergeError', 'landAttempts', 'checksWait', 'stageBase'] as const) delete state[key]
@@ -26,7 +27,9 @@ export async function restartTask(board: Board, workspaces: Pick<Workspaces, 're
     if (!current || !stages.includes(current)) throw new Error(`task ${id} runs no stage now${state.stage === 'land' ? '; it waits to merge' : ''}`)
     await workspaces.rewind(id, state.stageBase)
     stage = current
-    summary = `Stage ${stage} of ${taskRef(id)} restarted by @${me}: what its last run left is dropped, it starts again with the current settings.`
+    summary = state.stageBase
+      ? `Stage ${stage} of ${taskRef(id)} restarted by @${me}: what its last run left is dropped, it starts again with the current settings.`
+      : `Stage ${stage} of ${taskRef(id)} restarted by @${me}: it starts again with the current settings and drops the changes it did not commit; its commits stay, because its start was not recorded.`
   }
   for (const key of ['waiting', 'retryAt', 'parked', 'lastError', 'lastResult', 'runs', 'split'] as const) delete state[key]
   state.attempt = 0

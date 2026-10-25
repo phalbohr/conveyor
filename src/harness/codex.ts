@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, mkdtempSync, openSync, readSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { NO_USAGE, RESULT_SCHEMA, childEnv, failed, parseResult, type Harness, type HarnessOptions, type Quota, type QuotaWindow, type StageOutput, type StageRun, type Usage } from './harness.js'
@@ -19,6 +19,7 @@ const FIVE_HOURS = 300
 const SEVEN_DAYS = 10_080
 const DAY = 86_400_000
 const QUOTA_EVERY = 60_000
+const QUOTA_TAIL = 1_048_576
 
 export class CodexHarness implements Harness {
   constructor(private readonly options: HarnessOptions = {}) {}
@@ -62,7 +63,7 @@ export class CodexHarness implements Harness {
           if (event?.type === 'thread.started') thread = event.thread_id
           if (thread && run.onQuota && Date.now() - quotaAt >= QUOTA_EVERY) {
             quotaAt = Date.now()
-            const quota = this.takeQuota(thread, true)
+            const quota = this.readQuota(thread, true)
             if (quota) run.onQuota(quota)
           }
           if (event?.type === 'item.completed' && event.item?.type === 'agent_message') message = event.item.text
@@ -73,7 +74,7 @@ export class CodexHarness implements Harness {
         },
       })
 
-      const quota = thread ? this.takeQuota(thread) : undefined
+      const quota = thread ? this.readQuota(thread, false) : undefined
       const extra = quota ? { quota } : {}
       if (exit.aborted) return { result: failed('stage aborted'), usage: tokens, ...extra }
       if (error || exit.code !== 0 || message === undefined) {
@@ -85,7 +86,15 @@ export class CodexHarness implements Harness {
     }
   }
 
-  private takeQuota(thread: string, keep = false): Quota | undefined {
+  private readQuota(thread: string, keep: boolean) {
+    try {
+      return this.takeQuota(thread, keep)
+    } catch {
+      return undefined
+    }
+  }
+
+  private takeQuota(thread: string, keep: boolean): Quota | undefined {
     const env = this.options.env ?? process.env
     const sessions = join(env.CODEX_HOME ?? join(homedir(), '.codex'), 'sessions')
     const days = [new Date(), new Date(Date.now() - DAY)].map((date) =>
@@ -95,7 +104,7 @@ export class CodexHarness implements Harness {
       .filter((dir) => existsSync(dir))
       .flatMap((dir) => readdirSync(dir).filter((name) => name.endsWith(`-${thread}.jsonl`)).map((name) => join(dir, name)))[0]
     if (!file) return undefined
-    const limits = readFileSync(file, 'utf8')
+    const limits = tail(file, QUOTA_TAIL)
       .split('\n')
       .filter((line) => line.includes('"rate_limits"'))
       .map((line) => findLimits(parseJson(line)))
@@ -131,6 +140,19 @@ function parseLine(line: string): CodexEvent | undefined {
     return JSON.parse(line) as CodexEvent
   } catch {
     return undefined
+  }
+}
+
+function tail(file: string, bytes: number) {
+  const fd = openSync(file, 'r')
+  try {
+    const size = fstatSync(fd).size
+    const start = Math.max(0, size - bytes)
+    const buffer = Buffer.alloc(size - start)
+    readSync(fd, buffer, 0, buffer.length, start)
+    return buffer.toString('utf8')
+  } finally {
+    closeSync(fd)
   }
 }
 

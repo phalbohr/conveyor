@@ -143,8 +143,9 @@ export async function helpSessionCommand(context: Context): Promise<number> {
   const prepared = prepare(context)
   if (!prepared) return 1
   const { config } = prepared
+  const folder = config.live.harness === 'claude' ? '.claude' : '.agents'
   const local = skillState(context.cwd)
-  const home = local === 'missing' ? skillState(context.home) : 'current'
+  const home = local === 'missing' ? skillState(context.home, folder) : 'current'
   if (home !== 'current') skillInstall({ ...context, stdout: () => undefined }, {}, false)
   const note =
     local === 'old'

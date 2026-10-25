@@ -6,10 +6,11 @@ import type { Context } from '../cli.js'
 const SKILL = 'conveyor-help'
 const SOURCE = fileURLToPath(new URL(`../../skills/${SKILL}/`, import.meta.url))
 
-export function skillState(base: string): 'missing' | 'old' | 'current' {
-  const targets = [join(base, '.claude', 'skills', SKILL), join(base, '.agents', 'skills', SKILL)]
-  if (!targets.some((target) => existsSync(join(target, 'SKILL.md')))) return 'missing'
-  const files = readdirSync(SOURCE)
+export function skillState(base: string, folder?: '.claude' | '.agents'): 'missing' | 'old' | 'current' {
+  const targets = [join(base, '.claude', 'skills', SKILL), join(base, '.agents', 'skills', SKILL)].filter((target) => existsSync(join(target, 'SKILL.md')))
+  if (targets.length === 0) return 'missing'
+  if (folder && !existsSync(join(base, folder, 'skills', SKILL, 'SKILL.md'))) return 'old'
+  const files = readdirSync(SOURCE, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name)
   const same = (target: string) => files.every((file) => existsSync(join(target, file)) && readFileSync(join(target, file), 'utf8') === readFileSync(join(SOURCE, file), 'utf8'))
   return targets.every(same) ? 'current' : 'old'
 }

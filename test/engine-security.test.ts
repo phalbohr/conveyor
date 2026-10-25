@@ -192,6 +192,19 @@ describe('stage output', () => {
     expect(text).not.toContain(home)
   })
 
+  it('hides configured secret values in the workpad and error comments', async () => {
+    const context = setup({
+      config: 'retry: {max_attempts: 1}',
+      redact: (text) => text.replaceAll('local-key-7f3a9c', '[redacted]'),
+      script: () => ({ outcome: 'failed', summary: 'the server refused key local-key-7f3a9c' }),
+    })
+    await context.board.createTask('Add login', 'p', { form: 'plan' })
+    await context.cycle()
+    const text = (await context.board.listComments('1')).map((comment) => comment.body).join('\n')
+    expect(text).toContain('refused key [redacted]')
+    expect(text).not.toContain('local-key-7f3a9c')
+  })
+
   it('hides secrets in artifacts the conveyor commits to the repository', async () => {
     const workspaces = new FakeWorkspaces()
     const { board, cycle } = setup({

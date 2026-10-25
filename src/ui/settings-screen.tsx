@@ -63,7 +63,10 @@ export function SettingsScreen({ doc, refreshModels }: Props) {
         const next = options[(index + (key.rightArrow ? 1 : -1) + options.length) % options.length] ?? INHERIT
         attempt(() => doc.set(current.key, next === INHERIT ? '' : next))
       }
-      if (input === 'd' && current && inheritable(current)) attempt(() => doc.set(current.key, ''))
+      if (input === 'd' && current) {
+        if (inheritable(current)) attempt(() => doc.set(current.key, ''))
+        else setMessage({ text: 'd sets a stage or triage value back to its default; this row has no default above it.' })
+      }
       if (input === 'a') setMode({ kind: 'add-name' })
       if (input === 'm' && refreshModels) {
         setMessage({ text: 'Refreshing model lists…' })

@@ -94,6 +94,7 @@ const triageSchema = z.object({
 const QUOTA_FRESH = 10 * 60_000
 const LAND = 'land'
 const LAND_WAIT = 60_000
+const TURN_LIMIT = 2 * 3_600_000
 const CHECKS_GRACE = 5 * 60_000
 const MERGE_LOCK = 'merge'
 const FIX_LOCK = 'fix'
@@ -151,6 +152,7 @@ export class Engine {
   private readonly verifying = new Map<string, string>()
   private readonly mergeQueue = new Map<string, { priority: number; since: number }>()
   private mergeTurn: string | undefined
+  private turnAt = 0
   private readonly limited = new Map<string, string>()
   private readonly cleanups = new Set<Promise<void>>()
   private me?: string
@@ -195,7 +197,7 @@ export class Engine {
     let awaitingReview = 0
     let backingOff = 0
     const parked = new Set<string>()
-    const landing = new Set<string>()
+    const landing = new Set<string>([...this.running.keys(), ...this.held])
     let labeled: string | undefined
     const now = Date.now()
 
@@ -778,7 +780,7 @@ export class Engine {
       }
       this.log(`task ${id}: stage ${stage.name} → ${output.result.outcome}: ${output.result.summary}`)
       state.runs = { ...state.runs, [stage.name]: runs + 1 }
-      state.lastResult = `${output.result.outcome}: ${publicText(output.result.summary.split('\n')[0] ?? '', this.options.home).slice(0, 300)}`
+      state.lastResult = `${output.result.outcome}: ${this.publicSummary(output.result.summary.split('\n')[0] ?? '').slice(0, 300)}`
       conversation = undefined
       await workspaces
         .commitAll(id, `${stage.name}: ${((this.options.redact ?? ((text: string) => redactSecrets(text)))(output.result.summary).split('\n')[0] ?? '').slice(0, 72)}`)
@@ -850,7 +852,10 @@ export class Engine {
 
   private aheadInMergeQueue(id: string, priority: number | undefined) {
     if (!this.mergeQueue.has(id)) this.mergeQueue.set(id, { priority: priority ?? Number.MAX_SAFE_INTEGER, since: Date.now() })
-    this.mergeTurn ??= [...this.mergeQueue].sort(([, a], [, b]) => a.priority - b.priority || a.since - b.since)[0]?.[0]
+    if (!this.mergeTurn) {
+      this.mergeTurn = [...this.mergeQueue].sort(([, a], [, b]) => a.priority - b.priority || a.since - b.since)[0]?.[0]
+      this.turnAt = Date.now()
+    }
     return this.mergeTurn === id ? undefined : this.mergeTurn
   }
 
@@ -893,6 +898,7 @@ export class Engine {
     }
     const pending = (reason: string) => {
       if (!this.mergeQueue.has(id)) return wait(reason)
+      if (this.mergeTurn === id && Date.now() - this.turnAt > TURN_LIMIT) return wait(`${reason} for over ${TURN_LIMIT / 3_600_000} h; the next task of the merge queue goes first`)
       inQueue = this.mergeTurn !== id
       return queued(reason)
     }
@@ -1143,7 +1149,9 @@ export class Engine {
   private async verdict(sha: string, repo: string | undefined) {
     const checks = await this.options.board.commitChecks(sha, repo).catch(() => 'pending' as const)
     if (checks !== 'cancelled') return checks
-    if ((await this.options.board.baseHead(repo).catch(() => sha)) === sha) return 'failure'
+    const head = await this.options.board.baseHead(repo).catch(() => undefined)
+    if (head === undefined) return 'pending'
+    if (head === sha) return 'failure'
     this.log(`a newer commit of the base branch${repo ? ` of ${repo}` : ''} cancelled the CI at ${sha.slice(0, 7)}; the CI of the newer commit checks this merge too`)
     return 'success'
   }
@@ -1754,6 +1762,10 @@ export class Engine {
     this.log(`task ${id}: part ${done} of ${parts.length} done; the parts collect in one ${multi ? 'merge request per repository' : 'pull request'}, part ${done + 1} starts`)
   }
 
+  private publicSummary(text: string) {
+    return publicText((this.options.redact ?? ((value: string) => value))(text), this.options.home)
+  }
+
   private async stopWithError(run: TaskRun, stage: string, text: string) {
     const { board } = this.options
     const { id, config, state } = run
@@ -1778,7 +1790,7 @@ export class Engine {
 
   private async fail(id: string, stage: Stage, state: WorkpadState, result: StageResult, config: Config, fatal: boolean) {
     state.attempt++
-    state.lastError = publicText(result.summary, this.options.home)
+    state.lastError = this.publicSummary(result.summary)
     if (fatal) {
       const text = `**The \`${stage.name}\` stage cannot start.**\n\n${state.lastError}\n\nFix the cause, then reply with any comment to retry.\n\n${commandHelp(config)}`
       const comment = await this.options.board.addComment(id, agentComment('error', text))
